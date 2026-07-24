@@ -20,15 +20,25 @@ type envelope struct {
 // serialization concerns out of ports; a production transport would
 // version this.
 type wireMsg struct {
-	Kind      uint8    `cbor:"1,keyasint"`
-	RID       uint64   `cbor:"2,keyasint"`
-	Target    []byte   `cbor:"3,keyasint,omitempty"`
-	Nodes     [][]byte `cbor:"4,keyasint,omitempty"`
-	Providers [][]byte `cbor:"5,keyasint,omitempty"`
-	ChunkID   []byte   `cbor:"6,keyasint,omitempty"`
-	Data      []byte   `cbor:"7,keyasint,omitempty"`
-	Found     bool     `cbor:"8,keyasint,omitempty"`
-	OK        bool     `cbor:"9,keyasint,omitempty"`
+	Kind      uint8      `cbor:"1,keyasint"`
+	RID       uint64     `cbor:"2,keyasint"`
+	Target    []byte     `cbor:"3,keyasint,omitempty"`
+	Nodes     [][]byte   `cbor:"4,keyasint,omitempty"`
+	Providers [][]byte   `cbor:"5,keyasint,omitempty"`
+	ChunkID   []byte     `cbor:"6,keyasint,omitempty"`
+	Data      []byte     `cbor:"7,keyasint,omitempty"`
+	Found     bool       `cbor:"8,keyasint,omitempty"`
+	OK        bool       `cbor:"9,keyasint,omitempty"`
+	Nonce     uint64     `cbor:"10,keyasint,omitempty"`
+	Tag       []byte     `cbor:"11,keyasint,omitempty"`
+	Proof     *wireProof `cbor:"12,keyasint,omitempty"`
+}
+
+type wireProof struct {
+	Root  []byte   `cbor:"1,keyasint"`
+	Index int      `cbor:"2,keyasint"`
+	Total int      `cbor:"3,keyasint"`
+	Path  [][]byte `cbor:"4,keyasint,omitempty"`
 }
 
 var encMode cbor.EncMode
@@ -59,6 +69,18 @@ func toWire(m ports.Message) wireMsg {
 	if len(m.Data) > 0 {
 		w.Data = append([]byte(nil), m.Data...)
 	}
+	w.Nonce = m.Nonce
+	if len(m.Tag) > 0 {
+		w.Tag = append([]byte(nil), m.Tag...)
+	}
+	if m.Proof != nil {
+		w.Proof = &wireProof{
+			Root:  append([]byte(nil), m.Proof.Root[:]...),
+			Index: m.Proof.Index,
+			Total: m.Proof.Total,
+			Path:  idsToBytes(m.Proof.Path),
+		}
+	}
 	return w
 }
 
@@ -74,6 +96,13 @@ func fromWire(w wireMsg) ports.Message {
 	copy(m.ChunkID[:], w.ChunkID)
 	m.Nodes = bytesToIDs(w.Nodes)
 	m.Providers = bytesToIDs(w.Providers)
+	m.Nonce = w.Nonce
+	m.Tag = w.Tag
+	if w.Proof != nil {
+		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path)}
+		copy(p.Root[:], w.Proof.Root)
+		m.Proof = &p
+	}
 	return m
 }
 

@@ -27,7 +27,9 @@ import (
 // away and the swarm alone carries the file.
 // done receives the number of chunk-replica placements that succeeded.
 func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int)) {
-	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), m.Leaves()...)
+	leaves := m.Leaves()
+	root := m.Root()
+	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
 	placed := 0
 	var next func(i int)
 	next = func(i int) {
@@ -41,9 +43,18 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 			next(i + 1)
 			return
 		}
+		// Shards travel with their Merkle inclusion proof so hosts can
+		// answer storage challenges. Manifest chunks aren't tree leaves
+		// and go bare.
+		var proof *ports.StorageProof
+		if li := i - len(entry.ManifestChunks); li >= 0 {
+			if p, perr := manifest.Prove(leaves, li); perr == nil {
+				proof = &ports.StorageProof{Root: root, Index: p.Index, Total: p.Total, Path: p.Path}
+			}
+		}
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
 			targets := n.pickTargets(closest)
-			n.storeAt(id, c.Data, targets, 0, &placed, func() {
+			n.storeAt(id, c.Data, proof, targets, 0, &placed, func() {
 				if !keepLocal {
 					n.store.Delete(bg(), id)
 				}
@@ -69,24 +80,27 @@ func (n *Node) pickTargets(closest []ports.NodeID) []ports.NodeID {
 	return targets
 }
 
-func (n *Node) storeAt(id ports.ChunkID, data []byte, targets []ports.NodeID, i int, placed *int, done func()) {
+func (n *Node) storeAt(id ports.ChunkID, data []byte, proof *ports.StorageProof, targets []ports.NodeID, i int, placed *int, done func()) {
 	if i == len(targets) {
 		done()
 		return
 	}
-	msg := ports.Message{Kind: ports.MsgStoreChunk, ChunkID: id, Data: data}
+	msg := ports.Message{Kind: ports.MsgStoreChunk, ChunkID: id, Data: data, Proof: proof}
 	n.request(targets[i], msg, func(resp ports.Message, err error) {
 		if err == nil && resp.OK {
 			*placed++
 		}
-		n.storeAt(id, data, targets, i+1, placed, done)
+		n.storeAt(id, data, proof, targets, i+1, placed, done)
 	})
 }
 
-// resolveProviders finds nodes claiming to hold id: local records first,
-// then a GetProviders walk toward the key, stopping as soon as any
-// provider surfaces. Results are deduped and sorted by distance to the
-// key so retrieval order is deterministic.
+// resolveProviders finds nodes claiming to hold id: local records plus
+// a GetProviders walk toward the key, run to convergence so EVERY
+// discoverable record is collected. An earlier version stopped at the
+// first record found — and the audit scenario's liars exposed that as a
+// real fragility: the one record you stop on may be a fake provider
+// while honest replicas sit undiscovered. Results are deduped and
+// sorted by distance to the key so retrieval order is deterministic.
 func (n *Node) resolveProviders(id ports.ChunkID, done func([]ports.NodeID)) {
 	seen := make(map[ports.NodeID]bool)
 	var acc []ports.NodeID
@@ -99,24 +113,15 @@ func (n *Node) resolveProviders(id ports.ChunkID, done func([]ports.NodeID)) {
 		}
 	}
 	add(n.provs.Get(id))
-	finish := func() {
-		dht.SortByDistance(id, acc)
-		done(acc)
-	}
-	if len(acc) > 0 {
-		finish()
-		return
-	}
 	w := n.newWalk(ports.MsgGetProviders, id,
 		func(ps []ports.NodeID) bool {
 			add(ps)
-			if len(acc) > 0 {
-				finish()
-				return true
-			}
-			return false
+			return false // keep walking: we want all records, not the first
 		},
-		func([]ports.NodeID) { finish() }) // walk converged; maybe empty
+		func([]ports.NodeID) {
+			dht.SortByDistance(id, acc)
+			done(acc)
+		})
 	w.step()
 }
 

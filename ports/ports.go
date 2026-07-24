@@ -109,6 +109,9 @@ type CreditLedger interface {
 	// RecordServe credits server for delivering bytes of chunk id to
 	// requester.
 	RecordServe(server, requester NodeID, id ChunkID, bytes int64)
+	// RecordAudit settles a storage challenge: a passed audit earns the
+	// prover a reward, a failed one costs a slash.
+	RecordAudit(prover NodeID, id ChunkID, passed bool)
 	Balance(n NodeID) int64
 	CanPublish(n NodeID) bool
 	// ChargePublish deducts the publish fee, or returns

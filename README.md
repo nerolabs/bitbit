@@ -23,6 +23,14 @@ sockets. See `HANDOFF.md` for the full design brief and
   byte served, publishing costs a fee); watch the Gini coefficient
   climb as hosts earn, and freeloaders lose the ability to publish
 
+Beyond the original handoff:
+
+- ✅ M6 — real TCP transport: the identical core scatters and retrieves
+  over actual sockets; only adapters changed (the hexagonal bet, won)
+- ✅ M7 — toy proof-of-retrieval: chunks travel with Merkle proofs,
+  audits challenge providers with nonce tags, and nodes that kept the
+  proof but ditched the data get slashed into debt
+
 ## Try it
 
 The guided version of everything below — with what to look for at each
@@ -46,6 +54,12 @@ go build -o shardnet ./cmd/shardnet
 
 # the economy: hosts earn per byte served; freeloaders go broke
 ./shardnet sim run economy -seed 21
+
+# storage audits: liars keep the proof, ditch the data, get caught
+./shardnet sim run audit -seed 31
+
+# the same core over real TCP sockets on localhost
+./shardnet net demo -nodes 8
 ```
 
 Chunks land in `.shardnet/objects/` named by SHA-256. Add the same file

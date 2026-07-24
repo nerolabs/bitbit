@@ -90,6 +90,14 @@ type Node struct {
 	// and using DHT routing. Exists so the economy scenario can watch
 	// leeches go broke.
 	freeload bool
+	// liar makes the node accept chunk placements, keep the PROOF, and
+	// throw away the DATA — then claim to have the chunk when asked.
+	// It can still answer a challenge with a valid Merkle proof (it
+	// kept that), but it cannot compute the nonce tag, which is the
+	// whole point of the tag. Exists so audits have someone to catch.
+	liar bool
+	// proofs holds the storage proof for each chunk this node hosts.
+	proofs map[ports.ChunkID]ports.StorageProof
 }
 
 // SetLedger wires credit accounting; nil disables it.
@@ -97,6 +105,9 @@ func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
 
 // SetFreeload toggles leech behavior.
 func (n *Node) SetFreeload(v bool) { n.freeload = v }
+
+// SetLiar toggles fake-storage behavior (see the liar field).
+func (n *Node) SetLiar(v bool) { n.liar = v }
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
@@ -108,6 +119,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		table:   dht.NewTable(id, cfg.K),
 		provs:   dht.NewProviders(),
 		pending: make(map[uint64]*pending),
+		proofs:  make(map[ports.ChunkID]ports.StorageProof),
 	}
 	tr.SetHandler(n.handle)
 	return n
@@ -183,12 +195,27 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		c := ports.Chunk{ID: msg.ChunkID, Data: msg.Data}
 		ok := c.Verify() // never store what doesn't hash right
+		if ok && msg.Proof != nil && !verifyStorageProof(*msg.Proof, msg.ChunkID) {
+			ok = false // refuse chunks with proofs we couldn't defend under audit
+		}
+		if ok && n.liar {
+			// Keep the receipt, ditch the goods.
+			if msg.Proof != nil {
+				n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
+			}
+			n.provs.Add(msg.ChunkID, n.id)
+			n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: true})
+			return
+		}
 		if ok {
 			if err := n.store.Put(bg(), c); err != nil {
 				ok = false
 			} else {
 				n.Stats.ChunksReceived++
 				n.provs.Add(msg.ChunkID, n.id) // we are now a provider
+				if msg.Proof != nil {
+					n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
+				}
 			}
 		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: ok})
@@ -210,7 +237,12 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: true, Data: c.Data})
 	case ports.MsgHasChunk:
 		ok, _ := n.store.Has(bg(), msg.ChunkID)
+		if n.liar {
+			_, ok = n.proofs[msg.ChunkID] // "of course I have it"
+		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgHasChunkReply, Found: ok})
+	case ports.MsgChallenge:
+		n.reply(from, msg, n.answerChallenge(msg))
 	}
 }
 

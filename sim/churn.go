@@ -132,7 +132,11 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 		}
 	}
 
-	window := ports.Duration(6) * o.NodeCfg.RepairInterval
+	// Enough sim-time per wave for ~3 full repair sweeps — a sweep
+	// probes every shard through full provider walks, which is slow by
+	// design (thoroughness beat speed when the liar scenario showed
+	// what first-answer provider resolution misses).
+	window := ports.Duration(9) * o.NodeCfg.RepairInterval
 	report("start")
 	perWave := int(float64(o.Nodes) * o.KillFrac)
 	for w := 0; w < o.Waves; w++ {

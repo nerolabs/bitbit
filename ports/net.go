@@ -57,7 +57,21 @@ const (
 	MsgFetchChunkReply // Found + Data
 	MsgHasChunk        // ChunkID: cheap availability probe (repair loop)
 	MsgHasChunkReply   // Found
+	MsgChallenge       // ChunkID + Nonce: prove you hold this shard of Proof.Root
+	MsgChallengeReply  // Found + Proof + Tag
 )
+
+// StorageProof is a Merkle inclusion proof shipped alongside a chunk:
+// "this chunk is leaf Index of the Total shards under Root". It travels
+// with the chunk at store time (a host must be able to prove what it
+// holds) and comes back in challenge replies. Path is bottom-up sibling
+// hashes, exactly core/manifest's proof shape.
+type StorageProof struct {
+	Root  Hash
+	Index int
+	Total int
+	Path  []Hash
+}
 
 // Message is the single wire envelope. RID correlates requests with
 // replies. Fields are used per-kind; unused fields stay zero.
@@ -71,12 +85,18 @@ type Message struct {
 	Data      []byte
 	Found     bool
 	OK        bool
+	// Proof-of-retrieval fields: Proof rides on StoreChunk (so hosts
+	// can later prove possession) and ChallengeReply; Nonce freshens a
+	// challenge; Tag is the prover's SHA-256(nonce ‖ chunk bytes).
+	Proof *StorageProof
+	Nonce uint64
+	Tag   []byte
 }
 
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply:
 		return true
 	}
 	return false

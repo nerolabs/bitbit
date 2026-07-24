@@ -23,6 +23,8 @@ type account struct {
 	balance      int64
 	servedBytes  int64
 	fetchedBytes int64
+	auditsPassed int
+	auditsFailed int
 }
 
 // Ledger implements ports.CreditLedger plus the observability the sim's
@@ -32,6 +34,13 @@ type Ledger struct {
 	grant    int64
 	accounts map[ports.NodeID]*account
 	order    []ports.NodeID // registration order: deterministic iteration
+
+	// Audit economics: storage that survives a spot-check earns rent;
+	// storage that turns out to be a lie is slashed hard. Balances may
+	// go negative — debt is the scarlet letter. Exported so scenarios
+	// can tune the pain.
+	AuditReward int64
+	AuditSlash  int64
 }
 
 var _ ports.CreditLedger = (*Ledger)(nil)
@@ -41,7 +50,12 @@ var _ ports.CreditLedger = (*Ledger)(nil)
 // bootstraps a fresh economy (with zero grants, nobody could ever
 // publish the first file).
 func New(fee, grant int64) *Ledger {
-	return &Ledger{fee: fee, grant: grant, accounts: make(map[ports.NodeID]*account)}
+	return &Ledger{
+		fee: fee, grant: grant,
+		accounts:    make(map[ports.NodeID]*account),
+		AuditReward: 1_000,
+		AuditSlash:  25_000,
+	}
 }
 
 // Register creates the node's account and applies the starting grant.
@@ -67,6 +81,22 @@ func (l *Ledger) RecordServe(server, requester ports.NodeID, _ ports.ChunkID, by
 	s.balance += bytes // 1 byte served = 1 credit
 	s.servedBytes += bytes
 	l.acct(requester).fetchedBytes += bytes
+}
+
+func (l *Ledger) RecordAudit(prover ports.NodeID, _ ports.ChunkID, passed bool) {
+	a := l.acct(prover)
+	if passed {
+		a.balance += l.AuditReward
+		a.auditsPassed++
+	} else {
+		a.balance -= l.AuditSlash
+		a.auditsFailed++
+	}
+}
+
+func (l *Ledger) Audits(n ports.NodeID) (passed, failed int) {
+	a := l.acct(n)
+	return a.auditsPassed, a.auditsFailed
 }
 
 func (l *Ledger) Balance(n ports.NodeID) int64      { return l.acct(n).balance }

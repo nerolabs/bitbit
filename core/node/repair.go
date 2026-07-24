@@ -89,12 +89,14 @@ func (n *Node) repairTick() {
 	nextRoot(0)
 }
 
-// shardRef locates one stored shard of a file: which stripe, and which
-// position within it (0..k-1 data, k..n-1 parity).
+// shardRef locates one stored shard of a file: which stripe, which
+// position within it (0..k-1 data, k..n-1 parity), and which Merkle
+// leaf it is (for re-attaching storage proofs on redistribution).
 type shardRef struct {
-	id     ports.ChunkID
-	stripe int
-	pos    int
+	id      ports.ChunkID
+	stripe  int
+	pos     int
+	leafIdx int
 }
 
 func (n *Node) repairRoot(root ports.Hash, done func()) {
@@ -152,7 +154,7 @@ func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
 			targets := n.pickTargets(closest)
 			placed := 0
-			n.storeAt(id, c.Data, targets, 0, &placed, func() {
+			n.storeAt(id, c.Data, nil, targets, 0, &placed, func() {
 				if placed > 0 {
 					n.Stats.ShardsRebuilt++
 				}
@@ -171,10 +173,13 @@ func storedShards(m *manifest.Manifest, p erasure.Params) []shardRef {
 	for j := 0; j < p.Stripes(len(dataIDs)); j++ {
 		lo, hi := j*p.K, min((j+1)*p.K, len(dataIDs))
 		for i, id := range dataIDs[lo:hi] {
-			refs = append(refs, shardRef{id: id, stripe: j, pos: i})
+			refs = append(refs, shardRef{id: id, stripe: j, pos: i, leafIdx: lo + i})
 		}
 		for q, id := range parityIDs[j*p.ParityShards() : (j+1)*p.ParityShards()] {
-			refs = append(refs, shardRef{id: id, stripe: j, pos: p.K + q})
+			refs = append(refs, shardRef{
+				id: id, stripe: j, pos: p.K + q,
+				leafIdx: len(dataIDs) + j*p.ParityShards() + q,
+			})
 		}
 	}
 	return refs
@@ -241,7 +246,7 @@ func (n *Node) repairStripes(m *manifest.Manifest, p erasure.Params, refs []shar
 		next()
 		return
 	}
-	n.repairStripe(p, stripeRefs, next)
+	n.repairStripe(m, p, stripeRefs, next)
 }
 
 // repairStripe fetches whatever shards of the stripe it can get —
@@ -251,7 +256,9 @@ func (n *Node) repairStripes(m *manifest.Manifest, p erasure.Params, refs []shar
 // fresh nodes. The caretaker keeps nothing afterward — it's a
 // paramedic, not a hoarder. A failed attempt (below k fetchable) is
 // counted and simply retried on the next sweep.
-func (n *Node) repairStripe(p erasure.Params, stripeRefs []shardRef, done func()) {
+func (n *Node) repairStripe(m *manifest.Manifest, p erasure.Params, stripeRefs []shardRef, done func()) {
+	leaves := m.Leaves()
+	root := m.Root()
 	ids := make([]ports.ChunkID, len(stripeRefs))
 	realData := 0
 	for i, r := range stripeRefs {
@@ -306,10 +313,14 @@ func (n *Node) repairStripe(p erasure.Params, stripeRefs []shardRef, done func()
 				return
 			}
 			r := toPlace[i]
+			var proof *ports.StorageProof
+			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
+				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path}
+			}
 			n.IterativeFindNode(r.id, func(closest []ports.NodeID) {
 				targets := n.pickTargets(closest)
 				placed := 0
-				n.storeAt(r.id, shards[r.pos], targets, 0, &placed, func() {
+				n.storeAt(r.id, shards[r.pos], proof, targets, 0, &placed, func() {
 					if placed > 0 {
 						n.Stats.ShardsRebuilt++
 					}
