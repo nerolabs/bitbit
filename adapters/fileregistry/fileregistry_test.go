@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"shardnet/adapters/fileregistry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/fileregistry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func TestPersistsAcrossReopen(t *testing.T) {

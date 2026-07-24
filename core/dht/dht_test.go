@@ -5,7 +5,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func randID(rng *rand.Rand) ports.NodeID {

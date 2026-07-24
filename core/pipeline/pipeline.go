@@ -17,11 +17,11 @@ import (
 	"fmt"
 	"io"
 
-	"shardnet/core/chunk"
-	"shardnet/core/crypto"
-	"shardnet/core/erasure"
-	"shardnet/core/manifest"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/chunk"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/manifest"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // DefaultChunkSize is 64 KiB for the sim (64 MiB is the production

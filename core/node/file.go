@@ -13,11 +13,11 @@ import (
 	"fmt"
 	"io"
 
-	"shardnet/core/dht"
-	"shardnet/core/erasure"
-	"shardnet/core/manifest"
-	"shardnet/core/pipeline"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/dht"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/manifest"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // Distribute pushes every chunk of a locally-added file — manifest

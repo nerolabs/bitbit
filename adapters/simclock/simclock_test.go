@@ -3,7 +3,7 @@ package simclock
 import (
 	"testing"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func TestFiresInTimeOrderWithStableTies(t *testing.T) {

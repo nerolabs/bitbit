@@ -3,9 +3,9 @@ package simnet_test
 import (
 	"testing"
 
-	"shardnet/adapters/simclock"
-	"shardnet/adapters/simnet"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/simclock"
+	"github.com/nerolabs/bitbit/adapters/simnet"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func id(b byte) ports.NodeID { return ports.HashBytes([]byte{b}) }

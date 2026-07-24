@@ -29,9 +29,9 @@ var forbiddenExact = map[string]string{
 }
 
 var forbiddenPrefixes = map[string]string{
-	"shardnet/adapters/": "core must not import adapters (hexagonal rule)",
-	"net/":               "core has no networking; that's what adapters are for",
-	"os/":                "filesystem access must come through a port",
+	"github.com/nerolabs/bitbit/adapters/": "core must not import adapters (hexagonal rule)",
+	"net/":                                 "core has no networking; that's what adapters are for",
+	"os/":                                  "filesystem access must come through a port",
 }
 
 func TestCoreImportsNoAdaptersAndNoEffects(t *testing.T) {

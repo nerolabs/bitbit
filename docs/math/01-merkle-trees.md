@@ -2,7 +2,7 @@
 
 ## The problem
 
-A file in shardnet is a list of chunk hashes. We want a single short
+A file in bitbit is a list of chunk hashes. We want a single short
 value — one 32-byte name — that commits to the *entire* list, such that:
 
 1. Anyone holding the name can verify any chunk they receive.
@@ -53,7 +53,7 @@ they match, `E` is in the file. A tree with *n* leaves needs only
 ⌈log₂ n⌉ sibling hashes: a million-chunk file has 20-hash proofs
 (640 bytes) instead of a 32 MB hash list.
 
-This is the seam shardnet's future credit system needs: a node can prove
+This is the seam bitbit's future credit system needs: a node can prove
 it holds shard *i* of root *R* without anyone re-downloading the file.
 
 ## Two details that matter in our implementation

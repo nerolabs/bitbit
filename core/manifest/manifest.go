@@ -14,9 +14,9 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"shardnet/core/crypto"
-	"shardnet/core/erasure"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 const Version = 1

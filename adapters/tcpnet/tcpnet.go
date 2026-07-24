@@ -31,8 +31,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"shardnet/adapters/eventloop"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/eventloop"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 const maxFrame = 32 << 20 // sanity cap; a frame carries at most one chunk

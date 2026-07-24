@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func Run(t *testing.T, newStore func(t *testing.T) ports.ChunkStore) {
@@ -15,7 +15,7 @@ func Run(t *testing.T, newStore func(t *testing.T) ports.ChunkStore) {
 
 	t.Run("PutGetRoundtrip", func(t *testing.T) {
 		s := newStore(t)
-		c := ports.NewChunk([]byte("hello, shardnet"))
+		c := ports.NewChunk([]byte("hello, bitbit"))
 		if err := s.Put(ctx, c); err != nil {
 			t.Fatal(err)
 		}

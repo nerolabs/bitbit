@@ -3,9 +3,9 @@ package sim
 import (
 	"testing"
 
-	"shardnet/adapters/simnet"
-	"shardnet/core/node"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/simnet"
+	"github.com/nerolabs/bitbit/core/node"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func nodeDefaultConfig() node.Config { return node.DefaultConfig() }

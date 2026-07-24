@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"shardnet/adapters/eventloop"
-	"shardnet/adapters/memstore"
-	"shardnet/adapters/tcpnet"
-	"shardnet/adapters/walltime"
-	"shardnet/core/crypto"
-	"shardnet/core/node"
-	"shardnet/core/pipeline"
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/eventloop"
+	"github.com/nerolabs/bitbit/adapters/memstore"
+	"github.com/nerolabs/bitbit/adapters/tcpnet"
+	"github.com/nerolabs/bitbit/adapters/walltime"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/node"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type realNode struct {

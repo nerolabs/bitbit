@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"shardnet/adapters/eventloop"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/eventloop"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type Clock struct {

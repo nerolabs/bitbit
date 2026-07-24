@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func id(b byte) ports.NodeID { return ports.HashBytes([]byte{b}) }

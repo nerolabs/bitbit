@@ -7,7 +7,7 @@ package dht
 import (
 	"sort"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // Distance is the Kademlia metric: XOR of the two IDs, compared as a

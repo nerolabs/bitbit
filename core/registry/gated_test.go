@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"shardnet/core/credit"
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/credit"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func gatedEntry(rootByte byte, publisher ports.NodeID) ports.Entry {

@@ -16,7 +16,7 @@ package credit
 import (
 	"sort"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type account struct {

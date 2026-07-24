@@ -1,6 +1,6 @@
 package dht
 
-import "shardnet/ports"
+import "github.com/nerolabs/bitbit/ports"
 
 // Providers is the provider-record store: "these nodes claim to have
 // chunk H". Records live on the nodes whose IDs are closest to H —

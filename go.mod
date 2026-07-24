@@ -1,4 +1,4 @@
-module shardnet
+module github.com/nerolabs/bitbit
 
 go 1.26.5
 

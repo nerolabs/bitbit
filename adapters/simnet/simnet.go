@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // Scheduler is the slice of simclock the network needs.

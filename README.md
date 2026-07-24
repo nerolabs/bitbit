@@ -1,11 +1,11 @@
-# shardnet
+# BitBit
 
 A content-addressed, erasure-coded, distributed file store — built as a
 real product from day one, simulated in-process until it needs real
 sockets. See `HANDOFF.md` for the full design brief and
 `docs/math/` for friendly explanations of the math.
 
-## Status: all five milestones complete
+## Status: HANDOFF complete (M1–M5), plus M6–M7
 
 - ✅ M1 — chunk → encrypt → hash → manifest → Merkle root, and back;
   CLI `add`/`get` against a content-addressed disk store
@@ -18,7 +18,6 @@ sockets. See `HANDOFF.md` for the full design brief and
   repair loops rebuild lost shards from parity and re-seed them; the
   live view shows redundancy draining and recovering, and the file
   comes back bit-perfect
-- ⬜ M4 — churn & repair (the money demo)
 - ✅ M5 — economics observatory: credit-gated registry (1 credit = 1
   byte served, publishing costs a fee); watch the Gini coefficient
   climb as hosts earn, and freeloaders lose the ability to publish
@@ -37,32 +36,32 @@ The guided version of everything below — with what to look for at each
 step — is [`docs/v1-test.md`](docs/v1-test.md).
 
 ```sh
-go build -o shardnet ./cmd/shardnet
+go build -o bitbit ./cmd/bitbit
 
-./shardnet add somefile.pdf            # prints the file's Merkle root
-./shardnet ls                          # registry contents
-./shardnet info <root>                 # stripe map: every shard, its stripe, its presence
-./shardnet get <root> -o restored.pdf  # full verify-everything retrieval
-./shardnet add secret.txt -mode private  # random key, no dedup, no confirmation attack
-./shardnet add big.iso -k 4 -n 7       # custom erasure geometry
+./bitbit add somefile.pdf            # prints the file's Merkle root
+./bitbit ls                          # registry contents
+./bitbit info <root>                 # stripe map: every shard, its stripe, its presence
+./bitbit get <root> -o restored.pdf  # full verify-everything retrieval
+./bitbit add secret.txt -mode private  # random key, no dedup, no confirmation attack
+./bitbit add big.iso -k 4 -n 7       # custom erasure geometry
 
 # the network, simulated: 100 nodes, 3% packet loss, 8 nodes killed
-./shardnet sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
+./bitbit sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
 
 # the money demo: watch repair outrun two waves of node death
-./shardnet sim run churn -seed 11
+./bitbit sim run churn -seed 11
 
 # the economy: hosts earn per byte served; freeloaders go broke
-./shardnet sim run economy -seed 21
+./bitbit sim run economy -seed 21
 
 # storage audits: liars keep the proof, ditch the data, get caught
-./shardnet sim run audit -seed 31
+./bitbit sim run audit -seed 31
 
 # the same core over real TCP sockets on localhost
-./shardnet net demo -nodes 8
+./bitbit net demo -nodes 8
 ```
 
-Chunks land in `.shardnet/objects/` named by SHA-256. Add the same file
+Chunks land in `.bitbit/objects/` named by SHA-256. Add the same file
 twice in (default) convergent mode and you get the same root with zero
 new bytes stored. Delete or corrupt up to n−k shards per stripe
 (default: any 6 of 16) and `get` silently reconstructs them from parity;

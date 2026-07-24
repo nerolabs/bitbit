@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func entry(rootByte byte, size int64) ports.Entry {

@@ -15,7 +15,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type Store struct {

@@ -74,7 +74,7 @@ per-replica or sealing (Filecoin again). All of this slots in behind
 `ports.CreditLedger.RecordAudit` — the interface doesn't change, the
 cryptography behind it does.
 
-## What shardnet does (M7)
+## What bitbit does (M7)
 
 - `Distribute` and repair ship every shard with its `StorageProof`;
   hosts refuse chunks whose proofs don't verify (never hold what you
@@ -84,7 +84,7 @@ cryptography behind it does.
 - The auditor challenges *every* provider of every shard, fetches
   ground truth once per shard, grades all answers, and settles into
   the ledger: `+AuditReward` per pass, `−AuditSlash` per fail.
-- Run it: `shardnet sim run audit` — 6 liars, all caught, zero false
+- Run it: `bitbit sim run audit` — 6 liars, all caught, zero false
   accusations, file still retrievable because honest replicas and
   parity never depended on them.
 

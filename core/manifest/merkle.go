@@ -18,7 +18,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // MerkleRoot computes the root over an ordered list of leaf values (for

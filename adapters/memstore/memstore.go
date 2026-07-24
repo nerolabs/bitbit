@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type Store struct {

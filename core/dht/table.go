@@ -1,6 +1,6 @@
 package dht
 
-import "shardnet/ports"
+import "github.com/nerolabs/bitbit/ports"
 
 // Table is the k-bucket routing table. Bucket i holds peers whose
 // highest differing bit from self is i — i.e. peers at distance

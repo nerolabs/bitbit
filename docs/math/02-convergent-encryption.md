@@ -24,7 +24,7 @@ ct     = AES-256-GCM(key, nonce, plaintext)
 Same plaintext ⇒ same key ⇒ same ciphertext ⇒ same chunk ID ⇒ dedup
 works across *everyone*, even though the stored bytes are encrypted and
 useless to anyone who doesn't already know the plaintext... or the
-secret, which shardnet records in the file's manifest. Holding a manifest
+secret, which bitbit records in the file's manifest. Holding a manifest
 = able to decrypt; holding only chunks = holding noise.
 
 ## Wait — a fixed nonce with GCM?
@@ -47,7 +47,7 @@ The damage scales with guessability:
 
 - *Public data* (OS images, media, datasets): nothing to confirm that
   isn't already public. Convergent is ideal — this is why it's the
-  default for `shardnet add`.
+  default for `bitbit add`.
 - *Low-entropy private data* (a form letter with your salary in one
   blank): an attacker can enumerate every plausible fill-in and confirm
   which one you stored. A few thousand SHA-256 calls; disastrous.
@@ -55,7 +55,7 @@ The damage scales with guessability:
   data is unguessable anyway, you lose nothing by using `private` mode.
 
 Rule of thumb: convergent encryption protects data exactly as well as
-that data is *unguessable*. For anything personal, `shardnet add
+that data is *unguessable*. For anything personal, `bitbit add
 -mode private` uses a random per-file key (index-bound nonces, no dedup,
 no confirmation surface).
 

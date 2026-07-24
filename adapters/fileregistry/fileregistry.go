@@ -13,8 +13,8 @@ import (
 	"os"
 	"sync"
 
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type Registry struct {

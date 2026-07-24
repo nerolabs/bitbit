@@ -55,8 +55,8 @@ const (
 )
 
 const (
-	convergentAAD = "shardnet/convergent/v1"
-	privateAAD    = "shardnet/private/v1"
+	convergentAAD = "github.com/nerolabs/bitbit/convergent/v1"
+	privateAAD    = "github.com/nerolabs/bitbit/private/v1"
 )
 
 // ConvergentEncrypt encrypts one plaintext chunk. The returned secret is
@@ -98,11 +98,11 @@ func convergentSeal(plaintext []byte, secret [SecretSize]byte) ([]byte, error) {
 }
 
 func convergentCipher(secret [SecretSize]byte) (cipher.AEAD, []byte, error) {
-	key, err := hkdf.Key(sha256.New, secret[:], nil, "shardnet/convergent/v1/key", KeySize)
+	key, err := hkdf.Key(sha256.New, secret[:], nil, "github.com/nerolabs/bitbit/convergent/v1/key", KeySize)
 	if err != nil {
 		return nil, nil, err
 	}
-	nonce, err := hkdf.Key(sha256.New, secret[:], nil, "shardnet/convergent/v1/nonce", nonceSize)
+	nonce, err := hkdf.Key(sha256.New, secret[:], nil, "github.com/nerolabs/bitbit/convergent/v1/nonce", nonceSize)
 	if err != nil {
 		return nil, nil, err
 	}

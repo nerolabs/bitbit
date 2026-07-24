@@ -13,14 +13,14 @@ import (
 	"fmt"
 	"math/rand"
 
-	"shardnet/adapters/memstore"
-	"shardnet/adapters/simclock"
-	"shardnet/adapters/simnet"
-	"shardnet/core/crypto"
-	"shardnet/core/node"
-	"shardnet/core/pipeline"
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/memstore"
+	"github.com/nerolabs/bitbit/adapters/simclock"
+	"github.com/nerolabs/bitbit/adapters/simnet"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/node"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 var bgCtx = context.Background()

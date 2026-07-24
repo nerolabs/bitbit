@@ -13,13 +13,13 @@ import (
 	"fmt"
 	"strings"
 
-	"shardnet/adapters/simnet"
-	"shardnet/core/crypto"
-	"shardnet/core/erasure"
-	"shardnet/core/manifest"
-	"shardnet/core/node"
-	"shardnet/core/pipeline"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/simnet"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/manifest"
+	"github.com/nerolabs/bitbit/core/node"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type ChurnOpts struct {
@@ -113,6 +113,9 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 	for _, c := range caretakers {
 		c.Care(cl.Registry, root)
 	}
+	// Let the caretakers' warm start (manifest fetch + announce) finish
+	// before the dying begins — they were on duty before the disaster.
+	cl.Sched.RunUntil(cl.Sched.Now().Add(30 * ports.Second))
 	protected := map[ports.NodeID]bool{z.ID(): true}
 	for _, c := range caretakers {
 		protected[c.ID()] = true
@@ -162,8 +165,6 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 			report(fmt.Sprintf("wave %d +%ds", w+1, (i+1)*int(window/3/ports.Duration(ports.Second))))
 		}
 	}
-	res.MinFinal, _ = minAvg(cl.StripeRedundancy(m))
-
 	// The survivor's verdict.
 	var out bytes.Buffer
 	var getErr error
@@ -182,6 +183,10 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 		return res, fmt.Errorf("churn(seed=%d): NetGet: %w", seed, getErr)
 	}
 	res.Match = bytes.Equal(out.Bytes(), data)
+	// Measure final redundancy at the actual end: repair sweeps keep
+	// running through the retrieval window, and judging them mid-sweep
+	// undercounts their work.
+	res.MinFinal, _ = minAvg(cl.StripeRedundancy(m))
 	report("final get")
 	return res, nil
 }

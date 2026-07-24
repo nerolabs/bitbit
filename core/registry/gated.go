@@ -3,7 +3,7 @@ package registry
 import (
 	"context"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // Gated wraps the append-only log with credit gating: publishing costs

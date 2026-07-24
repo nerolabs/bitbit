@@ -8,14 +8,14 @@ import (
 	"testing"
 	"testing/quick"
 
-	"shardnet/adapters/memstore"
-	"shardnet/core/chunk"
-	"shardnet/core/crypto"
-	"shardnet/core/erasure"
-	"shardnet/core/manifest"
-	"shardnet/core/pipeline"
-	"shardnet/core/registry"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/memstore"
+	"github.com/nerolabs/bitbit/core/chunk"
+	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/manifest"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 const testChunkSize = 1024

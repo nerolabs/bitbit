@@ -15,8 +15,8 @@ import (
 	"errors"
 	"fmt"
 
-	"shardnet/core/dht"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/dht"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 type Config struct {

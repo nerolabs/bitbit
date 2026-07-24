@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"sync"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // Log is an in-memory ports.Registry.

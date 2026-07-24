@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func randomLeaves(rng *rand.Rand, n int) []ports.Hash {

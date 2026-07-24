@@ -10,36 +10,36 @@
 package node
 
 import (
-	"shardnet/core/erasure"
-	"shardnet/core/manifest"
-	"shardnet/core/pipeline"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/manifest"
+	"github.com/nerolabs/bitbit/core/pipeline"
+	"github.com/nerolabs/bitbit/ports"
 )
 
-// Care makes this node a caretaker of root: it fetches the manifest
-// chunks (and keeps them — manifests have no parity in v1, caretakers
-// ARE their redundancy), then starts the periodic repair sweep.
+// Care makes this node a caretaker of root: the repair loop starts
+// unconditionally (a sweep that finds nothing fetchable just retries
+// next interval — an earlier version gated the loop on the first
+// manifest fetch succeeding, and a node death in that window silently
+// disabled repair forever). The warm start fetches the manifest chunks
+// now — caretakers ARE the manifest's redundancy in v1 — and announces
+// the copies so the swarm can find them: the caretaker is usually
+// nowhere near the chunk IDs, so without records planted on the nodes
+// that ARE near, its copies are invisible to provider walks.
 func (n *Node) Care(reg ports.Registry, root ports.Hash) {
 	n.reg = reg
 	n.care = append(n.care, root)
+	if !n.repairRunning {
+		n.repairRunning = true
+		n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
+	}
 	entry, ok, err := reg.Lookup(bg(), root)
 	if err != nil || !ok {
 		return
 	}
 	n.fetchAll(entry.ManifestChunks, func(missing []ports.ChunkID) {
-		if len(missing) > 0 {
-			return // can't caretake what we can't read; retry next Care
+		if len(missing) == 0 {
+			n.announceAll(entry.ManifestChunks, func() {})
 		}
-		// Announce our manifest copies so the swarm can find them: the
-		// caretaker is usually nowhere near the chunk IDs, so without
-		// records planted on the nodes that ARE near, its copies are
-		// invisible to provider walks.
-		n.announceAll(entry.ManifestChunks, func() {
-			if !n.repairRunning {
-				n.repairRunning = true
-				n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
-			}
-		})
 	})
 }
 
@@ -105,6 +105,19 @@ func (n *Node) repairRoot(root ports.Hash, done func()) {
 		done()
 		return
 	}
+	// (Re)acquire the manifest each sweep: mostly local cache hits, but
+	// a caretaker that missed its warm-start fetch keeps trying rather
+	// than sitting out the crisis.
+	n.fetchAll(entry.ManifestChunks, func(missing []ports.ChunkID) {
+		if len(missing) > 0 {
+			done() // swarm can't supply it right now; retry next sweep
+			return
+		}
+		n.repairRootWithManifest(entry, done)
+	})
+}
+
+func (n *Node) repairRootWithManifest(entry ports.Entry, done func()) {
 	m, err := pipeline.LoadManifest(bg(), n.store, entry)
 	if err != nil || m.K == 0 || len(m.Chunks) == 0 {
 		done()

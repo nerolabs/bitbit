@@ -3,9 +3,9 @@ package memstore_test
 import (
 	"testing"
 
-	"shardnet/adapters/memstore"
-	"shardnet/adapters/storetest"
-	"shardnet/ports"
+	"github.com/nerolabs/bitbit/adapters/memstore"
+	"github.com/nerolabs/bitbit/adapters/storetest"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 func TestConformance(t *testing.T) {
