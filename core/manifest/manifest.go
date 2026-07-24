@@ -15,6 +15,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	"shardnet/core/crypto"
+	"shardnet/core/erasure"
 	"shardnet/ports"
 )
 
@@ -40,11 +41,17 @@ type Manifest struct {
 	// FileKey is the per-file key (private mode only). Plaintext in v1 —
 	// acceptable in the sim, revisit with encrypted manifests.
 	FileKey []byte `cbor:"7,keyasint,omitempty"`
-	// Erasure-coding parameters, reserved until M2.
+	// Erasure-coding parameters: stripes of K consecutive chunks carry
+	// N-K parity shards each. K=0 means no coding (an M1 manifest).
 	K int `cbor:"8,keyasint,omitempty"`
 	N int `cbor:"9,keyasint,omitempty"`
 	// ManifestKey is reserved for v2 manifest encryption.
 	ManifestKey []byte `cbor:"10,keyasint,omitempty"`
+	// Parity lists parity shard IDs in stripe order: stripe j owns
+	// Parity[j*(N-K) : (j+1)*(N-K)]. A short final stripe is padded with
+	// implicit zero shards during encoding (see core/erasure), so every
+	// stripe has exactly N-K parity entries.
+	Parity [][]byte `cbor:"11,keyasint,omitempty"`
 }
 
 var encMode cbor.EncMode
@@ -122,19 +129,59 @@ func (m *Manifest) Validate() error {
 	if len(m.ManifestKey) != 0 {
 		return fmt.Errorf("manifest: encrypted manifests are not supported yet")
 	}
+	if m.K == 0 {
+		if m.N != 0 || len(m.Parity) != 0 {
+			return fmt.Errorf("manifest: parity present but k=0 (uncoded)")
+		}
+		return nil
+	}
+	p := erasure.Params{K: m.K, N: m.N}
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("manifest: %w", err)
+	}
+	wantParity := 0
+	if len(m.Chunks) > 0 {
+		wantParity = p.Stripes(len(m.Chunks)) * p.ParityShards()
+	}
+	if len(m.Parity) != wantParity {
+		return fmt.Errorf("manifest: %d parity shards for %d chunks under (k=%d,n=%d), want %d",
+			len(m.Parity), len(m.Chunks), m.K, m.N, wantParity)
+	}
+	for i, id := range m.Parity {
+		if len(id) != len(ports.Hash{}) {
+			return fmt.Errorf("manifest: parity %d has ID length %d", i, len(id))
+		}
+	}
 	return nil
 }
 
-// ChunkIDs returns the chunk list as typed hashes.
+// ChunkIDs returns the data chunk list as typed hashes.
 func (m *Manifest) ChunkIDs() []ports.ChunkID {
-	ids := make([]ports.ChunkID, len(m.Chunks))
-	for i, c := range m.Chunks {
-		copy(ids[i][:], c)
-	}
-	return ids
+	return toHashes(m.Chunks)
 }
 
-// Root computes the file's Merkle root from the manifest's chunk list.
+// ParityIDs returns the parity shard list as typed hashes.
+func (m *Manifest) ParityIDs() []ports.ChunkID {
+	return toHashes(m.Parity)
+}
+
+// Leaves is the Merkle leaf order: all data chunk IDs in file order,
+// then all parity IDs in stripe order. The root therefore commits to
+// every shard of the file, so inclusion proofs work for parity too —
+// which the future proof-of-retrieval seam needs.
+func (m *Manifest) Leaves() []ports.Hash {
+	return append(m.ChunkIDs(), m.ParityIDs()...)
+}
+
+// Root computes the file's Merkle root over all shard hashes.
 func (m *Manifest) Root() ports.Hash {
-	return MerkleRoot(m.ChunkIDs())
+	return MerkleRoot(m.Leaves())
+}
+
+func toHashes(raw [][]byte) []ports.Hash {
+	ids := make([]ports.Hash, len(raw))
+	for i, b := range raw {
+		copy(ids[i][:], b)
+	}
+	return ids
 }

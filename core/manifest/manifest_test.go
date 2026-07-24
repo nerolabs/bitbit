@@ -136,6 +136,46 @@ func TestManifestValidation(t *testing.T) {
 	}
 }
 
+func TestManifestErasureValidation(t *testing.T) {
+	// k=2, n=3 over 5 chunks ⇒ 3 stripes ⇒ 3 parity shards.
+	m := validConvergent(5)
+	m.K, m.N = 2, 3
+	rng := rand.New(rand.NewSource(9))
+	for i := 0; i < 3; i++ {
+		id := make([]byte, 32)
+		rng.Read(id)
+		m.Parity = append(m.Parity, id)
+	}
+	if err := m.Validate(); err != nil {
+		t.Fatalf("valid erasure manifest rejected: %v", err)
+	}
+	if len(m.Leaves()) != 8 {
+		t.Fatalf("Leaves: got %d, want 8 (5 data + 3 parity)", len(m.Leaves()))
+	}
+
+	// Root must commit to parity, not just data.
+	before := m.Root()
+	m.Parity[0][0] ^= 1
+	if m.Root() == before {
+		t.Fatal("changing a parity ID must change the root")
+	}
+	m.Parity[0][0] ^= 1
+
+	bad := func(name string, corrupt func(*Manifest)) {
+		c := *m
+		c.Parity = append([][]byte{}, m.Parity...)
+		corrupt(&c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: expected validation error", name)
+		}
+	}
+	bad("wrong parity count", func(c *Manifest) { c.Parity = c.Parity[:2] })
+	bad("k without n", func(c *Manifest) { c.N = 0 })
+	bad("k >= n", func(c *Manifest) { c.N = 2 })
+	bad("parity with k=0", func(c *Manifest) { c.K, c.N = 0, 0 })
+	bad("short parity id", func(c *Manifest) { c.Parity[0] = c.Parity[0][:31] })
+}
+
 func BenchmarkMerkleRoot1024Leaves(b *testing.B) {
 	leaves := randomLeaves(rand.New(rand.NewSource(1)), 1024)
 	b.ResetTimer()

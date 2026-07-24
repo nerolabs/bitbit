@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"math/rand"
+	"strings"
 	"testing"
 	"testing/quick"
 
 	"shardnet/adapters/memstore"
+	"shardnet/core/chunk"
 	"shardnet/core/crypto"
+	"shardnet/core/erasure"
+	"shardnet/core/manifest"
 	"shardnet/core/pipeline"
 	"shardnet/core/registry"
 	"shardnet/ports"
@@ -115,54 +119,132 @@ func TestPrivateModeDistinctRoots(t *testing.T) {
 	}
 }
 
-func TestCorruptChunkIsCaught(t *testing.T) {
-	ctx := context.Background()
-	store := memstore.New()
-	reg := registry.New()
-	data := make([]byte, 20_000)
-	rand.New(rand.NewSource(4)).Read(data)
-	root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
-		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent})
+// loadManifest fetches and parses the stored manifest for root, so tests
+// can aim their destruction at specific stripes.
+func loadManifest(t *testing.T, ctx context.Context, store ports.ChunkStore, reg ports.Registry, root ports.Hash) *manifest.Manifest {
+	t.Helper()
+	entry, ok, err := reg.Lookup(ctx, root)
+	if err != nil || !ok {
+		t.Fatalf("lookup: ok=%v err=%v", ok, err)
+	}
+	var frames [][]byte
+	for _, id := range entry.ManifestChunks {
+		c, err := store.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		frames = append(frames, c.Data)
+	}
+	var buf bytes.Buffer
+	if err := chunk.Join(&buf, frames); err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.Unmarshal(buf.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, _, _ := reg.Lookup(ctx, root)
-	// Corrupt one data chunk (any chunk that isn't a manifest chunk).
-	manifestIDs := map[ports.ChunkID]bool{}
-	for _, id := range entry.ManifestChunks {
-		manifestIDs[id] = true
-	}
-	ids, _ := store.List(ctx)
-	corrupted := false
-	for _, id := range ids {
-		if !manifestIDs[id] {
-			store.Corrupt(id)
-			corrupted = true
-			break
+	return m
+}
+
+// The M2 money test: delete ANY n-k shards from every stripe and the
+// file still comes back bit-perfect; delete one more and it fails with
+// a clear error.
+func TestSurvivesAnyNMinusKLosses(t *testing.T) {
+	ctx := context.Background()
+	params := erasure.Params{K: 4, N: 7}
+	data := make([]byte, 37_000) // 37 chunks ⇒ 10 stripes, last one short
+	rand.New(rand.NewSource(4)).Read(data)
+
+	for trial := 0; trial < 20; trial++ {
+		rng := rand.New(rand.NewSource(int64(100 + trial)))
+		store := memstore.New()
+		reg := registry.New()
+		root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+			pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent, Erasure: params})
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if !corrupted {
-		t.Fatal("test setup: found no data chunk to corrupt")
-	}
-	if err := pipeline.Get(ctx, store, reg, root, &bytes.Buffer{}); err == nil {
-		t.Fatal("Get must fail loudly on a corrupted chunk")
+		m := loadManifest(t, ctx, store, reg, root)
+		dataIDs, parityIDs := m.ChunkIDs(), m.ParityIDs()
+
+		// In every stripe, destroy a random n-k of the stored shards.
+		// (A short final stripe stores fewer than n shards; implicit
+		// zero shards can't be destroyed, they're mathematical.)
+		for j := 0; j < params.Stripes(len(dataIDs)); j++ {
+			lo := j * params.K
+			hi := min(lo+params.K, len(dataIDs))
+			var stored []ports.ChunkID
+			stored = append(stored, dataIDs[lo:hi]...)
+			stored = append(stored, parityIDs[j*params.ParityShards():(j+1)*params.ParityShards()]...)
+			for _, idx := range rng.Perm(len(stored))[:params.N-params.K] {
+				if err := store.Delete(ctx, stored[idx]); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		var out bytes.Buffer
+		if err := pipeline.Get(ctx, store, reg, root, &out); err != nil {
+			t.Fatalf("trial %d: Get after n-k losses per stripe: %v", trial, err)
+		}
+		if !bytes.Equal(out.Bytes(), data) {
+			t.Fatalf("trial %d: reconstructed file differs", trial)
+		}
 	}
 }
 
-func TestMissingChunkIsCaught(t *testing.T) {
+func TestOneLossBeyondToleranceFailsLoudly(t *testing.T) {
 	ctx := context.Background()
+	params := erasure.Params{K: 4, N: 6}
 	store := memstore.New()
 	reg := registry.New()
 	data := make([]byte, 20_000)
 	rand.New(rand.NewSource(5)).Read(data)
-	root, _ := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
-		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent})
-	ids, _ := store.List(ctx)
-	if err := store.Delete(ctx, ids[0]); err != nil {
+	root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent, Erasure: params})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pipeline.Get(ctx, store, reg, root, &bytes.Buffer{}); err == nil {
-		t.Fatal("Get must fail when a chunk is missing (no erasure coding until M2)")
+	m := loadManifest(t, ctx, store, reg, root)
+	// Kill n-k+1 shards of stripe 0 (1 data + both parity): unrecoverable.
+	victims := []ports.ChunkID{m.ChunkIDs()[0], m.ParityIDs()[0], m.ParityIDs()[1]}
+	if len(victims) != params.N-params.K+1 {
+		t.Fatalf("test setup: %d victims", len(victims))
+	}
+	for _, id := range victims {
+		store.Delete(ctx, id)
+	}
+	err = pipeline.Get(ctx, store, reg, root, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("Get must fail once losses exceed n-k in a stripe")
+	}
+	if !strings.Contains(err.Error(), "stripe 0") || !strings.Contains(err.Error(), "unrecoverable") {
+		t.Fatalf("error should name the stripe and say unrecoverable, got: %v", err)
+	}
+}
+
+// Corruption is just loss with extra steps: a shard that fails its hash
+// check gets rebuilt from parity like a missing one.
+func TestCorruptionIsRepairedFromParity(t *testing.T) {
+	ctx := context.Background()
+	store := memstore.New()
+	reg := registry.New()
+	data := make([]byte, 20_000)
+	rand.New(rand.NewSource(6)).Read(data)
+	root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent, Erasure: erasure.Params{K: 4, N: 6}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := loadManifest(t, ctx, store, reg, root)
+	if !store.Corrupt(m.ChunkIDs()[0]) {
+		t.Fatal("test setup: corrupt failed")
+	}
+	var out bytes.Buffer
+	if err := pipeline.Get(ctx, store, reg, root, &out); err != nil {
+		t.Fatalf("Get with one corrupt chunk should recover via parity: %v", err)
+	}
+	if !bytes.Equal(out.Bytes(), data) {
+		t.Fatal("recovered file differs")
 	}
 }
 

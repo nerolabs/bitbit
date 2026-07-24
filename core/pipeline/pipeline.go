@@ -19,6 +19,7 @@ import (
 
 	"shardnet/core/chunk"
 	"shardnet/core/crypto"
+	"shardnet/core/erasure"
 	"shardnet/core/manifest"
 	"shardnet/ports"
 )
@@ -30,6 +31,8 @@ const DefaultChunkSize = 64 << 10
 type Options struct {
 	ChunkSize int
 	Mode      crypto.Mode
+	// Erasure is the (k, n) code; zero value means DefaultParams.
+	Erasure erasure.Params
 	// Rand supplies key material for private mode. Injected, never
 	// defaulted inside core: determinism under test is non-negotiable.
 	Rand io.Reader
@@ -39,6 +42,12 @@ type Options struct {
 func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.Reader, opts Options) (ports.Hash, error) {
 	if opts.ChunkSize == 0 {
 		opts.ChunkSize = DefaultChunkSize
+	}
+	if opts.Erasure == (erasure.Params{}) {
+		opts.Erasure = erasure.DefaultParams
+	}
+	if err := opts.Erasure.Validate(); err != nil {
+		return ports.Hash{}, fmt.Errorf("add: %w", err)
 	}
 	frames, err := chunk.Split(r, opts.ChunkSize)
 	if err != nil {
@@ -50,6 +59,8 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		Mode:      string(opts.Mode),
 		ChunkSize: int64(opts.ChunkSize),
 		FileSize:  fileSizeOf(frames),
+		K:         opts.Erasure.K,
+		N:         opts.Erasure.N,
 	}
 
 	var fileKey [crypto.KeySize]byte
@@ -64,6 +75,7 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		m.FileKey = fileKey[:]
 	}
 
+	ctChunks := make([][]byte, 0, len(frames))
 	for i, frame := range frames {
 		var ct []byte
 		switch opts.Mode {
@@ -87,6 +99,26 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 			return ports.Hash{}, fmt.Errorf("add: storing chunk %d: %w", i, err)
 		}
 		m.Chunks = append(m.Chunks, c.ID[:])
+		ctChunks = append(ctChunks, ct)
+	}
+
+	// Erasure-code the ciphertext stream: each stripe of k chunks gains
+	// n-k parity shards, stored like any other chunk.
+	p := opts.Erasure
+	for j := 0; j < p.Stripes(len(ctChunks)); j++ {
+		lo := j * p.K
+		hi := min(lo+p.K, len(ctChunks))
+		parity, err := erasure.EncodeStripe(p, ctChunks[lo:hi])
+		if err != nil {
+			return ports.Hash{}, fmt.Errorf("add: encoding stripe %d: %w", j, err)
+		}
+		for q, shard := range parity {
+			c := ports.NewChunk(shard)
+			if err := store.Put(ctx, c); err != nil {
+				return ports.Hash{}, fmt.Errorf("add: storing parity %d of stripe %d: %w", q, j, err)
+			}
+			m.Parity = append(m.Parity, c.ID[:])
+		}
 	}
 
 	root := m.Root()
@@ -169,24 +201,21 @@ func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root p
 		copy(fileKey[:], m.FileKey)
 	}
 
-	var written int64
-	frames := make([][]byte, 0, len(m.Chunks))
-	for i, id := range m.ChunkIDs() {
-		c, err := store.Get(ctx, id)
-		if err != nil {
-			return fmt.Errorf("get: chunk %d: %w", i, err)
-		}
-		if !c.Verify() {
-			return fmt.Errorf("get: chunk %d (%s): %w", i, id, ports.ErrCorrupt)
-		}
+	ctChunks, err := fetchDataChunks(ctx, store, m)
+	if err != nil {
+		return fmt.Errorf("get: %w", err)
+	}
+
+	frames := make([][]byte, 0, len(ctChunks))
+	for i, ct := range ctChunks {
 		var pt []byte
 		switch mode {
 		case crypto.Convergent:
 			var secret [crypto.SecretSize]byte
 			copy(secret[:], m.ChunkSecrets[i])
-			pt, err = crypto.ConvergentDecrypt(c.Data, secret)
+			pt, err = crypto.ConvergentDecrypt(ct, secret)
 		case crypto.Private:
-			pt, err = crypto.PrivateDecrypt(fileKey, uint64(i), c.Data)
+			pt, err = crypto.PrivateDecrypt(fileKey, uint64(i), ct)
 		}
 		if err != nil {
 			return fmt.Errorf("get: chunk %d: %w", i, err)
@@ -197,11 +226,72 @@ func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root p
 	if err := chunk.Join(counter, frames); err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
-	written = counter.n
-	if written != m.FileSize {
-		return fmt.Errorf("get: reassembled %d bytes, manifest says %d", written, m.FileSize)
+	if counter.n != m.FileSize {
+		return fmt.Errorf("get: reassembled %d bytes, manifest says %d", counter.n, m.FileSize)
 	}
 	return nil
+}
+
+// fetchDataChunks returns every ciphertext data chunk of the file, in
+// order, reconstructing missing or corrupt ones from parity when the
+// manifest is erasure-coded. A shard that fails its hash check is
+// treated exactly like a lost shard — to the decoder, corruption IS
+// loss. Every reconstructed chunk is re-verified against the manifest's
+// (root-committed) hash before use.
+func fetchDataChunks(ctx context.Context, store ports.ChunkStore, m *manifest.Manifest) ([][]byte, error) {
+	dataIDs := m.ChunkIDs()
+	if m.K == 0 { // uncoded manifest: every chunk must be present
+		out := make([][]byte, len(dataIDs))
+		for i, id := range dataIDs {
+			c, err := store.Get(ctx, id)
+			if err != nil {
+				return nil, fmt.Errorf("chunk %d: %w (no erasure coding to recover with)", i, err)
+			}
+			out[i] = c.Data
+		}
+		return out, nil
+	}
+
+	p := erasure.Params{K: m.K, N: m.N}
+	parityIDs := m.ParityIDs()
+	out := make([][]byte, len(dataIDs))
+	for j := 0; j < p.Stripes(len(dataIDs)); j++ {
+		lo := j * p.K
+		hi := min(lo+p.K, len(dataIDs))
+		realData := hi - lo
+
+		shards := make([][]byte, p.N)
+		missing := 0
+		for i := 0; i < realData; i++ {
+			c, err := store.Get(ctx, dataIDs[lo+i])
+			if err != nil {
+				missing++ // lost or corrupt — parity's problem now
+				continue
+			}
+			shards[i] = c.Data
+		}
+		if missing > 0 {
+			for q := 0; q < p.ParityShards(); q++ {
+				c, err := store.Get(ctx, parityIDs[j*p.ParityShards()+q])
+				if err != nil {
+					continue
+				}
+				shards[p.K+q] = c.Data
+			}
+			if err := erasure.ReconstructStripe(p, shards, realData); err != nil {
+				return nil, fmt.Errorf("stripe %d: %d data shard(s) lost and %w", j, missing, err)
+			}
+			// Reconstruction is only trusted if the recovered bytes hash
+			// to the IDs the Merkle root committed to.
+			for i := 0; i < realData; i++ {
+				if ports.HashBytes(shards[i]) != dataIDs[lo+i] {
+					return nil, fmt.Errorf("stripe %d: reconstructed chunk %d does not match its manifest hash", j, lo+i)
+				}
+			}
+		}
+		copy(out[lo:hi], shards[:realData])
+	}
+	return out, nil
 }
 
 func fileSizeOf(frames [][]byte) int64 {
