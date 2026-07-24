@@ -12,6 +12,7 @@ package node
 import (
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/nerolabs/bitbit/core/dht"
 	"github.com/nerolabs/bitbit/core/erasure"
@@ -31,6 +32,12 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 	root := m.Root()
 	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
 	placed := 0
+	// stripeHosts counts how many shards of each stripe every node
+	// holds, for anti-affinity: one node dying should cost a stripe as
+	// little as possible, so shards of the same stripe repel each
+	// other — and repel harder from nodes already doubled up.
+	stripeHosts := make(map[int]map[ports.NodeID]int)
+
 	var next func(i int)
 	next = func(i int) {
 		if i == len(ids) {
@@ -47,51 +54,94 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 		// answer storage challenges. Manifest chunks aren't tree leaves
 		// and go bare.
 		var proof *ports.StorageProof
+		stripe := -1 // manifest chunks have no stripe
 		if li := i - len(entry.ManifestChunks); li >= 0 {
 			if p, perr := manifest.Prove(leaves, li); perr == nil {
 				proof = &ports.StorageProof{Root: root, Index: p.Index, Total: p.Total, Path: p.Path}
 			}
+			stripe = stripeOfLeaf(m, li)
 		}
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
-			targets := n.pickTargets(closest)
-			n.storeAt(id, c.Data, proof, targets, 0, &placed, func() {
-				if !keepLocal {
-					n.store.Delete(bg(), id)
-				}
-				next(i + 1)
-			})
+			candidates := preferAvoiding(closest, stripeHosts[stripe])
+			n.placeAt(id, c.Data, proof, candidates, n.cfg.Replication,
+				func(target ports.NodeID) {
+					placed++
+					if stripe >= 0 {
+						if stripeHosts[stripe] == nil {
+							stripeHosts[stripe] = make(map[ports.NodeID]int)
+						}
+						stripeHosts[stripe][target]++
+					}
+				},
+				func(int) {
+					if !keepLocal {
+						n.store.Delete(bg(), id)
+					}
+					next(i + 1)
+				})
 		})
 	}
 	next(0)
 }
 
-// pickTargets filters self out of a closest-nodes list and caps it at
-// the replication factor.
-func (n *Node) pickTargets(closest []ports.NodeID) []ports.NodeID {
-	targets := make([]ports.NodeID, 0, n.cfg.Replication)
-	for _, t := range closest {
-		if t != n.id {
-			targets = append(targets, t)
-			if len(targets) == n.cfg.Replication {
-				break
-			}
-		}
+// stripeOfLeaf maps a Merkle leaf index (data leaves first, then
+// parity, per manifest.Leaves) to its stripe number, or -1 if the
+// manifest is uncoded.
+func stripeOfLeaf(m *manifest.Manifest, li int) int {
+	if m.K == 0 {
+		return -1
 	}
-	return targets
+	if li < len(m.Chunks) {
+		return li / m.K
+	}
+	return (li - len(m.Chunks)) / (m.N - m.K)
 }
 
-func (n *Node) storeAt(id ports.ChunkID, data []byte, proof *ports.StorageProof, targets []ports.NodeID, i int, placed *int, done func()) {
-	if i == len(targets) {
-		done()
-		return
+// preferAvoiding orders candidates by how many shards of this stripe
+// they already hold (fewest first; XOR closeness breaks ties by
+// preserving the incoming order). Anti-affinity as graded preference,
+// not veto: a shard is still better on a doubled-up node than nowhere.
+func preferAvoiding(candidates []ports.NodeID, held map[ports.NodeID]int) []ports.NodeID {
+	if len(held) == 0 {
+		return candidates
 	}
-	msg := ports.Message{Kind: ports.MsgStoreChunk, ChunkID: id, Data: data, Proof: proof}
-	n.request(targets[i], msg, func(resp ports.Message, err error) {
-		if err == nil && resp.OK {
-			*placed++
+	out := append([]ports.NodeID(nil), candidates...)
+	sort.SliceStable(out, func(i, j int) bool { return held[out[i]] < held[out[j]] })
+	return out
+}
+
+// placeAt walks candidates in order (skipping self) until want have
+// accepted or the list runs out. A full node's refusal (ErrStoreFull →
+// OK=false) just means the next candidate gets asked — spill-over is
+// how a capacity-bounded network fills evenly. accepted (optional)
+// fires per accepting node; done receives the acceptance count.
+func (n *Node) placeAt(id ports.ChunkID, data []byte, proof *ports.StorageProof,
+	candidates []ports.NodeID, want int, accepted func(ports.NodeID), done func(placed int)) {
+
+	placed := 0
+	var try func(i int)
+	try = func(i int) {
+		if placed >= want || i >= len(candidates) {
+			done(placed)
+			return
 		}
-		n.storeAt(id, data, proof, targets, i+1, placed, done)
-	})
+		target := candidates[i]
+		if target == n.id {
+			try(i + 1)
+			return
+		}
+		msg := ports.Message{Kind: ports.MsgStoreChunk, ChunkID: id, Data: data, Proof: proof}
+		n.request(target, msg, func(resp ports.Message, err error) {
+			if err == nil && resp.OK {
+				placed++
+				if accepted != nil {
+					accepted(target)
+				}
+			}
+			try(i + 1)
+		})
+	}
+	try(0)
 }
 
 // resolveProviders finds nodes claiming to hold id: local records plus

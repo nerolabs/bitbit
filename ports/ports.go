@@ -62,6 +62,7 @@ var (
 	ErrNoSuchEntry        = errors.New("root not in registry")
 	ErrInsufficientCredit = errors.New("insufficient credit to publish")
 	ErrPublisherRequired  = errors.New("gated registry requires a publisher identity")
+	ErrStoreFull          = errors.New("store capacity exhausted")
 )
 
 // ChunkStore is anywhere chunks can live: an in-memory map, a directory
@@ -76,6 +77,14 @@ type ChunkStore interface {
 	// Delete exists for capacity eviction (and for sim scenarios that
 	// destroy shards on purpose).
 	Delete(ctx context.Context, id ChunkID) error
+}
+
+// CapacityReporter is implemented by stores with a fixed pledge
+// ("bitbit daemon -capacity 2G"). Nodes whose store reports capacity
+// piggyback it on every message, which is how the network learns its
+// own total size.
+type CapacityReporter interface {
+	Capacity() (used, total int64)
 }
 
 // Entry is what gets published to the global registry: the Merkle root

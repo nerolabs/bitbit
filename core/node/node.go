@@ -98,7 +98,15 @@ type Node struct {
 	liar bool
 	// proofs holds the storage proof for each chunk this node hosts.
 	proofs map[ports.ChunkID]ports.StorageProof
+
+	// capacity gossip: capRep is the store's reporter (nil if the store
+	// is unbounded); peerCaps accumulates what peers report about
+	// themselves, the raw material of the network capacity estimate.
+	capRep   ports.CapacityReporter
+	peerCaps map[ports.NodeID]capInfo
 }
+
+type capInfo struct{ used, total int64 }
 
 // SetLedger wires credit accounting; nil disables it.
 func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
@@ -121,8 +129,23 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		pending: make(map[uint64]*pending),
 		proofs:  make(map[ports.ChunkID]ports.StorageProof),
 	}
+	if rep, ok := store.(ports.CapacityReporter); ok {
+		n.capRep = rep
+		n.peerCaps = make(map[ports.NodeID]capInfo)
+	} else {
+		n.peerCaps = make(map[ports.NodeID]capInfo)
+	}
 	tr.SetHandler(n.handle)
 	return n
+}
+
+// send stamps outgoing messages with our current capacity pledge — the
+// gossip that lets every node estimate the network's total storage.
+func (n *Node) send(to ports.NodeID, msg ports.Message) error {
+	if n.capRep != nil {
+		msg.CapUsed, msg.CapTotal = n.capRep.Capacity()
+	}
+	return n.tr.Send(to, msg)
 }
 
 func (n *Node) ID() ports.NodeID        { return n.id }
@@ -149,7 +172,7 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 	})
 	n.pending[rid] = p
 	n.Stats.QueriesSent++
-	if err := n.tr.Send(to, msg); err != nil {
+	if err := n.send(to, msg); err != nil {
 		p.cancel()
 		delete(n.pending, rid)
 		cb(ports.Message{}, err)
@@ -159,6 +182,9 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 // handle is the single entry point for every incoming message.
 func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 	n.table.Observe(from) // any message is proof of life
+	if msg.CapTotal > 0 {
+		n.peerCaps[from] = capInfo{used: msg.CapUsed, total: msg.CapTotal}
+	}
 
 	if msg.IsReply() {
 		p, ok := n.pending[msg.RID]
@@ -248,7 +274,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 
 func (n *Node) reply(to ports.NodeID, req ports.Message, resp ports.Message) {
 	resp.RID = req.RID
-	n.tr.Send(to, resp)
+	n.send(to, resp)
 }
 
 func (n *Node) closestExcluding(target ports.Hash, exclude ports.NodeID) []ports.NodeID {

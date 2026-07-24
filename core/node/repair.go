@@ -183,9 +183,7 @@ func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
 			return
 		}
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
-			targets := n.pickTargets(closest)
-			placed := 0
-			n.storeAt(id, c.Data, nil, targets, 0, &placed, func() {
+			n.placeAt(id, c.Data, nil, closest, n.cfg.Replication, nil, func(placed int) {
 				if placed > 0 {
 					n.Stats.ShardsRebuilt++
 				}
@@ -349,9 +347,7 @@ func (n *Node) repairStripe(m *manifest.Manifest, p erasure.Params, stripeRefs [
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path}
 			}
 			n.IterativeFindNode(r.id, func(closest []ports.NodeID) {
-				targets := n.pickTargets(closest)
-				placed := 0
-				n.storeAt(r.id, shards[r.pos], proof, targets, 0, &placed, func() {
+				n.placeAt(r.id, shards[r.pos], proof, closest, n.cfg.Replication, nil, func(placed int) {
 					if placed > 0 {
 						n.Stats.ShardsRebuilt++
 					}

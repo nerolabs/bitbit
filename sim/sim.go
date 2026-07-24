@@ -34,11 +34,20 @@ type Cluster struct {
 	rng      *rand.Rand
 }
 
-// NewCluster builds and bootstraps nNodes. Each node seeds its routing
-// table with a few earlier nodes (like joining via known peers) and
-// runs the standard self-lookup join; the scheduler then runs to
-// quiescence, so the returned cluster has settled routing tables.
+// NewCluster builds and bootstraps nNodes with unbounded stores.
 func NewCluster(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Config) *Cluster {
+	return NewClusterWithStores(seed, nNodes, netCfg, nodeCfg,
+		func(int) ports.ChunkStore { return memstore.New() })
+}
+
+// NewClusterWithStores builds and bootstraps nNodes, with per-node
+// stores from the factory (the capacity scenario hands out bounded
+// ones). Each node seeds its routing table with a few earlier nodes
+// (like joining via known peers) and runs the standard self-lookup
+// join; the scheduler then runs to quiescence, so the returned cluster
+// has settled routing tables.
+func NewClusterWithStores(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Config,
+	storeFor func(i int) ports.ChunkStore) *Cluster {
 	sched := simclock.New()
 	net := simnet.New(sched, seed, netCfg)
 	rng := rand.New(rand.NewSource(seed))
@@ -48,7 +57,7 @@ func NewCluster(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Confi
 		var id ports.NodeID
 		rng.Read(id[:])
 		ep := net.Endpoint(id)
-		cl.Nodes = append(cl.Nodes, node.New(id, nodeCfg, sched, ep, memstore.New()))
+		cl.Nodes = append(cl.Nodes, node.New(id, nodeCfg, sched, ep, storeFor(i)))
 	}
 	for i, nd := range cl.Nodes {
 		if i == 0 {

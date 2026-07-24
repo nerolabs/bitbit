@@ -32,6 +32,16 @@ Beyond the original handoff:
 - ✅ M8 — daemon mode: separate OS processes form a real swarm (disk
   stores, registry over HTTP, ephemeral add/get clients); daemons
   re-announce their held chunks on restart
+- ✅ M9 — capacity: `daemon -capacity 2G` pledges bounded storage;
+  placement spills over when nodes fill and spreads stripes for
+  availability; every node estimates total network storage from local
+  knowledge alone (`sim run capacity`)
+
+Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
+encrypted manifests, the reputation-quorum chain, web frontends, and
+the desktop client. The resolver layer that maps meaning onto opaque
+identifiers is a deliberately separate product:
+[`docs/aslan-boundary.md`](docs/aslan-boundary.md).
 
 ## Try it
 

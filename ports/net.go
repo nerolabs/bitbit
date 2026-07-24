@@ -91,6 +91,11 @@ type Message struct {
 	Proof *StorageProof
 	Nonce uint64
 	Tag   []byte
+	// Capacity gossip: every message from a capacity-pledging node
+	// carries its current used/total, so peers accumulate a sample of
+	// the network's storage for the M9 capacity estimate.
+	CapUsed  int64
+	CapTotal int64
 }
 
 // IsReply reports whether this kind terminates a pending request.
