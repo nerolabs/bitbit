@@ -36,6 +36,12 @@ Beyond the original handoff:
   placement spills over when nodes fill and spreads stripes for
   availability; every node estimates total network storage from local
   knowledge alone (`sim run capacity`)
+- ✅ M10 — identity, TLS, discovery: NodeID = SHA-256(public key),
+  every connection is mutual TLS pinned to the key (no CA — the
+  identity IS the key, and reputation can't be shed without it);
+  registry over pinned HTTPS; Bitcoin-style discovery (bootstrap
+  flags → DNS seeds → peer exchange, address book persisted for
+  flagless warm restarts)
 
 Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
 encrypted manifests, the reputation-quorum chain, web frontends, and

@@ -30,15 +30,15 @@ network capacity accounting: every message piggybacks the sender's
 used/total, and each node estimates network size from XOR-space
 density (math note 06) to compute total network capacity.
 
-### M10 — Identity, TLS, discovery
-- NodeID = hash of the node's public key; connections are TLS with
-  self-signed certs bound to that key. Identity IS the keypair — no
-  CA, no accounts. (This also hardens reputation: you can't shed a bad
-  reputation without shedding your identity.)
-- Discovery, Bitcoin-style, in layers: (1) hardcoded seed peers in the
-  binary, (2) DNS seeds — TXT/SRV records under a domain returning
-  peer strings, (3) peer exchange: tcpnet envelopes already gossip
-  contacts; persist learned peers to disk for warm restarts.
+### M10 — Identity, TLS, discovery (DONE)
+- NodeID = SHA-256(Ed25519 public key); all swarm connections are
+  mutual TLS 1.3 pinned to the key (adapters/identity, tcpnet);
+  registry over pinned HTTPS. No CA, no accounts — the identity IS the
+  keypair, and reputation can't be shed without it. Frames claiming a
+  sender other than the handshake's key are dropped.
+- Discovery in layers (adapters/discovery): -bootstrap peer strings →
+  -dns-seed TXT records → peer exchange, with the learned address book
+  persisted to peers.json for flagless warm restarts.
 
 ### M11 — Encrypted manifests ("encrypted at all levels")
 Fill the reserved ManifestKey seam: manifests are stored as ciphertext

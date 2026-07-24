@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/bitbit/adapters/eventloop"
+	"github.com/nerolabs/bitbit/adapters/identity"
 	"github.com/nerolabs/bitbit/adapters/memstore"
 	"github.com/nerolabs/bitbit/adapters/tcpnet"
 	"github.com/nerolabs/bitbit/adapters/walltime"
@@ -37,10 +38,10 @@ func (r *realNode) call(t *testing.T, timeout time.Duration, fn func(done func()
 	}
 }
 
-// The bet from the HANDOFF, settled: the identical core — node, dht,
-// pipeline, erasure, crypto — that runs on simnet runs here over real
-// TCP sockets on localhost, with only adapters swapped.
-func TestScatterOverRealTCP(t *testing.T) {
+// The bet from the HANDOFF, still standing after M10: the identical
+// core that runs on simnet runs here over mutual-TLS sockets with
+// pinned identities, with only adapters swapped.
+func TestScatterOverRealTLS(t *testing.T) {
 	const nNodes = 5
 	rng := rand.New(rand.NewSource(1))
 	cfg := node.DefaultConfig()
@@ -49,15 +50,14 @@ func TestScatterOverRealTCP(t *testing.T) {
 
 	var nodes []*realNode
 	for i := 0; i < nNodes; i++ {
-		var id ports.NodeID
-		rng.Read(id[:])
+		ident := identity.FromSeed(int64(100 + i))
 		loop := eventloop.New()
 		go loop.Run()
-		tr, err := tcpnet.New(loop, id, "127.0.0.1:0")
+		tr, err := tcpnet.New(loop, ident, "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
 		}
-		nd := node.New(id, cfg, walltime.New(loop), tr, memstore.New())
+		nd := node.New(ident.NodeID(), cfg, walltime.New(loop), tr, memstore.New())
 		nodes = append(nodes, &realNode{loop: loop, tr: tr, nd: nd})
 	}
 	defer func() {
@@ -67,7 +67,8 @@ func TestScatterOverRealTCP(t *testing.T) {
 		}
 	}()
 
-	// Everyone knows node 0's address; the rest is learned on the wire.
+	// Everyone knows node 0's identity+address; the rest is learned on
+	// the wire, every hop TLS-pinned.
 	for i := 1; i < nNodes; i++ {
 		nodes[i].tr.AddPeer(nodes[0].nd.ID(), nodes[0].tr.Addr())
 	}
@@ -78,7 +79,6 @@ func TestScatterOverRealTCP(t *testing.T) {
 		})
 	}
 
-	// A adds a file locally, scatters it across the swarm, keeps nothing.
 	data := make([]byte, 128<<10)
 	rng.Read(data)
 	a, z := nodes[0], nodes[nNodes-1]
@@ -102,7 +102,6 @@ func TestScatterOverRealTCP(t *testing.T) {
 		a.nd.Distribute(entry, m, false, func(int) { done() })
 	})
 
-	// Z, holding only the root hash, pulls it back through real sockets.
 	var out bytes.Buffer
 	z.call(t, 60*time.Second, func(done func()) {
 		z.nd.NetGet(reg, root, &out, func(err error) {
@@ -113,6 +112,52 @@ func TestScatterOverRealTCP(t *testing.T) {
 		})
 	})
 	if !bytes.Equal(out.Bytes(), data) {
-		t.Fatal("bytes differ after roundtrip over TCP")
+		t.Fatal("bytes differ after roundtrip over TLS")
+	}
+
+	// Peer exchange happened over the wire: node Z should now know more
+	// peers than the single seed it was given.
+	if got := len(z.tr.Peers()); got < 3 {
+		t.Fatalf("Z's address book has %d peers after traffic, want ≥3 (peer exchange broken?)", got)
+	}
+}
+
+// An impostor at a known address must get silence: the dialer pins the
+// expected identity and the handshake fails against the wrong key.
+func TestImpostorGetsNothing(t *testing.T) {
+	honest := identity.FromSeed(201)
+	impostor := identity.FromSeed(202)
+
+	loopA := eventloop.New()
+	go loopA.Run()
+	defer loopA.Stop()
+	trA, err := tcpnet.New(loopA, identity.FromSeed(200), "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer trA.Close()
+
+	loopB := eventloop.New()
+	go loopB.Run()
+	defer loopB.Stop()
+	trB, err := tcpnet.New(loopB, impostor, "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer trB.Close()
+
+	delivered := make(chan struct{}, 1)
+	trB.SetHandler(func(ports.NodeID, ports.Message) { delivered <- struct{}{} })
+
+	// A's address book claims HONEST lives at the impostor's address.
+	trA.AddPeer(honest.NodeID(), trB.Addr())
+	if err := trA.Send(honest.NodeID(), ports.Message{Kind: ports.MsgFindNode}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-delivered:
+		t.Fatal("impostor received a message meant for another identity")
+	case <-time.After(500 * time.Millisecond):
+		// silence: exactly right
 	}
 }

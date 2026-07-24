@@ -1,6 +1,13 @@
 // Package tcpnet is the real-network Transport: length-prefixed CBOR
-// frames over TCP. This adapter is the HANDOFF's bet made good — the
-// swap from simnet to real sockets touches zero core logic.
+// frames over mutual TLS. This adapter is the HANDOFF's bet made good —
+// the swap from simnet to real sockets touches zero core logic.
+//
+// Security model (M10): every connection is TLS 1.3 with BOTH ends
+// presenting self-signed certificates, verified by pubkey pinning
+// rather than PKI — a peer is authentic iff the key it presents hashes
+// to the NodeID you addressed (dialing) or the NodeID it claims to be
+// (accepting). Spoofed sender IDs die at the handshake; there is no CA
+// because the identity IS the key (see adapters/identity).
 //
 // Two realities of leaving the sim are handled here, both invisibly to
 // the core:
@@ -8,56 +15,76 @@
 //   - Addressing. Core speaks pure NodeIDs; TCP needs ip:port. The
 //     adapter keeps an address book, stamps every outgoing frame with
 //     the sender's own listen address, and attaches known addresses for
-//     any NodeIDs mentioned in the message (the Nodes/Providers lists).
-//     Receivers learn as they listen — this is why real Kademlia
-//     messages carry contact info, done here as an envelope concern.
+//     any NodeIDs mentioned in the message. Receivers learn as they
+//     listen — address gossip as an envelope concern.
 //   - Concurrency. Sockets mean goroutines; core code is lock-free and
 //     single-threaded by contract. Every delivery is posted onto the
 //     node's event loop, never invoked from a reader goroutine.
 //
-// Loss semantics are UDP-ish on purpose: Send never blocks and dial or
-// write failures just drop the message — the core's timeout machinery
-// already knows how to live in that world, because the sim taught it.
-// No TLS, no auth, no framing versioning: this is a demo transport for
-// a trusted network, and says so out loud.
+// Loss semantics are UDP-ish on purpose: Send never blocks and dial,
+// handshake, or write failures just drop the message — the core's
+// timeout machinery already knows how to live in that world.
 package tcpnet
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
 
 	"github.com/nerolabs/bitbit/adapters/eventloop"
+	"github.com/nerolabs/bitbit/adapters/identity"
 	"github.com/nerolabs/bitbit/ports"
 )
 
 const maxFrame = 32 << 20 // sanity cap; a frame carries at most one chunk
 
+// Peer is an entry in the address book.
+type Peer struct {
+	ID   ports.NodeID
+	Addr string
+}
+
 type Transport struct {
 	loop       *eventloop.Loop
+	ident      *identity.Identity
+	cert       tls.Certificate
 	self       ports.NodeID
 	listenAddr string
 	ln         net.Listener
 	handler    func(from ports.NodeID, msg ports.Message)
-	peers      map[ports.NodeID]string // address book; touched only on the loop
+
+	mu    sync.Mutex
+	peers map[ports.NodeID]string
 }
 
 var _ ports.Transport = (*Transport)(nil)
 
-// New starts listening on listenAddr (use "127.0.0.1:0" for an
-// ephemeral port; Addr() reports what was bound).
-func New(loop *eventloop.Loop, self ports.NodeID, listenAddr string) (*Transport, error) {
-	ln, err := net.Listen("tcp", listenAddr)
+// New starts listening on listenAddr with ident's TLS certificate.
+func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Transport, error) {
+	cert, err := ident.Certificate()
+	if err != nil {
+		return nil, fmt.Errorf("tcpnet: %w", err)
+	}
+	ln, err := tls.Listen("tcp", listenAddr, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAnyClientCert, // verified by pubkey hash after handshake
+		MinVersion:   tls.VersionTLS13,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("tcpnet: %w", err)
 	}
 	t := &Transport{
 		loop:       loop,
-		self:       self,
+		ident:      ident,
+		cert:       cert,
+		self:       ident.NodeID(),
 		listenAddr: ln.Addr().String(),
 		ln:         ln,
 		peers:      make(map[ports.NodeID]string),
@@ -66,24 +93,56 @@ func New(loop *eventloop.Loop, self ports.NodeID, listenAddr string) (*Transport
 	return t, nil
 }
 
-func (t *Transport) Addr() string { return t.listenAddr }
-
-func (t *Transport) Close() error { return t.ln.Close() }
+func (t *Transport) Addr() string       { return t.listenAddr }
+func (t *Transport) Self() ports.NodeID { return t.self }
+func (t *Transport) Close() error       { return t.ln.Close() }
 
 // AddPeer seeds the address book (bootstrap wiring).
 func (t *Transport) AddPeer(id ports.NodeID, addr string) {
-	t.loop.Post(func() { t.peers[id] = addr })
+	t.mu.Lock()
+	t.peers[id] = addr
+	t.mu.Unlock()
+}
+
+// Peers snapshots the address book, sorted for deterministic output —
+// this is what gets persisted for warm restarts (discovery).
+func (t *Transport) Peers() []Peer {
+	t.mu.Lock()
+	out := make([]Peer, 0, len(t.peers))
+	for id, addr := range t.peers {
+		out = append(out, Peer{ID: id, Addr: addr})
+	}
+	t.mu.Unlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	return out
+}
+
+func (t *Transport) lookupAddr(id ports.NodeID) (string, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	addr, ok := t.peers[id]
+	return addr, ok
+}
+
+func (t *Transport) learn(id ports.NodeID, addr string, overwrite bool) {
+	if addr == "" {
+		return
+	}
+	t.mu.Lock()
+	if _, known := t.peers[id]; overwrite || !known {
+		t.peers[id] = addr
+	}
+	t.mu.Unlock()
 }
 
 func (t *Transport) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
 	t.handler = h
 }
 
-// Send runs on the loop (core's thread). It resolves the address,
-// builds the envelope, then hands the actual dial+write to a goroutine
-// so the loop never blocks on the network.
+// Send resolves the address, builds the envelope, and hands the
+// dial+handshake+write to a goroutine so the loop never blocks.
 func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
-	addr, ok := t.peers[to]
+	addr, ok := t.lookupAddr(to)
 	if !ok {
 		return fmt.Errorf("tcpnet: no known address for %s", to)
 	}
@@ -91,7 +150,7 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	contacts := make(map[string]string)
 	for _, list := range [][]ports.NodeID{msg.Nodes, msg.Providers} {
 		for _, id := range list {
-			if a, known := t.peers[id]; known {
+			if a, known := t.lookupAddr(id); known {
 				contacts[id.String()] = a
 			}
 		}
@@ -103,12 +162,21 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	if err != nil {
 		return fmt.Errorf("tcpnet: encode: %w", err)
 	}
-	go writeFrame(addr, frame)
+	go t.writeFrame(to, addr, frame)
 	return nil
 }
 
-func writeFrame(addr string, frame []byte) {
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+// writeFrame dials with the target's identity pinned: if the far end's
+// key doesn't hash to the NodeID we meant, the handshake fails and the
+// message is dropped — impostors get silence, not data.
+func (t *Transport) writeFrame(to ports.NodeID, addr string, frame []byte) {
+	cfg := &tls.Config{
+		Certificates:          []tls.Certificate{t.cert},
+		InsecureSkipVerify:    true, // replaced by pinning, not skipped
+		VerifyPeerCertificate: identity.VerifyExpected(to),
+		MinVersion:            tls.VersionTLS13,
+	}
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
 	if err != nil {
 		return // dropped; timeouts upstream handle it
 	}
@@ -125,12 +193,21 @@ func (t *Transport) acceptLoop() {
 		if err != nil {
 			return // listener closed
 		}
-		go t.readLoop(conn)
+		go t.readLoop(conn.(*tls.Conn))
 	}
 }
 
-func (t *Transport) readLoop(conn net.Conn) {
+func (t *Transport) readLoop(conn *tls.Conn) {
 	defer conn.Close()
+	if err := conn.Handshake(); err != nil {
+		return
+	}
+	// The sender's identity comes from the TLS handshake, not from
+	// anything it writes in a frame.
+	from, err := identity.PeerID(conn.ConnectionState())
+	if err != nil {
+		return
+	}
 	for {
 		var hdr [4]byte
 		if _, err := io.ReadFull(conn, hdr[:]); err != nil {
@@ -148,23 +225,21 @@ func (t *Transport) readLoop(conn net.Conn) {
 		if err := cbor.Unmarshal(frame, &env); err != nil {
 			return
 		}
-		if len(env.From) != len(ports.NodeID{}) {
+		// A frame claiming to be from someone other than the
+		// authenticated key is a forgery; kill the connection.
+		var claimed ports.NodeID
+		copy(claimed[:], env.From)
+		if claimed != from {
 			return
 		}
-		var from ports.NodeID
-		copy(from[:], env.From)
+		t.learn(from, env.Addr, true)
+		for idHex, addr := range env.Contacts {
+			if id, err := ports.ParseHash(idHex); err == nil {
+				t.learn(id, addr, false)
+			}
+		}
 		msg := fromWire(env.Msg)
 		t.loop.Post(func() {
-			if env.Addr != "" {
-				t.peers[from] = env.Addr
-			}
-			for idHex, addr := range env.Contacts {
-				if id, err := ports.ParseHash(idHex); err == nil {
-					if _, known := t.peers[id]; !known {
-						t.peers[id] = addr
-					}
-				}
-			}
 			if t.handler != nil {
 				t.handler(from, msg)
 			}

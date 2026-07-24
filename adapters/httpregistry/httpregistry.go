@@ -13,6 +13,7 @@ package httpregistry
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nerolabs/bitbit/adapters/identity"
 	"github.com/nerolabs/bitbit/ports"
 )
 
@@ -65,9 +67,26 @@ func fromJSON(ej entryJSON) (ports.Entry, error) {
 	return e, nil
 }
 
-// Serve exposes reg on addr and returns the bound listener address and
-// a shutdown func.
+// Serve exposes reg on addr over plain HTTP (tests, trusted loopback).
 func Serve(addr string, reg ports.Registry) (boundAddr string, shutdown func(), err error) {
+	return serve(addr, reg, nil)
+}
+
+// ServeTLS exposes reg over TLS with the daemon's identity certificate;
+// clients pin the daemon's NodeID (NewPinnedClient) — same
+// key-is-identity scheme as tcpnet, no CA anywhere.
+func ServeTLS(addr string, ident *identity.Identity, reg ports.Registry) (boundAddr string, shutdown func(), err error) {
+	cert, err := ident.Certificate()
+	if err != nil {
+		return "", nil, err
+	}
+	return serve(addr, reg, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS13,
+	})
+}
+
+func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr string, shutdown func(), err error) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /publish", func(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +149,9 @@ func Serve(addr string, reg ports.Registry) (boundAddr string, shutdown func(), 
 	if err != nil {
 		return "", nil, err
 	}
+	if tlsCfg != nil {
+		ln = tls.NewListener(ln, tlsCfg)
+	}
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln)
 	return ln.Addr().String(), func() { srv.Close() }, nil
@@ -145,6 +167,19 @@ var _ ports.Registry = (*Client)(nil)
 
 func NewClient(baseURL string) *Client {
 	return &Client{base: baseURL, hc: &http.Client{Timeout: 10 * time.Second}}
+}
+
+// NewPinnedClient talks https to a registry hosted by the daemon whose
+// NodeID is expect; any other key at that address fails the handshake.
+func NewPinnedClient(baseURL string, expect ports.NodeID) *Client {
+	return &Client{base: baseURL, hc: &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{
+			InsecureSkipVerify:    true, // replaced by pinning, not skipped
+			VerifyPeerCertificate: identity.VerifyExpected(expect),
+			MinVersion:            tls.VersionTLS13,
+		}},
+	}}
 }
 
 func (c *Client) Publish(ctx context.Context, e ports.Entry) error {
