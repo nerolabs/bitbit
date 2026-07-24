@@ -1,0 +1,100 @@
+package tcpnet
+
+import (
+	"github.com/fxamacker/cbor/v2"
+
+	"shardnet/ports"
+)
+
+// envelope is the on-the-wire frame: who sent it, where to reach them,
+// any addresses they can vouch for, and the message itself.
+type envelope struct {
+	From     []byte            `cbor:"1,keyasint"`
+	Addr     string            `cbor:"2,keyasint"`
+	Contacts map[string]string `cbor:"3,keyasint,omitempty"`
+	Msg      wireMsg           `cbor:"4,keyasint"`
+}
+
+// wireMsg mirrors ports.Message with CBOR-friendly []byte fields. An
+// adapter mirroring the port type by hand is the honest cost of keeping
+// serialization concerns out of ports; a production transport would
+// version this.
+type wireMsg struct {
+	Kind      uint8    `cbor:"1,keyasint"`
+	RID       uint64   `cbor:"2,keyasint"`
+	Target    []byte   `cbor:"3,keyasint,omitempty"`
+	Nodes     [][]byte `cbor:"4,keyasint,omitempty"`
+	Providers [][]byte `cbor:"5,keyasint,omitempty"`
+	ChunkID   []byte   `cbor:"6,keyasint,omitempty"`
+	Data      []byte   `cbor:"7,keyasint,omitempty"`
+	Found     bool     `cbor:"8,keyasint,omitempty"`
+	OK        bool     `cbor:"9,keyasint,omitempty"`
+}
+
+var encMode cbor.EncMode
+
+func init() {
+	var err error
+	encMode, err = cbor.CanonicalEncOptions().EncMode()
+	if err != nil {
+		panic(err)
+	}
+}
+
+func toWire(m ports.Message) wireMsg {
+	w := wireMsg{
+		Kind:  uint8(m.Kind),
+		RID:   m.RID,
+		Found: m.Found,
+		OK:    m.OK,
+	}
+	if m.Target != (ports.Hash{}) {
+		w.Target = append([]byte(nil), m.Target[:]...)
+	}
+	if m.ChunkID != (ports.ChunkID{}) {
+		w.ChunkID = append([]byte(nil), m.ChunkID[:]...)
+	}
+	w.Nodes = idsToBytes(m.Nodes)
+	w.Providers = idsToBytes(m.Providers)
+	if len(m.Data) > 0 {
+		w.Data = append([]byte(nil), m.Data...)
+	}
+	return w
+}
+
+func fromWire(w wireMsg) ports.Message {
+	m := ports.Message{
+		Kind:  ports.MsgKind(w.Kind),
+		RID:   w.RID,
+		Found: w.Found,
+		OK:    w.OK,
+		Data:  w.Data,
+	}
+	copy(m.Target[:], w.Target)
+	copy(m.ChunkID[:], w.ChunkID)
+	m.Nodes = bytesToIDs(w.Nodes)
+	m.Providers = bytesToIDs(w.Providers)
+	return m
+}
+
+func idsToBytes(ids []ports.NodeID) [][]byte {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([][]byte, len(ids))
+	for i, id := range ids {
+		out[i] = append([]byte(nil), id[:]...)
+	}
+	return out
+}
+
+func bytesToIDs(raw [][]byte) []ports.NodeID {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]ports.NodeID, len(raw))
+	for i, b := range raw {
+		copy(out[i][:], b)
+	}
+	return out
+}
