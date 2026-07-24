@@ -20,12 +20,8 @@ import (
 	"shardnet/ports"
 )
 
-// Replication is how many closest nodes receive each chunk at
-// distribute time (kept < parity count so erasure still matters).
-const Replication = 3
-
 // Distribute pushes every chunk of a locally-added file — manifest
-// chunks, data shards, parity shards — onto the Replication closest
+// chunks, data shards, parity shards — onto the cfg.Replication closest
 // nodes to each chunk's ID, making them providers. If keepLocal is
 // false the local copies are deleted afterward: the publisher walks
 // away and the swarm alone carries the file.
@@ -46,15 +42,7 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 			return
 		}
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
-			targets := make([]ports.NodeID, 0, Replication)
-			for _, t := range closest {
-				if t != n.id {
-					targets = append(targets, t)
-					if len(targets) == Replication {
-						break
-					}
-				}
-			}
+			targets := n.pickTargets(closest)
 			n.storeAt(id, c.Data, targets, 0, &placed, func() {
 				if !keepLocal {
 					n.store.Delete(bg(), id)
@@ -64,6 +52,21 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 		})
 	}
 	next(0)
+}
+
+// pickTargets filters self out of a closest-nodes list and caps it at
+// the replication factor.
+func (n *Node) pickTargets(closest []ports.NodeID) []ports.NodeID {
+	targets := make([]ports.NodeID, 0, n.cfg.Replication)
+	for _, t := range closest {
+		if t != n.id {
+			targets = append(targets, t)
+			if len(targets) == n.cfg.Replication {
+				break
+			}
+		}
+	}
+	return targets
 }
 
 func (n *Node) storeAt(id ports.ChunkID, data []byte, targets []ports.NodeID, i int, placed *int, done func()) {

@@ -14,6 +14,10 @@ sockets. See `HANDOFF.md` for the full design brief and
 - ✅ M3 — Kademlia over a deterministic in-process network: `add` on
   node A, `get` on node Z, chunks scattered across 50 nodes, A keeps
   nothing; survives packet loss and dead nodes
+- ✅ M4 — churn & repair: 30% of the swarm killed in waves, caretaker
+  repair loops rebuild lost shards from parity and re-seed them; the
+  live view shows redundancy draining and recovering, and the file
+  comes back bit-perfect
 - ⬜ M4 — churn & repair (the money demo)
 - ⬜ M5 — credit economics observatory
 
@@ -31,6 +35,9 @@ go build -o shardnet ./cmd/shardnet
 
 # the network, simulated: 100 nodes, 3% packet loss, 8 nodes killed
 ./shardnet sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
+
+# the money demo: watch repair outrun two waves of node death
+./shardnet sim run churn -seed 11
 ```
 
 Chunks land in `.shardnet/objects/` named by SHA-256. Add the same file

@@ -1,0 +1,322 @@
+// The repair loop — the behavior that makes churn survivable. A
+// caretaker node periodically sweeps each file it cares about: probe
+// every shard's availability in the swarm, and when a stripe has lost
+// more than RepairSlack shards, fetch any k survivors, reconstruct the
+// missing shards from parity math, verify each rebuilt shard against
+// the Merkle-committed hash, and push the rebuilt shards back out to
+// fresh nodes. Redundancy decays with every node death; repair pumps it
+// back up. Files stay alive not because nodes are reliable but because
+// the loop outruns the failures.
+package node
+
+import (
+	"shardnet/core/erasure"
+	"shardnet/core/manifest"
+	"shardnet/core/pipeline"
+	"shardnet/ports"
+)
+
+// Care makes this node a caretaker of root: it fetches the manifest
+// chunks (and keeps them — manifests have no parity in v1, caretakers
+// ARE their redundancy), then starts the periodic repair sweep.
+func (n *Node) Care(reg ports.Registry, root ports.Hash) {
+	n.reg = reg
+	n.care = append(n.care, root)
+	entry, ok, err := reg.Lookup(bg(), root)
+	if err != nil || !ok {
+		return
+	}
+	n.fetchAll(entry.ManifestChunks, func(missing []ports.ChunkID) {
+		if len(missing) > 0 {
+			return // can't caretake what we can't read; retry next Care
+		}
+		// Announce our manifest copies so the swarm can find them: the
+		// caretaker is usually nowhere near the chunk IDs, so without
+		// records planted on the nodes that ARE near, its copies are
+		// invisible to provider walks.
+		n.announceAll(entry.ManifestChunks, func() {
+			if !n.repairRunning {
+				n.repairRunning = true
+				n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
+			}
+		})
+	})
+}
+
+// announceAll plants "I have chunk H" records on the K closest nodes to
+// each chunk ID.
+func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
+	var next func(i int)
+	next = func(i int) {
+		if i == len(ids) {
+			done()
+			return
+		}
+		id := ids[i]
+		n.IterativeFindNode(id, func(closest []ports.NodeID) {
+			var send func(j int)
+			send = func(j int) {
+				if j == len(closest) {
+					next(i + 1)
+					return
+				}
+				if closest[j] == n.id {
+					send(j + 1)
+					return
+				}
+				n.request(closest[j], ports.Message{Kind: ports.MsgAddProvider, Target: id},
+					func(ports.Message, error) { send(j + 1) })
+			}
+			send(0)
+		})
+	}
+	next(0)
+}
+
+// repairTick sweeps all cared-for roots sequentially, then reschedules
+// itself. Rescheduling only after the sweep finishes means sweeps never
+// overlap, however long probing takes.
+func (n *Node) repairTick() {
+	roots := append([]ports.Hash(nil), n.care...)
+	var nextRoot func(i int)
+	nextRoot = func(i int) {
+		if i == len(roots) {
+			n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
+			return
+		}
+		n.repairRoot(roots[i], func() { nextRoot(i + 1) })
+	}
+	nextRoot(0)
+}
+
+// shardRef locates one stored shard of a file: which stripe, and which
+// position within it (0..k-1 data, k..n-1 parity).
+type shardRef struct {
+	id     ports.ChunkID
+	stripe int
+	pos    int
+}
+
+func (n *Node) repairRoot(root ports.Hash, done func()) {
+	entry, ok, err := n.reg.Lookup(bg(), root)
+	if err != nil || !ok {
+		done()
+		return
+	}
+	m, err := pipeline.LoadManifest(bg(), n.store, entry)
+	if err != nil || m.K == 0 || len(m.Chunks) == 0 {
+		done()
+		return
+	}
+	p := erasure.Params{K: m.K, N: m.N}
+	refs := storedShards(m, p)
+
+	// Manifest chunks first: they have no parity, so the caretaker's
+	// local copy is their only spare. Probe REMOTE availability (a
+	// local copy would mask the swarm having lost it) and re-seed any
+	// chunk the swarm no longer holds.
+	n.healManifest(entry.ManifestChunks, 0, func() {
+		reachable := make(map[ports.ChunkID]bool, len(refs))
+		var probeNext func(i int)
+		probeNext = func(i int) {
+			if i == len(refs) {
+				n.repairStripes(m, p, refs, reachable, 0, done)
+				return
+			}
+			n.probeShard(refs[i].id, true, func(ok bool) {
+				reachable[refs[i].id] = ok
+				probeNext(i + 1)
+			})
+		}
+		probeNext(0)
+	})
+}
+
+func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
+	if i == len(ids) {
+		done()
+		return
+	}
+	id := ids[i]
+	next := func() { n.healManifest(ids, i+1, done) }
+	n.probeShard(id, false, func(ok bool) {
+		if ok {
+			next()
+			return
+		}
+		c, err := n.store.Get(bg(), id)
+		if err != nil {
+			next() // we lost our copy too; nothing to re-seed from
+			return
+		}
+		n.IterativeFindNode(id, func(closest []ports.NodeID) {
+			targets := n.pickTargets(closest)
+			placed := 0
+			n.storeAt(id, c.Data, targets, 0, &placed, func() {
+				if placed > 0 {
+					n.Stats.ShardsRebuilt++
+				}
+				next()
+			})
+		})
+	})
+}
+
+// storedShards lists every shard that physically exists for the file,
+// in stripe order. (A short final stripe stores fewer than n — its
+// implicit zero shards are math, not storage, and never need repair.)
+func storedShards(m *manifest.Manifest, p erasure.Params) []shardRef {
+	dataIDs, parityIDs := m.ChunkIDs(), m.ParityIDs()
+	var refs []shardRef
+	for j := 0; j < p.Stripes(len(dataIDs)); j++ {
+		lo, hi := j*p.K, min((j+1)*p.K, len(dataIDs))
+		for i, id := range dataIDs[lo:hi] {
+			refs = append(refs, shardRef{id: id, stripe: j, pos: i})
+		}
+		for q, id := range parityIDs[j*p.ParityShards() : (j+1)*p.ParityShards()] {
+			refs = append(refs, shardRef{id: id, stripe: j, pos: p.K + q})
+		}
+	}
+	return refs
+}
+
+// probeShard answers "does anyone have this chunk?" via provider
+// records confirmed with a cheap HasChunk round-trip. includeLocal
+// counts our own store as availability; the manifest-heal path sets it
+// false to ask specifically whether the SWARM still holds the chunk.
+func (n *Node) probeShard(id ports.ChunkID, includeLocal bool, done func(bool)) {
+	n.Stats.Probes++
+	if includeLocal {
+		if ok, _ := n.store.Has(bg(), id); ok {
+			done(true)
+			return
+		}
+	}
+	n.resolveProviders(id, func(provs []ports.NodeID) {
+		var try func(i int)
+		try = func(i int) {
+			if i >= len(provs) {
+				done(false)
+				return
+			}
+			if provs[i] == n.id {
+				try(i + 1)
+				return
+			}
+			n.request(provs[i], ports.Message{Kind: ports.MsgHasChunk, ChunkID: id},
+				func(resp ports.Message, err error) {
+					if err == nil && resp.Found {
+						done(true)
+						return
+					}
+					try(i + 1)
+				})
+		}
+		try(0)
+	})
+}
+
+// repairStripes walks the stripes, repairing each one whose losses
+// exceed the slack.
+func (n *Node) repairStripes(m *manifest.Manifest, p erasure.Params, refs []shardRef,
+	reachable map[ports.ChunkID]bool, stripe int, done func()) {
+
+	numStripes := p.Stripes(len(m.Chunks))
+	if stripe == numStripes {
+		done()
+		return
+	}
+	var stripeRefs []shardRef
+	missing := 0
+	for _, r := range refs {
+		if r.stripe == stripe {
+			stripeRefs = append(stripeRefs, r)
+			if !reachable[r.id] {
+				missing++
+			}
+		}
+	}
+	next := func() { n.repairStripes(m, p, refs, reachable, stripe+1, done) }
+	if missing == 0 || missing <= n.cfg.RepairSlack {
+		next()
+		return
+	}
+	n.repairStripe(p, stripeRefs, next)
+}
+
+// repairStripe fetches whatever shards of the stripe it can get —
+// deliberately trying ALL of them, since the probe map may be stale by
+// the time we act — reconstructs the rest, verifies every rebuilt shard
+// against the manifest's hashes, and re-distributes the missing ones to
+// fresh nodes. The caretaker keeps nothing afterward — it's a
+// paramedic, not a hoarder. A failed attempt (below k fetchable) is
+// counted and simply retried on the next sweep.
+func (n *Node) repairStripe(p erasure.Params, stripeRefs []shardRef, done func()) {
+	ids := make([]ports.ChunkID, len(stripeRefs))
+	realData := 0
+	for i, r := range stripeRefs {
+		ids[i] = r.id
+		if r.pos < p.K {
+			realData++
+		}
+	}
+	n.fetchAll(ids, func(unfetched []ports.ChunkID) {
+		// Build the stripe from whatever actually arrived.
+		shards := make([][]byte, p.N)
+		for _, r := range stripeRefs {
+			if c, err := n.store.Get(bg(), r.id); err == nil {
+				shards[r.pos] = c.Data
+			}
+		}
+		cleanup := func() {
+			for _, r := range stripeRefs {
+				n.store.Delete(bg(), r.id)
+			}
+			done()
+		}
+		if err := erasure.ReconstructStripe(p, shards, realData); err != nil {
+			n.Stats.RepairFailures++ // below k fetchable right now; retry next sweep
+			cleanup()
+			return
+		}
+		// Trust the math, verify the bytes: every rebuilt shard must
+		// hash to the ID the Merkle root committed to.
+		for _, r := range stripeRefs {
+			if ports.HashBytes(shards[r.pos]) != r.id {
+				n.Stats.RepairFailures++
+				cleanup()
+				return
+			}
+		}
+		n.Stats.Repairs++
+		missing := make(map[ports.ChunkID]bool, len(unfetched))
+		for _, id := range unfetched {
+			missing[id] = true
+		}
+		var toPlace []shardRef
+		for _, r := range stripeRefs {
+			if missing[r.id] {
+				toPlace = append(toPlace, r)
+			}
+		}
+		var place func(i int)
+		place = func(i int) {
+			if i == len(toPlace) {
+				cleanup()
+				return
+			}
+			r := toPlace[i]
+			n.IterativeFindNode(r.id, func(closest []ports.NodeID) {
+				targets := n.pickTargets(closest)
+				placed := 0
+				n.storeAt(r.id, shards[r.pos], targets, 0, &placed, func() {
+					if placed > 0 {
+						n.Stats.ShardsRebuilt++
+					}
+					place(i + 1)
+				})
+			})
+		}
+		place(0)
+	})
+}

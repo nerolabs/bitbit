@@ -20,13 +20,28 @@ import (
 )
 
 type Config struct {
-	K              int            // Kademlia bucket size / replication factor
+	K              int            // Kademlia bucket size
 	Alpha          int            // lookup parallelism
 	RequestTimeout ports.Duration // per-request; a timeout marks the peer failed
+	// Replication is how many closest nodes receive each chunk at
+	// distribute/repair time. With erasure coding doing the heavy
+	// lifting, even 1 is viable — parity across nodes replaces copies.
+	Replication int
+	// RepairInterval is how often a caretaker sweeps the files it cares
+	// about; RepairSlack is how many missing shards a stripe may have
+	// before repair kicks in (repair when missing > slack).
+	RepairInterval ports.Duration
+	RepairSlack    int
 }
 
 func DefaultConfig() Config {
-	return Config{K: 8, Alpha: 3, RequestTimeout: 500 * ports.Millisecond}
+	return Config{
+		K: 8, Alpha: 3,
+		RequestTimeout: 500 * ports.Millisecond,
+		Replication:    3,
+		RepairInterval: 60 * ports.Second,
+		RepairSlack:    2,
+	}
 }
 
 var ErrTimeout = errors.New("node: request timed out")
@@ -38,6 +53,10 @@ type Stats struct {
 	ChunksServed   int
 	ChunksReceived int // chunks pushed to us via StoreChunk
 	BytesServed    int64
+	Probes         int // shard availability checks (repair loop)
+	Repairs        int // stripes repaired
+	ShardsRebuilt  int // shards reconstructed and re-distributed
+	RepairFailures int // repair attempts that couldn't reconstruct (retried next sweep)
 }
 
 type pending struct {
@@ -58,6 +77,11 @@ type Node struct {
 	rid     uint64
 	pending map[uint64]*pending
 	Stats   Stats
+
+	// caretaker state (repair loop)
+	reg           ports.Registry
+	care          []ports.Hash
+	repairRunning bool
 }
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
@@ -159,6 +183,9 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.Stats.ChunksServed++
 		n.Stats.BytesServed += int64(len(c.Data))
 		n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: true, Data: c.Data})
+	case ports.MsgHasChunk:
+		ok, _ := n.store.Has(bg(), msg.ChunkID)
+		n.reply(from, msg, ports.Message{Kind: ports.MsgHasChunkReply, Found: ok})
 	}
 }
 

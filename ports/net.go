@@ -55,6 +55,8 @@ const (
 	MsgStoreChunkAck
 	MsgFetchChunk      // ChunkID
 	MsgFetchChunkReply // Found + Data
+	MsgHasChunk        // ChunkID: cheap availability probe (repair loop)
+	MsgHasChunkReply   // Found
 )
 
 // Message is the single wire envelope. RID correlates requests with
@@ -74,7 +76,7 @@ type Message struct {
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply:
 		return true
 	}
 	return false
