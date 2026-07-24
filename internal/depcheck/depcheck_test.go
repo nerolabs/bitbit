@@ -20,12 +20,12 @@ import (
 )
 
 var forbiddenExact = map[string]string{
-	"os":          "filesystem access must come through a ChunkStore or other port",
-	"time":        "wall-clock time must come through the Clock port",
-	"math/rand":   "randomness must be injected (io.Reader or seeded source)",
+	"os":           "filesystem access must come through a ChunkStore or other port",
+	"time":         "wall-clock time must come through the Clock port",
+	"math/rand":    "randomness must be injected (io.Reader or seeded source)",
 	"math/rand/v2": "randomness must be injected (io.Reader or seeded source)",
-	"crypto/rand": "randomness must be injected so sims are deterministic",
-	"net":         "core has no networking; that's what adapters are for",
+	"crypto/rand":  "randomness must be injected so sims are deterministic",
+	"net":          "core has no networking; that's what adapters are for",
 }
 
 var forbiddenPrefixes = map[string]string{

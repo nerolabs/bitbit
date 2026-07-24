@@ -36,6 +36,9 @@ type Options struct {
 	// Rand supplies key material for private mode. Injected, never
 	// defaulted inside core: determinism under test is non-negotiable.
 	Rand io.Reader
+	// Publisher is recorded in the registry entry; required when the
+	// registry is credit-gated, ignored otherwise.
+	Publisher ports.NodeID
 }
 
 // Add ingests r and returns the file's Merkle root.
@@ -146,6 +149,7 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		Root:           root,
 		ManifestChunks: manifestIDs,
 		FileSize:       m.FileSize,
+		Publisher:      opts.Publisher,
 	})
 	if err != nil {
 		return ports.Hash{}, fmt.Errorf("add: publish: %w", err)

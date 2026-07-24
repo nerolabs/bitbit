@@ -82,7 +82,21 @@ type Node struct {
 	reg           ports.Registry
 	care          []ports.Hash
 	repairRunning bool
+
+	// ledger, when set, is credited for every chunk this node serves.
+	ledger ports.CreditLedger
+	// freeload makes the node a pure consumer: it refuses to store
+	// pushed chunks and refuses to serve fetches, while still fetching
+	// and using DHT routing. Exists so the economy scenario can watch
+	// leeches go broke.
+	freeload bool
 }
+
+// SetLedger wires credit accounting; nil disables it.
+func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
+
+// SetFreeload toggles leech behavior.
+func (n *Node) SetFreeload(v bool) { n.freeload = v }
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
@@ -163,6 +177,10 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.provs.Add(msg.Target, from)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgAddProviderAck, OK: true})
 	case ports.MsgStoreChunk:
+		if n.freeload {
+			n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: false})
+			return
+		}
 		c := ports.Chunk{ID: msg.ChunkID, Data: msg.Data}
 		ok := c.Verify() // never store what doesn't hash right
 		if ok {
@@ -175,6 +193,10 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: ok})
 	case ports.MsgFetchChunk:
+		if n.freeload {
+			n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: false})
+			return
+		}
 		c, err := n.store.Get(bg(), msg.ChunkID)
 		if err != nil {
 			n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: false})
@@ -182,6 +204,9 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		n.Stats.ChunksServed++
 		n.Stats.BytesServed += int64(len(c.Data))
+		if n.ledger != nil {
+			n.ledger.RecordServe(n.id, from, msg.ChunkID, int64(len(c.Data)))
+		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: true, Data: c.Data})
 	case ports.MsgHasChunk:
 		ok, _ := n.store.Has(bg(), msg.ChunkID)

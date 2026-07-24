@@ -56,10 +56,12 @@ func NewChunk(data []byte) Chunk {
 func (c Chunk) Verify() bool { return HashBytes(c.Data) == c.ID }
 
 var (
-	ErrNotFound     = errors.New("chunk not found")
-	ErrCorrupt      = errors.New("chunk data does not match its ID")
-	ErrDupPublish   = errors.New("root already published with different entry")
-	ErrNoSuchEntry  = errors.New("root not in registry")
+	ErrNotFound           = errors.New("chunk not found")
+	ErrCorrupt            = errors.New("chunk data does not match its ID")
+	ErrDupPublish         = errors.New("root already published with different entry")
+	ErrNoSuchEntry        = errors.New("root not in registry")
+	ErrInsufficientCredit = errors.New("insufficient credit to publish")
+	ErrPublisherRequired  = errors.New("gated registry requires a publisher identity")
 )
 
 // ChunkStore is anywhere chunks can live: an in-memory map, a directory
@@ -85,6 +87,9 @@ type Entry struct {
 	Root           Hash
 	ManifestChunks []ChunkID
 	FileSize       int64
+	// Publisher identifies who pays the publish fee when the registry
+	// is credit-gated. Zero in ungated (local CLI) use.
+	Publisher NodeID
 }
 
 // Registry is the append-only log of published roots. v1 is a single
@@ -94,4 +99,19 @@ type Registry interface {
 	Publish(ctx context.Context, e Entry) error
 	Lookup(ctx context.Context, root Hash) (Entry, bool, error)
 	All(ctx context.Context) ([]Entry, error)
+}
+
+// CreditLedger is the future proof-of-retrieval seam: nodes earn credit
+// for serving chunks and spend it on registry publishes. v1 accounting
+// is naive and trusting; the interface is what a cryptographically
+// audited version would also implement.
+type CreditLedger interface {
+	// RecordServe credits server for delivering bytes of chunk id to
+	// requester.
+	RecordServe(server, requester NodeID, id ChunkID, bytes int64)
+	Balance(n NodeID) int64
+	CanPublish(n NodeID) bool
+	// ChargePublish deducts the publish fee, or returns
+	// ErrInsufficientCredit without side effects.
+	ChargePublish(n NodeID) error
 }

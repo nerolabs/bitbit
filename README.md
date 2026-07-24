@@ -5,7 +5,7 @@ real product from day one, simulated in-process until it needs real
 sockets. See `HANDOFF.md` for the full design brief and
 `docs/math/` for friendly explanations of the math.
 
-## Status: M3 complete (the network)
+## Status: all five milestones complete
 
 - ✅ M1 — chunk → encrypt → hash → manifest → Merkle root, and back;
   CLI `add`/`get` against a content-addressed disk store
@@ -19,7 +19,9 @@ sockets. See `HANDOFF.md` for the full design brief and
   live view shows redundancy draining and recovering, and the file
   comes back bit-perfect
 - ⬜ M4 — churn & repair (the money demo)
-- ⬜ M5 — credit economics observatory
+- ✅ M5 — economics observatory: credit-gated registry (1 credit = 1
+  byte served, publishing costs a fee); watch the Gini coefficient
+  climb as hosts earn, and freeloaders lose the ability to publish
 
 ## Try it
 
@@ -38,6 +40,9 @@ go build -o shardnet ./cmd/shardnet
 
 # the money demo: watch repair outrun two waves of node death
 ./shardnet sim run churn -seed 11
+
+# the economy: hosts earn per byte served; freeloaders go broke
+./shardnet sim run economy -seed 21
 ```
 
 Chunks land in `.shardnet/objects/` named by SHA-256. Add the same file

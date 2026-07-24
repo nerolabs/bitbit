@@ -28,8 +28,8 @@ func (h eventHeap) Less(i, j int) bool {
 	}
 	return h[i].seq < h[j].seq
 }
-func (h eventHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *eventHeap) Push(x any)        { *h = append(*h, x.(*event)) }
+func (h eventHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h *eventHeap) Push(x any)   { *h = append(*h, x.(*event)) }
 func (h *eventHeap) Pop() any {
 	old := *h
 	n := len(old)

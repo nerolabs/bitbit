@@ -106,14 +106,14 @@ func TestManifestRoundtripAndCanonicalBytes(t *testing.T) {
 
 func TestManifestValidation(t *testing.T) {
 	cases := map[string]func(*Manifest){
-		"bad version":         func(m *Manifest) { m.Version = 99 },
-		"bad mode":            func(m *Manifest) { m.Mode = "rot13" },
-		"zero chunk size":     func(m *Manifest) { m.ChunkSize = 0 },
-		"negative file size":  func(m *Manifest) { m.FileSize = -1 },
-		"short chunk id":      func(m *Manifest) { m.Chunks[0] = m.Chunks[0][:31] },
-		"missing secret":      func(m *Manifest) { m.ChunkSecrets = m.ChunkSecrets[:len(m.ChunkSecrets)-1] },
-		"stray file key":      func(m *Manifest) { m.FileKey = make([]byte, 32) },
-		"manifest key set":    func(m *Manifest) { m.ManifestKey = []byte{1} },
+		"bad version":        func(m *Manifest) { m.Version = 99 },
+		"bad mode":           func(m *Manifest) { m.Mode = "rot13" },
+		"zero chunk size":    func(m *Manifest) { m.ChunkSize = 0 },
+		"negative file size": func(m *Manifest) { m.FileSize = -1 },
+		"short chunk id":     func(m *Manifest) { m.Chunks[0] = m.Chunks[0][:31] },
+		"missing secret":     func(m *Manifest) { m.ChunkSecrets = m.ChunkSecrets[:len(m.ChunkSecrets)-1] },
+		"stray file key":     func(m *Manifest) { m.FileKey = make([]byte, 32) },
+		"manifest key set":   func(m *Manifest) { m.ManifestKey = []byte{1} },
 	}
 	for name, corrupt := range cases {
 		m := validConvergent(3)

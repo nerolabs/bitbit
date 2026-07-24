@@ -30,6 +30,7 @@ type entryJSON struct {
 	Root           string   `json:"root"`
 	ManifestChunks []string `json:"manifest_chunks"`
 	FileSize       int64    `json:"file_size"`
+	Publisher      string   `json:"publisher,omitempty"`
 }
 
 func Open(path string) (*Registry, error) {
@@ -74,6 +75,9 @@ func (r *Registry) Publish(ctx context.Context, e ports.Entry) error {
 		return err
 	}
 	ej := entryJSON{Root: e.Root.String(), FileSize: e.FileSize}
+	if e.Publisher != (ports.NodeID{}) {
+		ej.Publisher = e.Publisher.String()
+	}
 	for _, id := range e.ManifestChunks {
 		ej.ManifestChunks = append(ej.ManifestChunks, id.String())
 	}
@@ -106,6 +110,11 @@ func (ej entryJSON) toEntry() (ports.Entry, error) {
 		return ports.Entry{}, err
 	}
 	e := ports.Entry{Root: root, FileSize: ej.FileSize}
+	if ej.Publisher != "" {
+		if e.Publisher, err = ports.ParseHash(ej.Publisher); err != nil {
+			return ports.Entry{}, err
+		}
+	}
 	for _, s := range ej.ManifestChunks {
 		id, err := ports.ParseHash(s)
 		if err != nil {
