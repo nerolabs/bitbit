@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/ports"
@@ -82,9 +83,9 @@ type AuditReport struct {
 // fetch ground truth and grade the tags. Results are settled into the
 // ledger — rent for the honest, slashes for the liars. The auditor
 // needs the manifest (it fetches it first) and a ledger to settle into.
-func (n *Node) Audit(reg ports.Registry, root ports.Hash, done func(AuditReport)) {
+func (n *Node) Audit(reg ports.Registry, ch link.CareHandle, done func(AuditReport)) {
 	var report AuditReport
-	entry, ok, err := reg.Lookup(bg(), root)
+	entry, ok, err := reg.Lookup(bg(), ch.Root)
 	if err != nil || !ok {
 		done(report)
 		return
@@ -94,7 +95,7 @@ func (n *Node) Audit(reg ports.Registry, root ports.Hash, done func(AuditReport)
 			done(report)
 			return
 		}
-		m, err := pipeline.LoadManifest(bg(), n.store, entry)
+		m, err := pipeline.LoadLayout(bg(), n.store, entry, ch)
 		if err != nil {
 			done(report)
 			return

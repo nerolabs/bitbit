@@ -92,14 +92,14 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 
 	data := make([]byte, o.FileSize)
 	cl.rng.Read(data)
-	root, err := pipeline.Add(bgCtx, a.Store(), cl.Registry, bytes.NewReader(data),
+	h, err := pipeline.Add(bgCtx, a.Store(), cl.Registry, bytes.NewReader(data),
 		pipeline.Options{ChunkSize: o.ChunkSize, Mode: crypto.Convergent, Erasure: o.Erasure})
 	if err != nil {
 		return res, err
 	}
-	res.Root = root
-	entry, _, _ := cl.Registry.Lookup(bgCtx, root)
-	m, err := pipeline.LoadManifest(bgCtx, a.Store(), entry)
+	res.Root = h.Root
+	entry, _, _ := cl.Registry.Lookup(bgCtx, h.Root)
+	m, err := pipeline.LoadFull(bgCtx, a.Store(), entry, h)
 	if err != nil {
 		return res, err
 	}
@@ -111,7 +111,7 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 	}
 
 	for _, c := range caretakers {
-		c.Care(cl.Registry, root)
+		c.Care(cl.Registry, h.Care())
 	}
 	// Let the caretakers' warm start (manifest fetch + announce) finish
 	// before the dying begins — they were on duty before the disaster.
@@ -169,7 +169,7 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 	var out bytes.Buffer
 	var getErr error
 	got := false
-	z.NetGet(cl.Registry, root, &out, func(err error) { getErr = err; got = true })
+	z.NetGet(cl.Registry, h, &out, func(err error) { getErr = err; got = true })
 	cl.Sched.RunUntil(cl.Sched.Now().Add(600 * ports.Second))
 	res.Repairs = sumStat(caretakers, func(s node.Stats) int { return s.Repairs })
 	res.ShardsRebuilt = sumStat(caretakers, func(s node.Stats) int { return s.ShardsRebuilt })

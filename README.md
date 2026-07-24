@@ -42,6 +42,10 @@ Beyond the original handoff:
   registry over pinned HTTPS; Bitcoin-style discovery (bootstrap
   flags → DNS seeds → peer exchange, address book persisted for
   flagless warm restarts)
+- ✅ M11 — encrypted manifests: manifests are ciphertext twice over;
+  the share handle is a bitbit link (root + key), and a one-way key
+  hierarchy yields CARE LINKS — repair and audit rights with no
+  ability to decrypt. Infrastructure now hosts noise describing noise
 
 Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
 encrypted manifests, the reputation-quorum chain, web frontends, and

@@ -94,14 +94,14 @@ func Audit(seed int64, o AuditOpts) (AuditResult, error) {
 	publisher, auditor, retriever := cl.Nodes[0], cl.Nodes[1], cl.Nodes[len(cl.Nodes)-1]
 	data := make([]byte, o.FileSize)
 	cl.rng.Read(data)
-	root, err := pipeline.Add(bgCtx, publisher.Store(), reg, bytes.NewReader(data),
+	h, err := pipeline.Add(bgCtx, publisher.Store(), reg, bytes.NewReader(data),
 		pipeline.Options{ChunkSize: o.ChunkSize, Mode: crypto.Convergent})
 	if err != nil {
 		return res, err
 	}
-	res.Root = root
-	entry, _, _ := reg.Lookup(bgCtx, root)
-	m, err := pipeline.LoadManifest(bgCtx, publisher.Store(), entry)
+	res.Root = h.Root
+	entry, _, _ := reg.Lookup(bgCtx, h.Root)
+	m, err := pipeline.LoadFull(bgCtx, publisher.Store(), entry, h)
 	if err != nil {
 		return res, err
 	}
@@ -112,7 +112,7 @@ func Audit(seed int64, o AuditOpts) (AuditResult, error) {
 
 	// The audit sweep: challenge every provider of every shard.
 	done := false
-	auditor.Audit(reg, root, func(rep node.AuditReport) {
+	auditor.Audit(reg, h.Care(), func(rep node.AuditReport) {
 		res.Report = rep
 		done = true
 	})
@@ -163,7 +163,7 @@ func Audit(seed int64, o AuditOpts) (AuditResult, error) {
 	var out bytes.Buffer
 	var gerr error
 	got := false
-	retriever.NetGet(reg, root, &out, func(err error) { gerr = err; got = true })
+	retriever.NetGet(reg, h, &out, func(err error) { gerr = err; got = true })
 	cl.Sched.Run()
 	res.Retrieved = got && gerr == nil && bytes.Equal(out.Bytes(), data)
 	say(fmt.Sprintf("retrieve  | bit-perfect despite %d fake providers: %v", o.Liars, res.Retrieved))

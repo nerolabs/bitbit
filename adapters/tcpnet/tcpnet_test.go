@@ -13,6 +13,7 @@ import (
 	"github.com/nerolabs/bitbit/adapters/tcpnet"
 	"github.com/nerolabs/bitbit/adapters/walltime"
 	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/node"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/core/registry"
@@ -82,18 +83,18 @@ func TestScatterOverRealTLS(t *testing.T) {
 	data := make([]byte, 128<<10)
 	rng.Read(data)
 	a, z := nodes[0], nodes[nNodes-1]
-	var root ports.Hash
+	var h link.Handle
 	a.call(t, 30*time.Second, func(done func()) {
 		var err error
-		root, err = pipeline.Add(context.Background(), a.nd.Store(), reg, bytes.NewReader(data),
+		h, err = pipeline.Add(context.Background(), a.nd.Store(), reg, bytes.NewReader(data),
 			pipeline.Options{ChunkSize: 8 << 10, Mode: crypto.Convergent})
 		if err != nil {
 			t.Errorf("add: %v", err)
 			done()
 			return
 		}
-		entry, _, _ := reg.Lookup(context.Background(), root)
-		m, err := pipeline.LoadManifest(context.Background(), a.nd.Store(), entry)
+		entry, _, _ := reg.Lookup(context.Background(), h.Root)
+		m, err := pipeline.LoadFull(context.Background(), a.nd.Store(), entry, h)
 		if err != nil {
 			t.Errorf("load manifest: %v", err)
 			done()
@@ -104,7 +105,7 @@ func TestScatterOverRealTLS(t *testing.T) {
 
 	var out bytes.Buffer
 	z.call(t, 60*time.Second, func(done func()) {
-		z.nd.NetGet(reg, root, &out, func(err error) {
+		z.nd.NetGet(reg, h, &out, func(err error) {
 			if err != nil {
 				t.Errorf("netget: %v", err)
 			}

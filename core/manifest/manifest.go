@@ -84,6 +84,8 @@ func Unmarshal(b []byte) (*Manifest, error) {
 	return &m, nil
 }
 
+func cborUnmarshal(b []byte, v any) error { return cbor.Unmarshal(b, v) }
+
 // Validate enforces internal consistency; every load and store path runs
 // through it so a malformed manifest fails loudly, early.
 func (m *Manifest) Validate() error {

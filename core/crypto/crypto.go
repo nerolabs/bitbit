@@ -145,6 +145,58 @@ func PrivateDecrypt(key [KeySize]byte, index uint64, ciphertext []byte) ([]byte,
 	return pt, nil
 }
 
+// SealBox encrypts pt under a caller-supplied 32-byte key with a
+// deterministic nonce derived from (key, domain). Safe under the same
+// argument as convergent mode: callers must guarantee a given key is
+// used for one plaintext only (ours are content-derived, so identical
+// key ⇒ identical plaintext). domain separates uses of the same key.
+func SealBox(key [SecretSize]byte, domain string, pt []byte) ([]byte, error) {
+	gcm, nonce, err := boxCipher(key, domain)
+	if err != nil {
+		return nil, err
+	}
+	return gcm.Seal(nil, nonce, pt, []byte(domain)), nil
+}
+
+// OpenBox reverses SealBox.
+func OpenBox(key [SecretSize]byte, domain string, ct []byte) ([]byte, error) {
+	gcm, nonce, err := boxCipher(key, domain)
+	if err != nil {
+		return nil, err
+	}
+	pt, err := gcm.Open(nil, nonce, ct, []byte(domain))
+	if err != nil {
+		return nil, fmt.Errorf("crypto: open box (%s): %w", domain, err)
+	}
+	return pt, nil
+}
+
+func boxCipher(key [SecretSize]byte, domain string) (cipher.AEAD, []byte, error) {
+	k, err := hkdf.Key(sha256.New, key[:], nil, domain+"/key", KeySize)
+	if err != nil {
+		return nil, nil, err
+	}
+	nonce, err := hkdf.Key(sha256.New, key[:], nil, domain+"/nonce", nonceSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	gcm, err := newGCM(k)
+	return gcm, nonce, err
+}
+
+// DeriveKey derives a subordinate key one-way: knowing the child never
+// reveals the parent. This is what makes graded capabilities possible —
+// hand out the child, keep the parent.
+func DeriveKey(parent [SecretSize]byte, domain string) [SecretSize]byte {
+	out, err := hkdf.Key(sha256.New, parent[:], nil, domain, SecretSize)
+	if err != nil {
+		panic(err) // static parameters; cannot fail
+	}
+	var k [SecretSize]byte
+	copy(k[:], out)
+	return k
+}
+
 func privateNonce(index uint64) []byte {
 	nonce := make([]byte, nonceSize)
 	binary.BigEndian.PutUint64(nonce[nonceSize-8:], index)

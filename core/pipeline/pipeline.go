@@ -20,6 +20,7 @@ import (
 	"github.com/nerolabs/bitbit/core/chunk"
 	"github.com/nerolabs/bitbit/core/crypto"
 	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/ports"
 )
@@ -41,8 +42,12 @@ type Options struct {
 	Publisher ports.NodeID
 }
 
-// Add ingests r and returns the file's Merkle root.
-func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.Reader, opts Options) (ports.Hash, error) {
+// Add ingests r and returns the file's bitbit link: the Merkle root
+// (its public name) plus the link key (the private capability). The link
+// key is the hash of the plaintext manifest, so convergent content
+// yields the same link every time — dedup extends all the way up to the
+// handle you share.
+func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.Reader, opts Options) (link.Handle, error) {
 	if opts.ChunkSize == 0 {
 		opts.ChunkSize = DefaultChunkSize
 	}
@@ -50,11 +55,11 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		opts.Erasure = erasure.DefaultParams
 	}
 	if err := opts.Erasure.Validate(); err != nil {
-		return ports.Hash{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, fmt.Errorf("add: %w", err)
 	}
 	frames, err := chunk.Split(r, opts.ChunkSize)
 	if err != nil {
-		return ports.Hash{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, fmt.Errorf("add: %w", err)
 	}
 
 	m := &manifest.Manifest{
@@ -69,11 +74,11 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 	var fileKey [crypto.KeySize]byte
 	if opts.Mode == crypto.Private {
 		if opts.Rand == nil {
-			return ports.Hash{}, fmt.Errorf("add: private mode requires an injected randomness source")
+			return link.Handle{}, fmt.Errorf("add: private mode requires an injected randomness source")
 		}
 		fileKey, err = crypto.NewFileKey(opts.Rand)
 		if err != nil {
-			return ports.Hash{}, err
+			return link.Handle{}, err
 		}
 		m.FileKey = fileKey[:]
 	}
@@ -86,20 +91,20 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 			var secret [crypto.SecretSize]byte
 			ct, secret, err = crypto.ConvergentEncrypt(frame)
 			if err != nil {
-				return ports.Hash{}, fmt.Errorf("add: chunk %d: %w", i, err)
+				return link.Handle{}, fmt.Errorf("add: chunk %d: %w", i, err)
 			}
 			m.ChunkSecrets = append(m.ChunkSecrets, secret[:])
 		case crypto.Private:
 			ct, err = crypto.PrivateEncrypt(fileKey, uint64(i), frame)
 			if err != nil {
-				return ports.Hash{}, fmt.Errorf("add: chunk %d: %w", i, err)
+				return link.Handle{}, fmt.Errorf("add: chunk %d: %w", i, err)
 			}
 		default:
-			return ports.Hash{}, fmt.Errorf("add: unknown mode %q", opts.Mode)
+			return link.Handle{}, fmt.Errorf("add: unknown mode %q", opts.Mode)
 		}
 		c := ports.NewChunk(ct)
 		if err := store.Put(ctx, c); err != nil {
-			return ports.Hash{}, fmt.Errorf("add: storing chunk %d: %w", i, err)
+			return link.Handle{}, fmt.Errorf("add: storing chunk %d: %w", i, err)
 		}
 		m.Chunks = append(m.Chunks, c.ID[:])
 		ctChunks = append(ctChunks, ct)
@@ -113,12 +118,12 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		hi := min(lo+p.K, len(ctChunks))
 		parity, err := erasure.EncodeStripe(p, ctChunks[lo:hi])
 		if err != nil {
-			return ports.Hash{}, fmt.Errorf("add: encoding stripe %d: %w", j, err)
+			return link.Handle{}, fmt.Errorf("add: encoding stripe %d: %w", j, err)
 		}
 		for q, shard := range parity {
 			c := ports.NewChunk(shard)
 			if err := store.Put(ctx, c); err != nil {
-				return ports.Hash{}, fmt.Errorf("add: storing parity %d of stripe %d: %w", q, j, err)
+				return link.Handle{}, fmt.Errorf("add: storing parity %d of stripe %d: %w", q, j, err)
 			}
 			m.Parity = append(m.Parity, c.ID[:])
 		}
@@ -126,21 +131,29 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 
 	root := m.Root()
 
-	// The manifest travels the same road as data: serialized, chunked,
-	// stored. Its chunks are plain (no encryption) in v1.
+	// The manifest is sealed before it touches storage: the link key is
+	// the hash of the plaintext manifest (deterministic, content-bound),
+	// and the stored blob is ciphertext twice over — layout under the
+	// layout key, decryption material boxed under the content key.
+	// Infrastructure hosts noise describing noise.
 	mbytes, err := m.Marshal()
 	if err != nil {
-		return ports.Hash{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, fmt.Errorf("add: %w", err)
 	}
-	mframes, err := chunk.Split(bytes.NewReader(mbytes), opts.ChunkSize)
+	h := link.Handle{Root: root, Key: ports.HashBytes(mbytes)}
+	blob, err := manifest.Seal(m, h.LayoutKey(), h.ContentKey())
 	if err != nil {
-		return ports.Hash{}, fmt.Errorf("add: chunking manifest: %w", err)
+		return link.Handle{}, fmt.Errorf("add: sealing manifest: %w", err)
+	}
+	mframes, err := chunk.Split(bytes.NewReader(blob), opts.ChunkSize)
+	if err != nil {
+		return link.Handle{}, fmt.Errorf("add: chunking manifest: %w", err)
 	}
 	var manifestIDs []ports.ChunkID
 	for i, f := range mframes {
 		c := ports.NewChunk(f)
 		if err := store.Put(ctx, c); err != nil {
-			return ports.Hash{}, fmt.Errorf("add: storing manifest chunk %d: %w", i, err)
+			return link.Handle{}, fmt.Errorf("add: storing manifest chunk %d: %w", i, err)
 		}
 		manifestIDs = append(manifestIDs, c.ID)
 	}
@@ -152,33 +165,33 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		Publisher:      opts.Publisher,
 	})
 	if err != nil {
-		return ports.Hash{}, fmt.Errorf("add: publish: %w", err)
+		return link.Handle{}, fmt.Errorf("add: publish: %w", err)
 	}
-	return root, nil
+	return h, nil
 }
 
 // Get retrieves the file named by root and writes it to w. Every chunk
 // is hash-verified on receipt, and the manifest's chunk list is verified
 // against the root before any data is fetched — the registry entry
 // itself is treated as untrusted routing metadata.
-func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root ports.Hash, w io.Writer) error {
-	entry, ok, err := reg.Lookup(ctx, root)
+func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, h link.Handle, w io.Writer) error {
+	entry, ok, err := reg.Lookup(ctx, h.Root)
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
 	if !ok {
-		return fmt.Errorf("get %s: %w", root, ports.ErrNoSuchEntry)
+		return fmt.Errorf("get %s: %w", h.Root, ports.ErrNoSuchEntry)
 	}
 
-	m, err := LoadManifest(ctx, store, entry)
+	m, err := LoadFull(ctx, store, entry, h)
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
 	// The critical check: the manifest we fetched must actually be the
 	// one the root names. A registry (or store) pointing us at a
 	// different manifest is caught right here.
-	if m.Root() != root {
-		return fmt.Errorf("get: manifest root %s does not match requested root %s", m.Root(), root)
+	if m.Root() != h.Root {
+		return fmt.Errorf("get: manifest root %s does not match requested root %s", m.Root(), h.Root)
 	}
 
 	mode, err := crypto.ParseMode(m.Mode)
@@ -221,9 +234,9 @@ func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root p
 	return nil
 }
 
-// LoadManifest fetches, verifies, joins, and parses the manifest chunks
-// referenced by a registry entry.
-func LoadManifest(ctx context.Context, store ports.ChunkStore, entry ports.Entry) (*manifest.Manifest, error) {
+// LoadBlob fetches, verifies, and joins the sealed manifest blob
+// referenced by a registry entry — still ciphertext.
+func LoadBlob(ctx context.Context, store ports.ChunkStore, entry ports.Entry) ([]byte, error) {
 	var mbuf bytes.Buffer
 	mframes := make([][]byte, 0, len(entry.ManifestChunks))
 	for _, id := range entry.ManifestChunks {
@@ -239,7 +252,33 @@ func LoadManifest(ctx context.Context, store ports.ChunkStore, entry ports.Entry
 	if err := chunk.Join(&mbuf, mframes); err != nil {
 		return nil, fmt.Errorf("reassembling manifest: %w", err)
 	}
-	return manifest.Unmarshal(mbuf.Bytes())
+	return mbuf.Bytes(), nil
+}
+
+// LoadFull opens the manifest with the full link: layout + secrets.
+func LoadFull(ctx context.Context, store ports.ChunkStore, entry ports.Entry, h link.Handle) (*manifest.Manifest, error) {
+	blob, err := LoadBlob(ctx, store, entry)
+	if err != nil {
+		return nil, err
+	}
+	return manifest.OpenFull(blob, h.LayoutKey(), h.ContentKey())
+}
+
+// LoadLayout opens only the outer layer with a care link: structure
+// without secrets — the caretaker's whole world.
+func LoadLayout(ctx context.Context, store ports.ChunkStore, entry ports.Entry, ch link.CareHandle) (*manifest.Layout, error) {
+	blob, err := LoadBlob(ctx, store, entry)
+	if err != nil {
+		return nil, err
+	}
+	l, err := manifest.OpenLayout(blob, ch.LayoutKey)
+	if err != nil {
+		return nil, err
+	}
+	if l.Root() != ch.Root {
+		return nil, fmt.Errorf("layout root %s does not match care link root %s", l.Root(), ch.Root)
+	}
+	return l, nil
 }
 
 // fetchDataChunks returns every ciphertext data chunk of the file, in

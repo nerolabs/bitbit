@@ -16,6 +16,7 @@ import (
 	"fmt"
 
 	"github.com/nerolabs/bitbit/core/dht"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/ports"
 )
 
@@ -80,7 +81,7 @@ type Node struct {
 
 	// caretaker state (repair loop)
 	reg           ports.Registry
-	care          []ports.Hash
+	care          []link.CareHandle
 	repairRunning bool
 
 	// ledger, when set, is credited for every chunk this node serves.

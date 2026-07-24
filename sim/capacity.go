@@ -16,6 +16,7 @@ import (
 	"github.com/nerolabs/bitbit/adapters/simnet"
 	"github.com/nerolabs/bitbit/core/crypto"
 	"github.com/nerolabs/bitbit/core/erasure"
+	linkpkg "github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/node"
 	"github.com/nerolabs/bitbit/core/pipeline"
@@ -108,23 +109,23 @@ func Capacity(seed int64, o CapacityOpts) (CapacityResult, error) {
 
 	// The client publishes files until the swarm can't take one at
 	// target replication.
-	var firstRoot ports.Hash
+	var firstHandle linkpkg.Handle
 	var firstData []byte
 	perFileTarget := 0 // learned from the first file's full placement
 	for f := 0; f < o.MaxFiles; f++ {
 		pub := uploader
 		data := make([]byte, o.FileSize)
 		cl.rng.Read(data)
-		root, err := pipeline.Add(bgCtx, pub.Store(), cl.Registry, bytes.NewReader(data),
+		h, err := pipeline.Add(bgCtx, pub.Store(), cl.Registry, bytes.NewReader(data),
 			pipeline.Options{ChunkSize: o.ChunkSize, Mode: crypto.Convergent, Erasure: o.Erasure})
 		if err != nil {
 			return res, err
 		}
 		if f == 0 {
-			firstRoot, firstData = root, data
+			firstHandle, firstData = h, data
 		}
-		entry, _, _ := cl.Registry.Lookup(bgCtx, root)
-		m, err := pipeline.LoadManifest(bgCtx, pub.Store(), entry)
+		entry, _, _ := cl.Registry.Lookup(bgCtx, h.Root)
+		m, err := pipeline.LoadFull(bgCtx, pub.Store(), entry, h)
 		if err != nil {
 			return res, err
 		}
@@ -152,8 +153,8 @@ func Capacity(seed int64, o CapacityOpts) (CapacityResult, error) {
 	res.TrueUsed, _ = networkUsage(caps)
 
 	// Anti-affinity check (omniscient) on the FIRST file's placement.
-	entry, _, _ := cl.Registry.Lookup(bgCtx, firstRoot)
-	if m, err := pipeline.LoadManifest(bgCtx, anyHolderStore(cl, entry), entry); err == nil {
+	entry, _, _ := cl.Registry.Lookup(bgCtx, firstHandle.Root)
+	if m, err := pipeline.LoadFull(bgCtx, anyHolderStore(cl, entry), entry, firstHandle); err == nil {
 		res.StripeConflict, res.WorstOverlap = stripeConflicts(cl, m)
 	}
 	say(fmt.Sprintf("placement | worst single-node loss for any stripe of file 0: %d shard(s) (parity budget %d)",
@@ -174,7 +175,7 @@ func Capacity(seed int64, o CapacityOpts) (CapacityResult, error) {
 	var out bytes.Buffer
 	var gerr error
 	got := false
-	downloader.NetGet(cl.Registry, firstRoot, &out, func(err error) { gerr = err; got = true })
+	downloader.NetGet(cl.Registry, firstHandle, &out, func(err error) { gerr = err; got = true })
 	cl.Sched.Run()
 	res.Retrieved = got && gerr == nil && bytes.Equal(out.Bytes(), firstData)
 	say(fmt.Sprintf("retrieve  | first file from the filled network, bit-perfect: %v", res.Retrieved))

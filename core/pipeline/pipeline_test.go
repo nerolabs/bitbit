@@ -9,9 +9,9 @@ import (
 	"testing/quick"
 
 	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/core/chunk"
 	"github.com/nerolabs/bitbit/core/crypto"
 	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/core/registry"
@@ -26,12 +26,12 @@ func addGet(t *testing.T, data []byte, mode crypto.Mode) {
 	store := memstore.New()
 	reg := registry.New()
 	opts := pipeline.Options{ChunkSize: testChunkSize, Mode: mode, Rand: rand.New(rand.NewSource(1))}
-	root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
+	h, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
 	if err != nil {
 		t.Fatalf("Add(%d bytes, %s): %v", len(data), mode, err)
 	}
 	var out bytes.Buffer
-	if err := pipeline.Get(ctx, store, reg, root, &out); err != nil {
+	if err := pipeline.Get(ctx, store, reg, h, &out); err != nil {
 		t.Fatalf("Get(%s): %v", mode, err)
 	}
 	if !bytes.Equal(out.Bytes(), data) {
@@ -55,13 +55,13 @@ func TestRoundtripProperty(t *testing.T) {
 		ctx := context.Background()
 		store := memstore.New()
 		reg := registry.New()
-		root, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+		h, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
 			pipeline.Options{ChunkSize: 256, Mode: crypto.Convergent})
 		if err != nil {
 			return false
 		}
 		var out bytes.Buffer
-		if err := pipeline.Get(ctx, store, reg, root, &out); err != nil {
+		if err := pipeline.Get(ctx, store, reg, h, &out); err != nil {
 			return false
 		}
 		return bytes.Equal(out.Bytes(), data)
@@ -80,19 +80,19 @@ func TestConvergentDedup(t *testing.T) {
 	rand.New(rand.NewSource(3)).Read(data)
 	opts := pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Convergent}
 
-	root1, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
+	h1, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids1, _ := store.List(ctx)
-	root2, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
+	h2, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids2, _ := store.List(ctx)
 
-	if root1 != root2 {
-		t.Fatal("convergent mode: same content must yield same root")
+	if h1 != h2 {
+		t.Fatal("convergent mode: same content must yield same root AND same link")
 	}
 	if len(ids1) != len(ids2) {
 		t.Fatalf("second add stored %d new chunks; dedup should store none", len(ids2)-len(ids1))
@@ -104,42 +104,30 @@ func TestPrivateModeDistinctRoots(t *testing.T) {
 	store := memstore.New()
 	reg := registry.New()
 	data := []byte("identical content, added privately twice")
-	root1, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+	h1, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
 		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Private, Rand: rand.New(rand.NewSource(1))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	root2, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
+	h2, err := pipeline.Add(ctx, store, reg, bytes.NewReader(data),
 		pipeline.Options{ChunkSize: testChunkSize, Mode: crypto.Private, Rand: rand.New(rand.NewSource(2))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if root1 == root2 {
+	if h1.Root == h2.Root {
 		t.Fatal("private mode: different file keys must yield different roots")
 	}
 }
 
 // loadManifest fetches and parses the stored manifest for root, so tests
 // can aim their destruction at specific stripes.
-func loadManifest(t *testing.T, ctx context.Context, store ports.ChunkStore, reg ports.Registry, root ports.Hash) *manifest.Manifest {
+func loadManifest(t *testing.T, ctx context.Context, store ports.ChunkStore, reg ports.Registry, h link.Handle) *manifest.Manifest {
 	t.Helper()
-	entry, ok, err := reg.Lookup(ctx, root)
+	entry, ok, err := reg.Lookup(ctx, h.Root)
 	if err != nil || !ok {
 		t.Fatalf("lookup: ok=%v err=%v", ok, err)
 	}
-	var frames [][]byte
-	for _, id := range entry.ManifestChunks {
-		c, err := store.Get(ctx, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		frames = append(frames, c.Data)
-	}
-	var buf bytes.Buffer
-	if err := chunk.Join(&buf, frames); err != nil {
-		t.Fatal(err)
-	}
-	m, err := manifest.Unmarshal(buf.Bytes())
+	m, err := pipeline.LoadFull(ctx, store, entry, h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,9 +237,9 @@ func TestCorruptionIsRepairedFromParity(t *testing.T) {
 }
 
 func TestUnknownRoot(t *testing.T) {
-	var root ports.Hash
-	root[0] = 0xAB
-	err := pipeline.Get(context.Background(), memstore.New(), registry.New(), root, &bytes.Buffer{})
+	var h link.Handle
+	h.Root[0] = 0xAB
+	err := pipeline.Get(context.Background(), memstore.New(), registry.New(), h, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("Get of unpublished root must fail")
 	}

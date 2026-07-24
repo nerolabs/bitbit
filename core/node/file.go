@@ -16,6 +16,7 @@ import (
 
 	"github.com/nerolabs/bitbit/core/dht"
 	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/ports"
@@ -238,10 +239,10 @@ func (n *Node) fetchAll(ids []ports.ChunkID, done func(missing []ports.ChunkID))
 // v1), then data shards (misses tolerated), then parity shards for any
 // stripe that has misses. Final verification/repair/decryption is
 // pipeline.Get against the local store.
-func (n *Node) NetGet(reg ports.Registry, root ports.Hash, w io.Writer, done func(error)) {
-	entry, ok, err := reg.Lookup(bg(), root)
+func (n *Node) NetGet(reg ports.Registry, h link.Handle, w io.Writer, done func(error)) {
+	entry, ok, err := reg.Lookup(bg(), h.Root)
 	if err != nil || !ok {
-		done(fmt.Errorf("netget %s: %w", root, ports.ErrNoSuchEntry))
+		done(fmt.Errorf("netget %s: %w", h.Root, ports.ErrNoSuchEntry))
 		return
 	}
 	n.fetchAll(entry.ManifestChunks, func(missing []ports.ChunkID) {
@@ -249,7 +250,7 @@ func (n *Node) NetGet(reg ports.Registry, root ports.Hash, w io.Writer, done fun
 			done(fmt.Errorf("netget: %d of %d manifest chunks unreachable", len(missing), len(entry.ManifestChunks)))
 			return
 		}
-		m, err := pipeline.LoadManifest(bg(), n.store, entry)
+		m, err := pipeline.LoadFull(bg(), n.store, entry, h)
 		if err != nil {
 			done(fmt.Errorf("netget: %w", err))
 			return
@@ -261,7 +262,7 @@ func (n *Node) NetGet(reg ports.Registry, root ports.Hash, w io.Writer, done fun
 				// Whatever arrived, the pipeline is the judge: it
 				// verifies every hash against the root and repairs
 				// from parity where it can.
-				done(pipeline.Get(bg(), n.store, reg, root, w))
+				done(pipeline.Get(bg(), n.store, reg, h, w))
 			})
 		})
 	})

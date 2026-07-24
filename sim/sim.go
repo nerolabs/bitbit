@@ -123,14 +123,14 @@ func Scatter(seed int64, o ScatterOpts) (ScatterResult, error) {
 	cl.rng.Read(data)
 
 	// A ingests locally, then distributes every chunk to the swarm.
-	root, err := pipeline.Add(bgCtx, a.Store(), cl.Registry, bytes.NewReader(data),
+	h, err := pipeline.Add(bgCtx, a.Store(), cl.Registry, bytes.NewReader(data),
 		pipeline.Options{ChunkSize: o.ChunkSize, Mode: crypto.Convergent})
 	if err != nil {
 		return res, err
 	}
-	res.Root = root
-	entry, _, _ := cl.Registry.Lookup(bgCtx, root)
-	m, err := pipeline.LoadManifest(bgCtx, a.Store(), entry)
+	res.Root = h.Root
+	entry, _, _ := cl.Registry.Lookup(bgCtx, h.Root)
+	m, err := pipeline.LoadFull(bgCtx, a.Store(), entry, h)
 	if err != nil {
 		return res, err
 	}
@@ -154,7 +154,7 @@ func Scatter(seed int64, o ScatterOpts) (ScatterResult, error) {
 	var out bytes.Buffer
 	var getErr error
 	got := false
-	z.NetGet(cl.Registry, root, &out, func(err error) {
+	z.NetGet(cl.Registry, h, &out, func(err error) {
 		getErr = err
 		got = true
 	})

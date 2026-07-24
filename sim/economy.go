@@ -19,6 +19,7 @@ import (
 	"github.com/nerolabs/bitbit/adapters/simnet"
 	"github.com/nerolabs/bitbit/core/credit"
 	"github.com/nerolabs/bitbit/core/crypto"
+	linkpkg "github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/node"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/core/registry"
@@ -101,7 +102,7 @@ func Economy(seed int64, o EconomyOpts) (EconomyResult, error) {
 	// Phase 1: everyone publishes once on the grant. The first
 	// o.ContentFiles nodes publish real, distributed content; the rest
 	// publish small local-only files.
-	var contentRoots []ports.Hash
+	var contentHandles []linkpkg.Handle
 	for i, nd := range cl.Nodes {
 		var data []byte
 		if i < o.ContentFiles {
@@ -110,16 +111,16 @@ func Economy(seed int64, o EconomyOpts) (EconomyResult, error) {
 		} else {
 			data = []byte(fmt.Sprintf("node %s says hello", nd.ID()))
 		}
-		root, err := pipeline.Add(bgCtx, nd.Store(), reg, bytes.NewReader(data),
+		h, err := pipeline.Add(bgCtx, nd.Store(), reg, bytes.NewReader(data),
 			pipeline.Options{ChunkSize: o.ChunkSize, Mode: crypto.Convergent, Publisher: nd.ID()})
 		if err != nil {
 			return res, fmt.Errorf("economy(seed=%d): seed publish by node %d: %w", seed, i, err)
 		}
 		res.SeedPublishOK++
 		if i < o.ContentFiles {
-			contentRoots = append(contentRoots, root)
-			entry, _, _ := reg.Lookup(bgCtx, root)
-			m, err := pipeline.LoadManifest(bgCtx, nd.Store(), entry)
+			contentHandles = append(contentHandles, h)
+			entry, _, _ := reg.Lookup(bgCtx, h.Root)
+			m, err := pipeline.LoadFull(bgCtx, nd.Store(), entry, h)
 			if err != nil {
 				return res, err
 			}
@@ -136,7 +137,7 @@ func Economy(seed int64, o EconomyOpts) (EconomyResult, error) {
 	// mirrors — so repeat fetches keep paying the hosts.
 	gets := 0
 	fetchRound := func(nd *node.Node) error {
-		for fi, root := range contentRoots {
+		for fi, ch := range contentHandles {
 			if cl.Nodes[fi].ID() == nd.ID() {
 				continue
 			}
@@ -148,7 +149,7 @@ func Economy(seed int64, o EconomyOpts) (EconomyResult, error) {
 			var out bytes.Buffer
 			var gerr error
 			done := false
-			nd.NetGet(reg, root, &out, func(err error) { gerr = err; done = true })
+			nd.NetGet(reg, ch, &out, func(err error) { gerr = err; done = true })
 			cl.Sched.Run()
 			if !done || gerr != nil {
 				return fmt.Errorf("get of file %d: done=%v err=%v", fi, done, gerr)

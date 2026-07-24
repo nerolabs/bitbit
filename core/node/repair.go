@@ -12,6 +12,7 @@ package node
 import (
 	"github.com/nerolabs/bitbit/core/dht"
 	"github.com/nerolabs/bitbit/core/erasure"
+	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/ports"
@@ -26,14 +27,14 @@ import (
 // the copies so the swarm can find them: the caretaker is usually
 // nowhere near the chunk IDs, so without records planted on the nodes
 // that ARE near, its copies are invisible to provider walks.
-func (n *Node) Care(reg ports.Registry, root ports.Hash) {
+func (n *Node) Care(reg ports.Registry, ch link.CareHandle) {
 	n.reg = reg
-	n.care = append(n.care, root)
+	n.care = append(n.care, ch)
 	if !n.repairRunning {
 		n.repairRunning = true
 		n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
 	}
-	entry, ok, err := reg.Lookup(bg(), root)
+	entry, ok, err := reg.Lookup(bg(), ch.Root)
 	if err != nil || !ok {
 		return
 	}
@@ -95,14 +96,14 @@ func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
 // itself. Rescheduling only after the sweep finishes means sweeps never
 // overlap, however long probing takes.
 func (n *Node) repairTick() {
-	roots := append([]ports.Hash(nil), n.care...)
+	handles := append([]link.CareHandle(nil), n.care...)
 	var nextRoot func(i int)
 	nextRoot = func(i int) {
-		if i == len(roots) {
+		if i == len(handles) {
 			n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
 			return
 		}
-		n.repairRoot(roots[i], func() { nextRoot(i + 1) })
+		n.repairRoot(handles[i], func() { nextRoot(i + 1) })
 	}
 	nextRoot(0)
 }
@@ -117,8 +118,8 @@ type shardRef struct {
 	leafIdx int
 }
 
-func (n *Node) repairRoot(root ports.Hash, done func()) {
-	entry, ok, err := n.reg.Lookup(bg(), root)
+func (n *Node) repairRoot(ch link.CareHandle, done func()) {
+	entry, ok, err := n.reg.Lookup(bg(), ch.Root)
 	if err != nil || !ok {
 		done()
 		return
@@ -131,12 +132,17 @@ func (n *Node) repairRoot(root ports.Hash, done func()) {
 			done() // swarm can't supply it right now; retry next sweep
 			return
 		}
-		n.repairRootWithManifest(entry, done)
+		n.repairRootWithLayout(entry, ch, done)
 	})
 }
 
-func (n *Node) repairRootWithManifest(entry ports.Entry, done func()) {
-	m, err := pipeline.LoadManifest(bg(), n.store, entry)
+// repairRootWithLayout is where the M11 privilege separation earns its
+// keep: everything below runs on the LAYOUT alone. A caretaker repairs
+// stripes, verifies rebuilt shards against the Merkle root, and re-seeds
+// the swarm — while the content keys, and the bytes they unlock, remain
+// sealed to it.
+func (n *Node) repairRootWithLayout(entry ports.Entry, ch link.CareHandle, done func()) {
+	m, err := pipeline.LoadLayout(bg(), n.store, entry, ch)
 	if err != nil || m.K == 0 || len(m.Chunks) == 0 {
 		done()
 		return
@@ -196,7 +202,7 @@ func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
 // storedShards lists every shard that physically exists for the file,
 // in stripe order. (A short final stripe stores fewer than n — its
 // implicit zero shards are math, not storage, and never need repair.)
-func storedShards(m *manifest.Manifest, p erasure.Params) []shardRef {
+func storedShards(m *manifest.Layout, p erasure.Params) []shardRef {
 	dataIDs, parityIDs := m.ChunkIDs(), m.ParityIDs()
 	var refs []shardRef
 	for j := 0; j < p.Stripes(len(dataIDs)); j++ {
@@ -252,7 +258,7 @@ func (n *Node) probeShard(id ports.ChunkID, includeLocal bool, done func(bool)) 
 
 // repairStripes walks the stripes, repairing each one whose losses
 // exceed the slack.
-func (n *Node) repairStripes(m *manifest.Manifest, p erasure.Params, refs []shardRef,
+func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardRef,
 	reachable map[ports.ChunkID]bool, stripe int, done func()) {
 
 	numStripes := p.Stripes(len(m.Chunks))
@@ -285,7 +291,7 @@ func (n *Node) repairStripes(m *manifest.Manifest, p erasure.Params, refs []shar
 // fresh nodes. The caretaker keeps nothing afterward — it's a
 // paramedic, not a hoarder. A failed attempt (below k fetchable) is
 // counted and simply retried on the next sweep.
-func (n *Node) repairStripe(m *manifest.Manifest, p erasure.Params, stripeRefs []shardRef, done func()) {
+func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, done func()) {
 	leaves := m.Leaves()
 	root := m.Root()
 	ids := make([]ports.ChunkID, len(stripeRefs))

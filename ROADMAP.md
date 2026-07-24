@@ -40,11 +40,15 @@ density (math note 06) to compute total network capacity.
   -dns-seed TXT records → peer exchange, with the learned address book
   persisted to peers.json for flagless warm restarts.
 
-### M11 — Encrypted manifests ("encrypted at all levels")
-Fill the reserved ManifestKey seam: manifests are stored as ciphertext
-chunks. A file's share handle becomes `root + manifest key` (a "bitbit
-link"); holding only the root proves nothing and decrypts nothing.
-Infrastructure relays ciphertext end to end.
+### M11 — Encrypted manifests ("encrypted at all levels") (DONE)
+Manifests are sealed blobs: layout encrypted under a layout key, with
+the decryption material boxed under a content key inside. Both keys
+derive one-way (HKDF) from the link key — the share handle is
+`bitbit:v1:root:key`, and its degraded form `bitbitcare:v1:root:layoutkey`
+grants repair/audit WITHOUT decryption (see docs/math/07-key-hierarchy.md).
+Link keys are content-derived, so convergent dedup extends to the links
+themselves. Infrastructure relays ciphertext end to end; caretakers do
+their whole job inside the layout ring.
 
 ### M12 — The chain
 Replace the hosted registry with an append-only block chain of
