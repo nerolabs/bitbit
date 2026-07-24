@@ -25,6 +25,9 @@ sockets. See `HANDOFF.md` for the full design brief and
 
 ## Try it
 
+The guided version of everything below — with what to look for at each
+step — is [`docs/v1-test.md`](docs/v1-test.md).
+
 ```sh
 go build -o shardnet ./cmd/shardnet
 
