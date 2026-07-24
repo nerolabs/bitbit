@@ -1,0 +1,56 @@
+package httpregistry_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/nerolabs/bitbit/adapters/httpregistry"
+	"github.com/nerolabs/bitbit/core/registry"
+	"github.com/nerolabs/bitbit/ports"
+)
+
+func TestClientServerRoundtrip(t *testing.T) {
+	addr, shutdown, err := httpregistry.Serve("127.0.0.1:0", registry.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown()
+	c := httpregistry.NewClient("http://" + addr)
+	ctx := context.Background()
+
+	e := ports.Entry{
+		Root:           ports.HashBytes([]byte("file")),
+		ManifestChunks: []ports.ChunkID{ports.HashBytes([]byte("m0")), ports.HashBytes([]byte("m1"))},
+		FileSize:       4242,
+		Publisher:      ports.HashBytes([]byte("publisher")),
+	}
+	if err := c.Publish(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := c.Lookup(ctx, e.Root)
+	if err != nil || !ok {
+		t.Fatalf("lookup: ok=%v err=%v", ok, err)
+	}
+	if got.FileSize != e.FileSize || got.Publisher != e.Publisher ||
+		len(got.ManifestChunks) != 2 || got.ManifestChunks[1] != e.ManifestChunks[1] {
+		t.Fatalf("entry mangled over HTTP: %+v", got)
+	}
+
+	// Registry semantics survive the wire.
+	if err := c.Publish(ctx, e); err != nil {
+		t.Fatalf("idempotent republish: %v", err)
+	}
+	conflicting := e
+	conflicting.FileSize = 1
+	if err := c.Publish(ctx, conflicting); !errors.Is(err, ports.ErrDupPublish) {
+		t.Fatalf("conflict: want ErrDupPublish, got %v", err)
+	}
+	if _, ok, err := c.Lookup(ctx, ports.HashBytes([]byte("nope"))); ok || err != nil {
+		t.Fatalf("missing root: ok=%v err=%v", ok, err)
+	}
+	all, err := c.All(ctx)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("all: %d entries, err=%v", len(all), err)
+	}
+}

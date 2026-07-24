@@ -29,6 +29,9 @@ Beyond the original handoff:
 - ✅ M7 — toy proof-of-retrieval: chunks travel with Merkle proofs,
   audits challenge providers with nonce tags, and nodes that kept the
   proof but ditched the data get slashed into debt
+- ✅ M8 — daemon mode: separate OS processes form a real swarm (disk
+  stores, registry over HTTP, ephemeral add/get clients); daemons
+  re-announce their held chunks on restart
 
 ## Try it
 
@@ -60,6 +63,30 @@ go build -o bitbit ./cmd/bitbit
 # the same core over real TCP sockets on localhost
 ./bitbit net demo -nodes 8
 ```
+
+## Run a real swarm (separate processes)
+
+```sh
+# terminal 1: seed daemon, also hosts the swarm registry
+./bitbit daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store d1
+# it prints:  peer: <ID>@127.0.0.1:7101   ← this is your bootstrap string
+
+# terminals 2..n: more daemons
+./bitbit daemon -listen 127.0.0.1:7102 -store d2 \
+  -bootstrap <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+
+# publish from anywhere: an ephemeral client joins, scatters, leaves
+./bitbit swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+# → prints the root hash; the client keeps nothing
+
+# retrieve from anywhere (kill a daemon first, for sport)
+./bitbit swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+```
+
+Daemons use real disk stores and survive restarts (they re-announce
+what they hold). `-serve-registry` is the v1 "single honest instance"
+made reachable over HTTP — the seam a chain replaces someday. No TLS,
+no auth: trusted networks only, and the code says so out loud.
 
 Chunks land in `.bitbit/objects/` named by SHA-256. Add the same file
 twice in (default) convergent mode and you get the same root with zero

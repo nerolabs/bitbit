@@ -10,6 +10,7 @@
 package node
 
 import (
+	"github.com/nerolabs/bitbit/core/dht"
 	"github.com/nerolabs/bitbit/core/erasure"
 	"github.com/nerolabs/bitbit/core/manifest"
 	"github.com/nerolabs/bitbit/core/pipeline"
@@ -41,6 +42,23 @@ func (n *Node) Care(reg ports.Registry, root ports.Hash) {
 			n.announceAll(entry.ManifestChunks, func() {})
 		}
 	})
+}
+
+// AnnounceHeld re-plants provider records for every chunk in the local
+// store. Records live in peers' memories and die with processes — a
+// daemon restarting with a disk full of chunks is invisible until it
+// re-announces. Call after bootstrap; done receives the chunk count.
+func (n *Node) AnnounceHeld(done func(int)) {
+	ids, err := n.store.List(bg())
+	if err != nil {
+		done(0)
+		return
+	}
+	dht.SortByDistance(n.id, ids) // List order is map-random; sort for determinism
+	for _, id := range ids {
+		n.provs.Add(id, n.id)
+	}
+	n.announceAll(ids, func() { done(len(ids)) })
 }
 
 // announceAll plants "I have chunk H" records on the K closest nodes to
