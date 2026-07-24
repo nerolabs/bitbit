@@ -166,22 +166,7 @@ func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root p
 		return fmt.Errorf("get %s: %w", root, ports.ErrNoSuchEntry)
 	}
 
-	var mbuf bytes.Buffer
-	mframes := make([][]byte, 0, len(entry.ManifestChunks))
-	for _, id := range entry.ManifestChunks {
-		c, err := store.Get(ctx, id)
-		if err != nil {
-			return fmt.Errorf("get: manifest chunk: %w", err)
-		}
-		if !c.Verify() {
-			return fmt.Errorf("get: manifest chunk %s: %w", id, ports.ErrCorrupt)
-		}
-		mframes = append(mframes, c.Data)
-	}
-	if err := chunk.Join(&mbuf, mframes); err != nil {
-		return fmt.Errorf("get: reassembling manifest: %w", err)
-	}
-	m, err := manifest.Unmarshal(mbuf.Bytes())
+	m, err := LoadManifest(ctx, store, entry)
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
@@ -230,6 +215,27 @@ func Get(ctx context.Context, store ports.ChunkStore, reg ports.Registry, root p
 		return fmt.Errorf("get: reassembled %d bytes, manifest says %d", counter.n, m.FileSize)
 	}
 	return nil
+}
+
+// LoadManifest fetches, verifies, joins, and parses the manifest chunks
+// referenced by a registry entry.
+func LoadManifest(ctx context.Context, store ports.ChunkStore, entry ports.Entry) (*manifest.Manifest, error) {
+	var mbuf bytes.Buffer
+	mframes := make([][]byte, 0, len(entry.ManifestChunks))
+	for _, id := range entry.ManifestChunks {
+		c, err := store.Get(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("manifest chunk: %w", err)
+		}
+		if !c.Verify() {
+			return nil, fmt.Errorf("manifest chunk %s: %w", id, ports.ErrCorrupt)
+		}
+		mframes = append(mframes, c.Data)
+	}
+	if err := chunk.Join(&mbuf, mframes); err != nil {
+		return nil, fmt.Errorf("reassembling manifest: %w", err)
+	}
+	return manifest.Unmarshal(mbuf.Bytes())
 }
 
 // fetchDataChunks returns every ciphertext data chunk of the file, in

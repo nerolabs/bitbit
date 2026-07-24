@@ -5,13 +5,15 @@ real product from day one, simulated in-process until it needs real
 sockets. See `HANDOFF.md` for the full design brief and
 `docs/math/` for friendly explanations of the math.
 
-## Status: M2 complete (erasure resilience)
+## Status: M3 complete (the network)
 
 - ✅ M1 — chunk → encrypt → hash → manifest → Merkle root, and back;
   CLI `add`/`get` against a content-addressed disk store
 - ✅ M2 — Reed-Solomon stripes: delete any n−k shards per stripe and
   `get` reconstructs bit-perfectly; one more and it fails loudly
-- ⬜ M3 — Kademlia DHT over simulated network
+- ✅ M3 — Kademlia over a deterministic in-process network: `add` on
+  node A, `get` on node Z, chunks scattered across 50 nodes, A keeps
+  nothing; survives packet loss and dead nodes
 - ⬜ M4 — churn & repair (the money demo)
 - ⬜ M5 — credit economics observatory
 
@@ -26,6 +28,9 @@ go build -o shardnet ./cmd/shardnet
 ./shardnet get <root> -o restored.pdf  # full verify-everything retrieval
 ./shardnet add secret.txt -mode private  # random key, no dedup, no confirmation attack
 ./shardnet add big.iso -k 4 -n 7       # custom erasure geometry
+
+# the network, simulated: 100 nodes, 3% packet loss, 8 nodes killed
+./shardnet sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
 ```
 
 Chunks land in `.shardnet/objects/` named by SHA-256. Add the same file
@@ -38,12 +43,19 @@ one loss beyond that and it names the dead stripe and refuses.
 
 ```
 ports/       all cross-component interfaces + shared primitives
-core/        pure logic: chunking, crypto, manifests/Merkle, pipeline, registry
-adapters/    the effects: memstore, diskstore, fileregistry (simnet/simclock come with M3)
+core/        pure logic: chunking, crypto, erasure, manifests/Merkle,
+             pipeline, registry, dht (Kademlia), node behavior
+adapters/    the effects: memstore, diskstore, fileregistry,
+             simclock (deterministic scheduler), simnet (latency/loss/partitions)
+sim/         the harness: clusters, scenarios, stats
 cmd/         CLI
 internal/depcheck  the architecture rule as a failing test
 docs/math/   the math, explained for humans
 ```
+
+The sim runs on a single-threaded event scheduler — no goroutines, no
+wall clock, every random draw seeded — so any run reproduces exactly
+from its seed. Failing scenarios print the seed that kills them.
 
 Core packages import no adapters, no `os`/`net`/`time`/ambient
 randomness — enforced by `go test ./internal/depcheck`. Every effect
