@@ -77,12 +77,15 @@ go:embed, JSON API on the same port, zero extra runtime):
   hosting). No privileged view; it's knowledge any participant can
   assemble.
 
-### M14 — Desktop client (Mac/Windows/Linux)
-Recommendation: one Go binary with the embedded web UI (menu-bar /
-tray wrapper per OS), not Electron — single codebase, ~10 MB, all
-three platforms from `go build`. It bootstraps via M10 discovery,
-shows reachable top-level IDs, one click to fetch. If a richer native
-feel is wanted later, wrap the same Go core in Tauri.
+### M14 — Desktop client (DONE)
+`bitbit client`: one binary that consumes AND serves (pledges disk by
+default — every client a node), keeps a link-book library (the files
+you hold keys for; the network's other identifiers stay opaque to you,
+the Aslan boundary made visible), bootstraps via discovery, and opens
+the web UI in your browser. build.sh cross-compiles Mac (Intel + Apple
+Silicon), Windows, and Linux (amd64 + arm64) from one source, CGO off,
+5 self-contained 8-10 MB binaries. Tray/Tauri wrapping is optional
+polish that consumes the binary unchanged. See docs/desktop-client.md.
 
 ## The resolver layer ("Aslan" — separate product)
 Meaning lives above the infrastructure, in a separate codebase with

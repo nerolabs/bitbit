@@ -57,6 +57,11 @@ Beyond the original handoff:
   paste-a-link fetch page, and a network observatory that aggregates
   many daemons — capacity, serving bandwidth, per-file shard spread.
   One Go binary, `go:embed`, zero extra runtime
+- ✅ M14 — desktop client: `bitbit client` consumes AND serves in one
+  process (pledges disk by default), keeps a link-book library (files
+  you hold keys for — the rest of the network is opaque to you by
+  design), and opens a browser UI. `build.sh` cross-compiles Mac /
+  Windows / Linux from one source tree (see docs/desktop-client.md)
 
 Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
 encrypted manifests, the reputation-quorum chain, web frontends, and
