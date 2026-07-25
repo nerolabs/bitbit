@@ -34,6 +34,40 @@ Work captured for later, most-strategic first. The milestone history
 - Removed 44 MB of stale `dist/` binaries from the repo and gitignored
   the directory (done in this change).
 
+## Storage layer — placement & distribution
+
+Captured from design discussion (2026-07-25). Today Silt places every
+chunk independently by its own hash — the maximum-fanout extreme: good
+spread, but reading a file of S stripes costs ~S×k separate
+lookups-and-fetches, and concentration/failure-domain risks aren't
+actively managed. Decisions and tasks, priority order:
+
+- **Column-based placement** — *the backbone; next storage milestone.*
+  Place whole **columns** (one shard position across all stripes), keyed
+  by `hash(root‖j)`, instead of individual chunks. Reads become **k
+  conversations for the whole file** regardless of size, unit-failure
+  costs exactly one shard per stripe (lose up to n−k columns and still
+  rebuild), and anti-affinity becomes optimal and automatic. Design and
+  tradeoffs written up in
+  [docs/design/column-placement.md](docs/design/column-placement.md).
+- **Failure-domain-aware placement** — *highest-value durability item.*
+  Nodes advertise a domain hint (AS / rack / geo / operator); placement
+  spreads across distinct **domains**, not just node IDs. Content
+  addressing prevents random concentration but not *correlated* failure
+  (16 shards on 16 IDs in one datacenter). Pairs naturally with column
+  placement (the n columns should land in n distinct domains).
+- **Repair preserves anti-affinity** — *small, verified gap.* Repair
+  re-places rebuilt shards on the raw closest nodes without the
+  `preferAvoiding` stripe-spreading that initial `Distribute` uses
+  (`core/node/repair.go`), so stripes can drift toward clustering over
+  many repair cycles. Column placement subsumes this; if that's deferred,
+  fix repair directly first.
+- **Dispersion audit** — the caretaker repair loop counts *reachable
+  shards* per stripe; extend it to count distinct *hosts and domains* per
+  stripe and trigger redistribution below a diversity threshold. Turns
+  the observatory's existing "daemons hosting per root" health signal
+  into an enforced invariant.
+
 ## Strategy — the "fresh-eyes council"
 
 Andrew's ask: convene experienced Legal, PR, and Marketing executives

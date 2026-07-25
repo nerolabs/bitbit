@@ -117,3 +117,16 @@ design. Silt ships zero Aslan code, ever.
   code-signing/notarization (macOS) and a checksums file before a wide
   public push.
 - Website publishing + DNS: see DEPLOYMENT.md (Netlify, apex at Namecheap).
+
+## Storage-layer hardening (post-launch track)
+Sequenced after the launch-gating work (security/legal review, v0.1).
+Captured 2026-07-25; see docs/design/column-placement.md and BACKLOG.md.
+1. **Column-based placement** — align the placement unit with the erasure
+   boundary so reads cost ~k conversations (not ~S×k) and anti-affinity
+   is automatic. The backbone of the storage layer's next phase.
+2. **Failure-domain-aware placement** — spread columns across distinct
+   AS/rack/geo/operator domains; the top durability item.
+3. **Repair anti-affinity + dispersion audit** — repair re-applies
+   spreading; caretakers enforce a distinct-hosts/domains-per-stripe
+   invariant, not just a shard count.
+
