@@ -22,10 +22,20 @@ func (r ReplicaRegistry) Publish(context.Context, ports.Entry) error {
 }
 
 func (r ReplicaRegistry) Lookup(_ context.Context, root ports.Hash) (ports.Entry, bool, error) {
+	if r.C.Revoked(root) {
+		return ports.Entry{}, false, nil // taken down: unresolvable
+	}
 	e, ok := r.C.LookupRoot(root)
 	return e, ok, nil
 }
 
 func (r ReplicaRegistry) All(context.Context) ([]ports.Entry, error) {
-	return r.C.AllEntries(), nil
+	all := r.C.AllEntries()
+	kept := all[:0]
+	for _, e := range all {
+		if !r.C.Revoked(e.Root) {
+			kept = append(kept, e)
+		}
+	}
+	return kept, nil
 }

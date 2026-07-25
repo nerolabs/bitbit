@@ -56,10 +56,15 @@ func (n *Node) AnnounceHeld(done func(int)) {
 		return
 	}
 	dht.SortByDistance(n.id, ids) // List order is map-random; sort for determinism
+	kept := ids[:0]
 	for _, id := range ids {
+		if n.chunkDenied(id) {
+			continue // don't advertise taken-down content
+		}
 		n.provs.Add(id, n.id)
+		kept = append(kept, id)
 	}
-	n.announceAll(ids, func() { done(len(ids)) })
+	n.announceAll(kept, func() { done(len(kept)) })
 }
 
 // announceAll plants "I have chunk H" records on the K closest nodes to
@@ -119,6 +124,10 @@ type shardRef struct {
 }
 
 func (n *Node) repairRoot(ch link.CareHandle, done func()) {
+	if n.isDenied(ch.Root) {
+		done() // taken down: stop keeping it alive
+		return
+	}
 	entry, ok, err := n.reg.Lookup(bg(), ch.Root)
 	if err != nil || !ok {
 		done()

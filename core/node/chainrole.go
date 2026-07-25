@@ -94,7 +94,28 @@ func (n *Node) ProposeEntry(e ports.Entry, attesters, broadcast []ports.NodeID, 
 		return
 	}
 	prev, height := n.chain.Head()
-	b := &chain.Block{Height: height, Prev: prev, Entries: []ports.Entry{e}}
+	n.proposeBlock(&chain.Block{Height: height, Prev: prev, Entries: []ports.Entry{e}},
+		attesters, broadcast, quorum, done)
+}
+
+// ProposeRevocation runs consensus on a TAKEDOWN: an append-only block
+// that marks roots denied. It needs the same reputation quorum as a
+// publication, so removing content is exactly as governed as adding it —
+// no single node can take a file down, and the record of the takedown is
+// itself immutable and replicated.
+func (n *Node) ProposeRevocation(roots []ports.Hash, attesters, broadcast []ports.NodeID, quorum int, done func(error)) {
+	if n.chain == nil {
+		done(ErrNoChain)
+		return
+	}
+	prev, height := n.chain.Head()
+	n.proposeBlock(&chain.Block{Height: height, Prev: prev, Revocations: roots},
+		attesters, broadcast, quorum, done)
+}
+
+// proposeBlock signs b, gathers attestations to quorum, commits locally,
+// and broadcasts — shared by entry and revocation proposals.
+func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID, quorum int, done func(error)) {
 	chain.Sign(b, n.signer)
 	if err := n.chain.ValidateProposal(b); err != nil {
 		done(fmt.Errorf("propose: local pre-check: %w", err))

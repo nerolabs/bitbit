@@ -9,9 +9,19 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Takedown by revocation.** Illegal or unwanted content can be removed
+  without breaking encryption or rewriting history: an append-only
+  revocation record, committed by the same reputation quorum that commits
+  publications, makes compliant nodes no-op on a denied opaque root —
+  refusing to store, serve, prove, announce, or repair it, and purging
+  what they hold. Operators may also load a local denylist they choose to
+  honor (`silt daemon -denylist`). The project ships the mechanism and no
+  list; it operates neither the network nor the policy. See
+  `docs/safety-denylist.md` and `GOVERNANCE.md`. (`silt sim run takedown`.)
 - Public website (silthq.com) with brand, docs, operator guide, and downloads.
 - Continuous delivery: PR previews, a `staging` environment, and production
   deploys from `main`.
+- Strategy docs: fresh-eyes council, risk register, and launch plan.
 
 ## [0.1.0] — 2026-07-25
 
