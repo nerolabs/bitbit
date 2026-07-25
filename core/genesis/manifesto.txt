@@ -1,0 +1,43 @@
+BitBit — Genesis
+================
+
+This is the first file on every BitBit network: the block from which
+all others descend, carried by every node, hosted by the whole swarm,
+retrievable by anyone, forever. It holds no secret. It is here to say
+what this network is for.
+
+    The infrastructure is not the content.
+
+A BitBit node stores and serves anonymous, encrypted fragments. It
+cannot read what it holds; it was built, deliberately, to be unable to.
+Chunks are ciphertext. Manifests are ciphertext describing ciphertext.
+A file's public name is thirty-two bytes of hash that reveal nothing —
+not a title, not a size, not a kind. The network moves bytes the way a
+road moves traffic and a wire moves current: faithfully, and without
+opinion about the cargo.
+
+Meaning lives elsewhere, with whoever holds the keys. To open a file
+you need a link, and a link is a key, and keys travel between people —
+not through this network. What a thing IS, whether it may be shared,
+who is responsible for it: those are questions for the layer above,
+where names attach to numbers and humans attach to names. This layer
+answers a smaller, humbler question — is the data still here? — and
+answers it well: split across many machines, healed as they fail,
+provably held, and gone the instant its holders are gone and no one
+kept a key.
+
+We built it this way on purpose. A network that cannot know what it
+carries cannot be made to lie about it, cannot be conscripted to
+censor it, cannot be blamed for it any more than the alphabet is
+blamed for what is written. Privacy here is not a setting. It is the
+shape of the thing.
+
+To whoever runs a node: thank you. You are giving the network storage
+and bandwidth, and asking nothing of the files but that they be served
+honestly. To whoever reads this from a fresh clone: everything after
+this block was earned — audited, attested, agreed. This block was
+simply declared, once, so the rest would have somewhere to begin.
+
+Build something worth carrying.
+
+— The first block. Held by all. Owned by none.

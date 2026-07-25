@@ -261,11 +261,42 @@ func (c *Chain) Append(b Block) error {
 	if err := c.ValidateCommit(&b); err != nil {
 		return err
 	}
+	c.apply(b)
+	return nil
+}
+
+// AppendGenesis seeds the height-0 founding block. Unlike every later
+// block it needs NO quorum and NO proposer reputation — a genesis is
+// accepted because it is identical on every node (declared, not agreed),
+// exactly as Bitcoin's genesis has no predecessor to prove work against.
+// It must be the first block, at height 0 with a zero parent, and its
+// proposer signature must check out (so a corrupted genesis is caught).
+func (c *Chain) AppendGenesis(b Block) error {
+	if len(c.blocks) != 0 {
+		return fmt.Errorf("chain: genesis must be the first block")
+	}
+	if b.Height != 0 || b.Prev != (ports.Hash{}) {
+		return fmt.Errorf("chain: malformed genesis (height %d, non-zero prev?)", b.Height)
+	}
+	if len(b.Proposer) != ed25519.PublicKeySize {
+		return ErrBadSignature
+	}
+	h := b.Hash()
+	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
+		return fmt.Errorf("%w: genesis proposer", ErrBadSignature)
+	}
+	if len(b.Entries) == 0 {
+		return fmt.Errorf("chain: empty genesis")
+	}
+	c.apply(b)
+	return nil
+}
+
+func (c *Chain) apply(b Block) {
 	c.blocks = append(c.blocks, b)
 	for _, e := range b.Entries {
 		c.byRoot[e.Root] = e
 	}
-	return nil
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {

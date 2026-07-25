@@ -19,6 +19,7 @@ import (
 	"github.com/nerolabs/bitbit/core/chain"
 	"github.com/nerolabs/bitbit/core/credit"
 	"github.com/nerolabs/bitbit/core/crypto"
+	"github.com/nerolabs/bitbit/core/genesis"
 	"github.com/nerolabs/bitbit/core/node"
 	"github.com/nerolabs/bitbit/core/pipeline"
 	"github.com/nerolabs/bitbit/core/registry"
@@ -81,8 +82,14 @@ func Consensus(seed int64, o ConsensusOpts) (ConsensusResult, error) {
 	for i := 0; i < o.Nodes; i++ {
 		idents[i] = identity.FromSeed(seed*1000 + int64(i))
 		id := idents[i].NodeID()
-		nd := node.New(id, o.NodeCfg, sched, net.Endpoint(id), memstore.New())
-		nd.EnableChain(chain.New(o.Chain, repFn), idents[i].Signer())
+		st := memstore.New()
+		nd := node.New(id, o.NodeCfg, sched, net.Endpoint(id), st)
+		ch := chain.New(o.Chain, repFn)
+		gb, _, _, gerr := genesis.Build(st)
+		if gerr == nil {
+			ch.AppendGenesis(gb)
+		}
+		nd.EnableChain(ch, idents[i].Signer())
 		cl.Nodes = append(cl.Nodes, nd)
 	}
 	for i, nd := range cl.Nodes {
@@ -151,10 +158,11 @@ func Consensus(seed int64, o ConsensusOpts) (ConsensusResult, error) {
 	if !proposed || propErr != nil {
 		return res, fmt.Errorf("consensus(seed=%d): propose: done=%v err=%v", seed, proposed, propErr)
 	}
-	res.Committed = publisher.Chain().Len()
+	fullLen := publisher.Chain().Len()
+	res.Committed = fullLen - 1 // report non-genesis blocks
 	head, _ := publisher.Chain().Head()
 	for _, nd := range cl.Nodes {
-		if hh, _ := nd.Chain().Head(); hh == head && nd.Chain().Len() == res.Committed {
+		if hh, _ := nd.Chain().Head(); hh == head && nd.Chain().Len() == fullLen {
 			res.ReplicasInSync++
 		}
 	}
@@ -179,8 +187,13 @@ func Consensus(seed int64, o ConsensusOpts) (ConsensusResult, error) {
 	// every signature and quorum itself. Trust nothing, verify all.
 	lateIdent := identity.FromSeed(seed*1000 + int64(o.Nodes) + 7)
 	lateID := lateIdent.NodeID()
-	lateNode := node.New(lateID, o.NodeCfg, sched, net.Endpoint(lateID), memstore.New())
-	lateNode.EnableChain(chain.New(o.Chain, repFn), lateIdent.Signer())
+	lateStore := memstore.New()
+	lateNode := node.New(lateID, o.NodeCfg, sched, net.Endpoint(lateID), lateStore)
+	lateCh := chain.New(o.Chain, repFn)
+	if gb, _, _, gerr := genesis.Build(lateStore); gerr == nil {
+		lateCh.AppendGenesis(gb)
+	}
+	lateNode.EnableChain(lateCh, lateIdent.Signer())
 	lateNode.Bootstrap([]ports.NodeID{publisher.ID()}, func() {})
 	sched.Run()
 	syncDone := false
