@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run a public Silt node</title>
+<meta name="description" content="How to run a public Silt node: pledge storage and bandwidth, join the swarm, become a validator, and earn reputation.">
+<link rel="canonical" href="https://silthq.com/node.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <a href="/" class="wordmark" style="text-decoration:none">Sil<b>t</b></a>
+  <span class="spacer"></span>
+  <a href="/#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+
+<div class="doc">
+  <p class="eyebrow">Operator guide</p>
+  <h1>Run a public node</h1>
+  <p class="lead">A node gives the network storage and bandwidth, and asks nothing
+  of the files but that they be served honestly. It cannot read what it holds.
+  In return, it earns standing — and eventually a vote in what the network records.</p>
+
+  <h2>What you're agreeing to</h2>
+  <p>A public node stores encrypted fragments for other people's files and serves
+  them to anyone who asks. You will not know what any of it is — chunks are
+  ciphertext, and the network attaches no names or meaning. What you agree to is
+  simple and mechanical:</p>
+  <ul>
+    <li><b>Serve what you hold, honestly.</b> Answer fetches and prove possession when audited.</li>
+    <li><b>Contribute what you pledge.</b> The capacity you name is the capacity you give.</li>
+    <li><b>Verify everything.</b> The software never trusts a peer's word; neither should you need to.</li>
+  </ul>
+
+  <h2>Quick start</h2>
+  <p>One binary, no runtime. Build it, or grab a release:</p>
+  <pre class="code">git clone https://github.com/nerolabs/silt && cd silt
+<span class="o">go</span> build -o silt ./cmd/silt</pre>
+  <p>Start a node that pledges 2&nbsp;GB of storage and joins an existing swarm:</p>
+  <pre class="code"><span class="o">silt</span> daemon \
+  -capacity 2G \
+  -bootstrap <span class="g">&lt;PEER-ID&gt;</span>@seed.example.com:4001 \
+  -listen 0.0.0.0:4001</pre>
+  <p>It mints a keypair on first run (your identity is that key — keep the store
+  directory safe), joins via the peer you named, announces what it holds, and
+  begins serving. Learned peers are remembered, so subsequent restarts need no flags.</p>
+
+  <h3>-capacity</h3>
+  <p>The storage you pledge, e.g. <span class="mono">2G</span>, <span class="mono">500M</span>, <span class="mono">1T</span>.
+  The node refuses new shards once full, and placement spills over to the next
+  node. Every message a node sends carries its used/total, so <b>every node
+  continuously estimates the whole network's size from local gossip alone</b>.</p>
+
+  <h3>-bootstrap and -dns-seed</h3>
+  <p>Discovery works in layers, like Bitcoin: name a peer with <span class="mono">-bootstrap ID@host:port</span>,
+  or point <span class="mono">-dns-seed a-domain.com</span> at TXT records that list peers.
+  After that, peer exchange takes over and the address book persists to disk.</p>
+
+  <h2>Becoming a validator</h2>
+  <p>Validators keep a replica of the registry chain and vote on what gets
+  recorded. Add <span class="mono">-validator</span>, and — to also host the chain for
+  clients — <span class="mono">-serve-registry</span>:</p>
+  <pre class="code"><span class="o">silt</span> daemon -validator -capacity 2G \
+  -serve-registry 0.0.0.0:4433 \
+  -quorum 3 -attesters <span class="g">&lt;ID1&gt;,&lt;ID2&gt;,&lt;ID3&gt;,…</span></pre>
+  <p>A fresh validator is born carrying the <b>genesis block</b> — the founding
+  charter, identical on every node — and starts syncing real history from its
+  peers, re-validating every signature itself. It cannot be handed a false chain.</p>
+
+  <h2>How reputation is earned</h2>
+  <p>Reputation is not granted or bought; it accumulates from what other nodes
+  observe you do. Three inputs feed it:</p>
+  <table>
+    <tr><th>Signal</th><th>How it's measured</th></tr>
+    <tr><td><b>Storage honesty</b></td><td>Passing spot-check audits — proving, with a fresh nonce, that you still hold a shard. Failing one is punished heavily.</td></tr>
+    <tr><td><b>Serving</b></td><td>Bytes actually delivered to requesters. A node that hoards but won't serve is a freeloader.</td></tr>
+    <tr><td><b>Persistence</b></td><td>Staying reachable. Liveness is observed continuously, never assumed.</td></tr>
+  </table>
+  <p>Because your identity <em>is</em> your key, reputation can't be transferred or
+  laundered — and can't be shed without discarding the identity and starting from
+  zero. When your standing clears the network's bar, your signature begins to
+  count toward committing new entries. <a href="docs.html#consensus">The exact formula and quorum rules →</a></p>
+
+  <h2>Watch it work</h2>
+  <p>Add <span class="mono">-ui 127.0.0.1:8081</span> for a local dashboard: pledge used,
+  chunks held and served, the network's self-estimated size, chain height, and the
+  opaque roots you host shards of — everything a node can honestly say about itself.</p>
+
+  <p style="margin-top:3rem"><a href="/#download" class="btn">Download Silt</a> &nbsp;
+  <a href="docs.html" class="btn ghost">Full documentation</a></p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="meta"><span>silthq.com</span><span>·</span><span class="dim">the infrastructure is not the content</span></div>
+  </div>
+</footer>
+</body>
+</html>

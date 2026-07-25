@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt — the infrastructure is not the content</title>
+<meta name="description" content="Silt is a distributed, encrypted, erasure-coded storage network. Nodes store and serve anonymous ciphertext — they cannot know what they carry. Run a node, or build on it.">
+<link rel="canonical" href="https://silthq.com/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <span class="wordmark">Sil<b>t</b></span>
+  <span class="spacer"></span>
+  <a href="#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="docs.html" class="hide-sm">Docs</a>
+  <a href="#download">Download</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <div class="core" aria-hidden="true">
+      <i style="height:11%;background:#2a2118"></i><i style="height:6%;background:#37291a"></i>
+      <i style="height:14%;background:#211c15"></i><i style="height:5%;background:#4a3720"></i>
+      <i style="height:9%;background:#2a2118"></i><i style="height:17%;background:#1d1913"></i>
+      <i style="height:4%;background:#6e5124"></i><i style="height:12%;background:#241f18"></i>
+      <i style="height:8%;background:#332619"></i><i style="height:14%;background:#1d1913"></i>
+    </div>
+    <p class="eyebrow settle">Distributed storage · encrypted at every level</p>
+    <h1 class="thesis settle settle-2">The infrastructure is <em>not</em> the content.</h1>
+    <p class="sub settle settle-3">
+      Silt is a network that stores and serves files as anonymous, encrypted
+      fragments — split, scattered, and healed across many machines. A node
+      <b>cannot read what it holds; it was built to be unable to.</b> Meaning
+      lives elsewhere, with whoever holds the keys.
+    </p>
+    <div class="cta-row settle settle-4">
+      <a href="#download" class="btn">Download a client</a>
+      <a href="node.html" class="btn ghost">Run a public node</a>
+    </div>
+    <div class="genesis settle settle-4" title="the founding block every fresh network carries">
+      <b>// genesis</b> — every Silt network is born carrying one file: this charter.<br>
+      block&nbsp; 71cfe874f29d58b7cafdd8597c7c2a33c7187ac73fbb4e443a81b0b209e8d179<br>
+      link&nbsp;&nbsp; silt:v1:fce9eeeb23ac…:d7e3b68647…
+    </div>
+  </div>
+</section>
+
+<!-- PRINCIPLES -->
+<section id="how" class="plane">
+  <div class="wrap">
+    <div class="stratum-label">Surface · what it is</div>
+    <div class="strata">
+      <div class="layer">
+        <div><div class="k">Content-addressed</div><h3>A file's name is its hash</h3></div>
+        <p>Every fragment is named by the SHA-256 of its bytes. Verification is
+        intrinsic — you never have to trust a host, because a chunk that doesn't
+        hash to its name is rejected on sight. <b>Trust is replaced by arithmetic.</b></p>
+      </div>
+      <div class="layer">
+        <div><div class="k">Erasure-coded</div><h3>Any 10 of 16 rebuild the whole</h3></div>
+        <p>Files are Reed-Solomon coded into stripes: lose any six fragments of
+        sixteen and the file reconstructs, bit-perfect. A repair loop watches for
+        decay and rebuilds what's missing. <b>Losing machines degrades redundancy, not the file.</b></p>
+      </div>
+      <div class="layer">
+        <div><div class="k">Encrypted at every level</div><h3>Ciphertext describing ciphertext</h3></div>
+        <p>Chunks are encrypted. The manifest that reassembles them is itself
+        encrypted. The public name is thirty-two bytes that reveal nothing. To
+        open a file you need a <b>link</b> — a key that travels between people, never through the network.</p>
+      </div>
+      <div class="layer">
+        <div><div class="k">Governed by earned standing</div><h3>Write-access is earned, not bought</h3></div>
+        <p>The registry is a chain the operators keep together. Publishing a new
+        entry needs a quorum of nodes whose reputation — passed storage audits,
+        bytes served — clears a bar. <b>A fresh identity is a nobody until it proves itself.</b></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section class="plane">
+  <div class="wrap">
+    <div class="stratum-label">Deposition · the path of a file</div>
+    <h2 style="font-size:clamp(1.8rem,4vw,2.6rem);max-width:16ch">From your disk to the swarm, and back again.</h2>
+    <div class="flow">
+      <div class="step"><div class="s">A</div><h4>Chunk</h4><p>The file is split into fixed-size fragments, each framed so it rejoins exactly.</p></div>
+      <div class="step"><div class="s">B</div><h4>Encrypt</h4><p>Every fragment is sealed. Identical data can dedupe; secret data stays unguessable.</p></div>
+      <div class="step"><div class="s">C</div><h4>Erasure-code</h4><p>Fragments are grouped into stripes with parity, so any k of n reconstruct.</p></div>
+      <div class="step"><div class="s">D</div><h4>Scatter</h4><p>Shards are placed on the nodes nearest each hash, spread so one death costs little.</p></div>
+      <div class="step"><div class="s">E</div><h4>Register</h4><p>The file's root is committed to the chain. Retrieval reverses every step, verifying all.</p></div>
+    </div>
+    <p class="dim" style="margin-top:1.2rem;max-width:60ch">Retrieval is the mirror image: resolve who holds the shards, fetch them,
+    verify every hash, rebuild what's missing from parity, decrypt with the key in your link, reassemble.</p>
+  </div>
+</section>
+
+<!-- RUN A NODE -->
+<section class="plane">
+  <div class="wrap split">
+    <div>
+      <div class="stratum-label">Bedrock · carry the network</div>
+      <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:14ch">Pledge storage. Earn standing. Hold the network up.</h2>
+      <p class="dim" style="margin-top:1.2rem;max-width:52ch">A public node contributes a slice of disk and bandwidth and serves
+      encrypted shards to whoever asks. Serve honestly and survive spot-check
+      audits, and your reputation climbs — until the network trusts you to help
+      write its history. There is no sign-up. Generating a keypair is joining.</p>
+      <div class="cta-row"><a href="node.html" class="btn">Read the operator guide</a></div>
+    </div>
+    <ul class="rules">
+      <li><span><b>Pledge what you mean.</b> <span class="dim">Start a node with a fixed budget — <span class="mono">silt daemon -capacity 2G</span>. The network continuously knows its own total size.</span></span></li>
+      <li><span><b>Serve, don't hoard.</b> <span class="dim">Storing without serving is freeloading. Bandwidth counts toward reputation as much as bytes held.</span></span></li>
+      <li><span><b>Prove you hold it.</b> <span class="dim">Auditors challenge you to prove possession with a fresh nonce. Keep the proof but ditch the data and you're slashed into debt.</span></span></li>
+      <li><span><b>Never trust, always verify.</b> <span class="dim">Every shard is hash-checked on receipt; every block re-validated by every replica. Lying wastes a round-trip, never corrupts data.</span></span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- CONSENSUS / CHAIN -->
+<section class="plane">
+  <div class="wrap split">
+    <div>
+      <div class="stratum-label">Strata · the registry chain</div>
+      <h2 style="font-size:clamp(1.8rem,4vw,2.6rem);max-width:15ch">History by earned agreement, not by mining.</h2>
+      <p class="dim" style="margin-top:1.2rem;max-width:52ch">The list of what the network hosts is an append-only chain the operators
+      keep together. A block commits only when a quorum of reputable validators
+      sign it — no single node decides, and no electricity is burned. Because a
+      node's identity <em>is</em> its key, a bad reputation can't be shed without
+      becoming a stranger again.</p>
+      <p class="dim" style="max-width:52ch"><a href="docs.html#consensus">How reputation and quorum work →</a></p>
+    </div>
+    <div class="chain" aria-label="example chain">
+      <div class="block gen"><span class="lbl">genesis</span><span class="h">the founding charter · declared, not agreed</span><span class="att">held by all</span></div>
+      <div class="block"><span class="lbl">block 1</span><span class="h">3 files registered</span><span class="att">✓ 4 attestations</span></div>
+      <div class="block"><span class="lbl">block 2</span><span class="h">1 file registered</span><span class="att">✓ 5 attestations</span></div>
+      <div class="block"><span class="lbl">block 3</span><span class="h">2 files registered</span><span class="att">✓ 4 attestations</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section id="download" class="plane">
+  <div class="wrap">
+    <div class="stratum-label">Get Silt · one binary, every platform</div>
+    <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:16ch">Run the client. It serves while it fetches.</h2>
+    <p class="dim" style="margin-top:1rem;max-width:58ch">One self-contained binary — no runtime, no install. The desktop client
+    consumes and contributes in the same process: downloading and helping carry
+    the network are the same act.</p>
+    <div class="dls">
+      <div class="dl"><h4>macOS</h4><p>Apple Silicon &amp; Intel · ~9 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
+      <div class="dl"><h4>Windows</h4><p>x64 · ~10 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
+      <div class="dl"><h4>Linux</h4><p>x64 &amp; arm64 · ~9 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
+    </div>
+    <p class="dim" style="margin-top:1.4rem;font-size:0.9rem">Prefer to build it yourself? It's Go, no cgo:</p>
+    <pre class="code"><span class="c"># clone and build for your machine — or all five targets at once</span>
+git clone https://github.com/nerolabs/silt && cd silt
+<span class="o">go</span> build -o silt ./cmd/silt   <span class="c"># then:</span>  ./silt client
+<span class="o">./build.sh</span> v0.1               <span class="c"># → dist/silt-v0.1-&lt;os&gt;-&lt;arch&gt;</span></pre>
+  </div>
+</section>
+
+<!-- BOUNDARY -->
+<section class="boundary">
+  <div class="wrap">
+    <div class="stratum-label">The line · what Silt is and is not</div>
+    <h2>Silt carries bytes. It does not know, or care, what they mean.</h2>
+    <div class="cols">
+      <div class="is">
+        <h4>What Silt is</h4>
+        <p>Neutral infrastructure. It stores, serves, verifies, heals, and proves
+        that encrypted fragments are still here — the way a road moves traffic and
+        a wire moves current: faithfully, without opinion about the cargo.</p>
+      </div>
+      <div class="isnot">
+        <h4>What Silt is not</h4>
+        <p>It is not a place to browse, search, or discover what exists. It attaches
+        no names, no descriptions, no meaning to anything. Resolving a file's
+        identity into what it actually <em>is</em> belongs to a separate layer, built
+        by others — the way DNS sits above IP. Silt answers a smaller, honest
+        question: is the data still here?</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <p class="line">Held by all.<br>Owned by none.</p>
+      </div>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="node.html">Run a node</a>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API reference</a>
+        <a href="https://github.com/nerolabs/silt">Source (GitHub)</a>
+      </nav>
+    </div>
+    <div class="meta">
+      <span>silthq.com</span><span>·</span>
+      <span>open source</span><span>·</span>
+      <span class="dim">the infrastructure is not the content</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt documentation</title>
+<meta name="description" content="Silt documentation: the CLI, the link format, the daemon HTTP API, and how reputation-quorum consensus works.">
+<link rel="canonical" href="https://silthq.com/docs.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <a href="/" class="wordmark" style="text-decoration:none">Sil<b>t</b></a>
+  <span class="spacer"></span>
+  <a href="/#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+
+<div class="doc">
+  <p class="eyebrow">Documentation</p>
+  <h1>Documentation</h1>
+  <p class="lead">Silt is one binary that plays every role — publisher, host,
+  validator, desktop client — depending on how you invoke it. This is the working
+  reference for the command line, the link format, the HTTP API, and consensus.</p>
+
+  <h2>Architecture in one paragraph</h2>
+  <p>The core is pure logic — chunking, encryption, erasure coding, manifests,
+  the DHT, the chain — and touches no network, disk, or clock directly. Everything
+  effectful arrives through an interface (a <b>port</b>), and adapters implement
+  those ports: an in-memory network for deterministic simulation, real TCP for
+  production. The same core code runs in both. Retrieval always speaks to the same
+  registry interface, so it never learns whether that registry is a local file or
+  a replicated chain.</p>
+
+  <h2 id="cli">Command line</h2>
+  <p>Local (single-store) commands:</p>
+  <table>
+    <tr><th class="mono">command</th><th>does</th></tr>
+    <tr><td class="mono">silt add &lt;file&gt;</td><td>Chunk, encrypt, erasure-code, store; prints the file's <b>link</b> and its care link.</td></tr>
+    <tr><td class="mono">silt get &lt;link&gt; -o &lt;out&gt;</td><td>Fetch, verify every hash, repair from parity, decrypt, reassemble.</td></tr>
+    <tr><td class="mono">silt info &lt;link&gt;</td><td>Stripe map — every shard, its stripe, and whether it's present.</td></tr>
+    <tr><td class="mono">silt ls</td><td>List registered roots.</td></tr>
+    <tr><td class="mono">silt genesis</td><td>Print the founding block, its link, and the manifesto root.</td></tr>
+  </table>
+  <p>Networked commands:</p>
+  <table>
+    <tr><th class="mono">command</th><th>does</th></tr>
+    <tr><td class="mono">silt daemon …</td><td>Run a long-lived node: TCP listener, disk store, optional validator + registry + web UI.</td></tr>
+    <tr><td class="mono">silt client …</td><td>Desktop app: consumes and serves in one process, keeps a link-book library, opens a browser UI.</td></tr>
+    <tr><td class="mono">silt swarm add &lt;file&gt;</td><td>Publish into a running swarm via an ephemeral client; prints the link.</td></tr>
+    <tr><td class="mono">silt swarm get &lt;link&gt;</td><td>Retrieve from a swarm.</td></tr>
+    <tr><td class="mono">silt sim run &lt;scenario&gt;</td><td>Deterministic in-process simulations: scatter, churn, economy, audit, capacity, consensus.</td></tr>
+  </table>
+
+  <h2 id="links">The link format</h2>
+  <p>A file's public name is its Merkle root — thirty-two bytes that reveal
+  nothing. To open the file you also need its key. Together they are the link:</p>
+  <pre class="code"><span class="c"># full link — retrieve AND decrypt</span>
+silt:v1:<span class="o">&lt;root-hex&gt;</span>:<span class="g">&lt;key-hex&gt;</span>
+
+<span class="c"># care link — repair and audit rights, but CANNOT decrypt</span>
+siltcare:v1:<span class="o">&lt;root-hex&gt;</span>:<span class="g">&lt;layout-key-hex&gt;</span></pre>
+  <p>The key is content-derived, so identical files produce identical links —
+  deduplication reaches all the way up to the handle you share. From the link key
+  the software derives, one-way, a <b>layout key</b> (stripe structure — enough to
+  repair and audit) and a <b>content key</b> (the decryption material). Hand a
+  caretaker the care link and they can keep your file alive forever without ever
+  reading a byte of it.</p>
+
+  <h2 id="api">Daemon HTTP API</h2>
+  <p>A validator can host the registry over pinned HTTPS. Reads serve from the
+  local replica; a publish triggers a consensus round.</p>
+  <table>
+    <tr><th class="mono">endpoint</th><th>does</th></tr>
+    <tr><td class="mono">GET /lookup?root=…</td><td>Resolve a root to its registry entry, or 404.</td></tr>
+    <tr><td class="mono">GET /all</td><td>Every registered entry.</td></tr>
+    <tr><td class="mono">POST /publish</td><td>Propose an entry; commits only with quorum. 402 if the publisher can't afford it.</td></tr>
+  </table>
+  <p>The registry reference clients use is <span class="mono">&lt;host-ID&gt;@https://host:port</span> —
+  self-authenticating: the TLS handshake must present the key that hashes to that ID.</p>
+  <p>The web UI (<span class="mono">-ui</span>) adds read-only JSON at <span class="mono">/api/status</span>,
+  <span class="mono">/api/roots</span>, <span class="mono">/api/registry</span>, and <span class="mono">/api/chain</span>,
+  plus <span class="mono">/api/publish</span> and <span class="mono">/api/fetch</span>. These power the
+  dashboard and the network observatory; they expose only what any participant could already assemble.</p>
+
+  <h2 id="consensus">Consensus &amp; reputation</h2>
+  <p>The registry is an append-only chain. Each block hashes the previous one, so
+  history can't be edited in the middle without forging everything after it. A
+  block commits only when it satisfies:</p>
+  <pre class="code">reputation(proposer)  ≥  MinProposerRep
+  AND
+≥ Quorum distinct attesters, each with reputation ≥ MinAttesterRep,
+  none of them the proposer, having signed the block hash</pre>
+  <p>An attestation is an Ed25519 signature over the block hash, which covers the
+  block's height, its parent, and its entries — so a signature endorses exact
+  content in an exact place in history. Every replica re-validates all of it;
+  latecomers re-check the whole chain as they sync. Reputation is each validator's
+  <em>own</em> view — audits it ran, serving it saw — so lying to one validator buys
+  nothing with the others.</p>
+  <p>This is deliberately not proof-of-work. It's cheap, final immediately, and
+  honest about its trust model: a quorum chain for a network with an honest
+  validator majority. The founding <b>genesis</b> block is the one exception — it
+  needs no quorum, because it is declared identically on every node rather than
+  agreed, exactly as Bitcoin hardcodes its first block.</p>
+
+  <h2>Going deeper</h2>
+  <p>The repository carries a set of short, friendly notes on the mathematics —
+  Merkle trees, convergent encryption, Reed-Solomon, Kademlia, proof-of-retrieval,
+  network-size estimation, key hierarchies, and quorum chains — written for a
+  smart reader who isn't a mathematician. See <span class="mono">docs/math/</span> in the
+  <a href="https://github.com/nerolabs/silt">source</a>.</p>
+
+  <p style="margin-top:3rem"><a href="/#download" class="btn">Download Silt</a> &nbsp;
+  <a href="node.html" class="btn ghost">Run a node</a></p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="meta"><span>silthq.com</span><span>·</span><span class="dim">the infrastructure is not the content</span></div>
+  </div>
+</footer>
+</body>
+</html>
