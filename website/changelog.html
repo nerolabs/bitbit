@@ -33,15 +33,7 @@
 <p class="lead">All notable changes to Silt are recorded here. The format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>, and the project aims to follow <a href="https://semver.org/">Semantic Versioning</a>.</p>
 <p>This log is published at <a href="https://silthq.com/changelog.html">silthq.com/changelog</a>.</p>
 <h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
-<h3>Added</h3>
-<ul>
-<li><b>Takedown by revocation.</b> Illegal or unwanted content can be removed without breaking encryption or rewriting history: an append-only revocation record, committed by the same reputation quorum that commits publications, makes compliant nodes no-op on a denied opaque root — refusing to store, serve, prove, announce, or repair it, and purging what they hold. Operators may also load a local denylist they choose to honor (<span class="mono">silt daemon -denylist</span>). The project ships the mechanism and no list; it operates neither the network nor the policy. See <span class="mono">docs/safety-denylist.md</span> and <span class="mono">GOVERNANCE.md</span>. (<span class="mono">silt sim run takedown</span>.)</li>
-<li>Public website (silthq.com) with brand, docs, operator guide, and downloads.</li>
-<li>Continuous delivery: PR previews, a <span class="mono">staging</span> environment, and production deploys from <span class="mono">main</span>.</li>
-<li>Strategy docs: fresh-eyes council, risk register, and launch plan.</li>
-</ul>
-<h2 class="rel released"><span class="v">0.1.0</span><span class="d">2026-07-25</span></h2>
-<p>The first public cut. Silt is a distributed, encrypted, erasure-coded storage network whose nodes cannot know what they carry.</p>
+<p>Nothing has shipped yet — Silt has not cut its first tagged release. Everything below will land as <b>0.1.0</b>, the first public release. When it&#x27;s tagged, this section becomes the dated <span class="mono">0.1.0</span> entry and the download links resolve to real binaries.</p>
 <h3>Added</h3>
 <ul>
 <li><b>Content-addressed storage</b> — every fragment is named by the SHA-256 of its bytes; verification is intrinsic, so hosts are never trusted.</li>
@@ -52,8 +44,12 @@
 <li><b>Proof-of-retrieval audits</b> — hosts are challenged to prove possession with a fresh nonce; those that keep the proof but drop the data are slashed.</li>
 <li><b>The registry chain</b> — an append-only chain kept by the operators; blocks commit only with a quorum of attestations from validators whose reputation (audits + serving) is earned, not bought.</li>
 <li><b>Genesis</b> — every fresh network is born carrying a founding manifesto in block 0, declared identically on every node.</li>
+<li><b>Takedown by revocation</b> — illegal or unwanted content is removed at the availability layer, not the ledger: an append-only revocation record, committed by the same reputation quorum, makes compliant nodes no-op on a denied opaque root (refusing to store, serve, prove, announce, or repair it) and purge what they hold — never decrypting anything. Operators may also load a local denylist they choose to honor (<span class="mono">silt daemon -denylist</span>). The project ships the mechanism and no list; it operates neither the network nor the policy.</li>
 <li><b>Web UI</b> — an embedded dashboard, publish/fetch pages, and a network observatory, served by the daemon.</li>
 <li><b>Desktop client</b> — one binary that consumes and serves at once, keeps a link-book library, and runs on macOS, Windows, and Linux.</li>
+<li><b>Public website</b> (silthq.com) with brand, docs, operator guide, and build-from-source instructions.</li>
+<li><b>Continuous delivery</b> — PR previews, a <span class="mono">staging</span> environment, and production deploys from <span class="mono">main</span>; a public changelog rendered from this file.</li>
+<li><b>Governance &amp; strategy docs</b> — the fresh-eyes council, risk register, launch plan, safety/takedown model, and <span class="mono">GOVERNANCE.md</span>.</li>
 </ul>
   <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
 </div>
