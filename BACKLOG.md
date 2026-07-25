@@ -23,13 +23,10 @@ Work captured for later, most-strategic first. The milestone history
 
 ### Review-gated contributions
 - **Nothing reaches mainline or a release without review by Andrew +
-  Claude.** Foundation is in place: branch protection requires a PR +
-  green CI on `main`/`staging`. Next: raise required approvals to 1 and
-  add a `CODEOWNERS` file so review is enforced, not optional; document
-  the flow in `CONTRIBUTING.md` (fork → PR → CI → review → merge);
-  decide how "review by Claude" is operationalized (a `/code-review`
-  pass on each PR, posted as a review comment).
-- Add a PR template (what changed, tests, docs updated, risk).
+  Claude.** Branch protection requires a PR + green CI on `main`/`staging`
+  (done); `CONTRIBUTING.md`, `CODEOWNERS`, and a PR template are in (done);
+  required approvals raised to 1 so a maintainer review is enforced (done).
+  "Review by Claude" = a `/code-review` pass on each PR before merge.
 
 ### Housekeeping
 - Cut the **v0.1 release** and publish signed binaries (see ROADMAP);
