@@ -14,13 +14,13 @@ Work captured for later, most-strategic first. The milestone history
   to add (Phase 2): multi-process end-to-end tests — spin real daemons
   over TCP, publish → chain-commit → fetch, assert bit-perfect — run in
   CI, not just the in-process sim.
-- **The website ships with the code.** Make documentation, the
-  changelog, and the public roadmap first-class build outputs so a
-  mainline change can't land without its docs. Concretely: a CI check
-  that fails a PR touching `cmd/`, `core/`, or `adapters/` if it doesn't
-  also update `CHANGELOG.md` (Unreleased) and, where relevant,
-  `docs/`; auto-render `ROADMAP.md` into a public `website/roadmap.html`
-  the way the changelog is rendered today.
+- **The website ships with the code.** *Done (Phase 0).* `ROADMAP.md`
+  now auto-renders to `website/roadmap.html` (via `scripts/gen_roadmap.py`,
+  linked in the site nav), with a CI staleness check like the changelog's;
+  and a `Docs ship with code` CI job fails a PR that touches `cmd/`,
+  `core/`, or `adapters/` without updating `CHANGELOG.md`. Documentation
+  under `docs/` is not yet enforced the same way — a possible tightening
+  later.
 
 ### Observability & debugging
 - **`--debug` mode → `debug.log`.** Give the client a `--debug` flag that
