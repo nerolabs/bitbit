@@ -1,0 +1,197 @@
+package chain
+
+import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"errors"
+	"math/rand"
+	"testing"
+
+	"github.com/nerolabs/bitbit/ports"
+)
+
+func key(seed int64) ed25519.PrivateKey {
+	var b [ed25519.SeedSize]byte
+	rand.New(rand.NewSource(seed)).Read(b[:])
+	return ed25519.NewKeyFromSeed(b[:])
+}
+
+func idOf(priv ed25519.PrivateKey) ports.NodeID {
+	return sha256.Sum256(priv.Public().(ed25519.PublicKey))
+}
+
+func entry(b byte) ports.Entry {
+	return ports.Entry{
+		Root:           ports.HashBytes([]byte{b}),
+		ManifestChunks: []ports.ChunkID{ports.HashBytes([]byte{b, b})},
+		FileSize:       int64(b) * 100,
+	}
+}
+
+// A world with 1 proposer and 4 validators, reputations settable.
+type world struct {
+	c    *Chain
+	reps map[ports.NodeID]int64
+	prop ed25519.PrivateKey
+	vals []ed25519.PrivateKey
+}
+
+func newWorld(cfg Config) *world {
+	w := &world{reps: make(map[ports.NodeID]int64), prop: key(1)}
+	for i := int64(2); i <= 5; i++ {
+		w.vals = append(w.vals, key(i))
+	}
+	w.c = New(cfg, func(n ports.NodeID) int64 { return w.reps[n] })
+	w.reps[idOf(w.prop)] = 1000
+	for _, v := range w.vals {
+		w.reps[idOf(v)] = 1000
+	}
+	return w
+}
+
+func (w *world) block(entries ...ports.Entry) *Block {
+	prev, height := w.c.Head()
+	b := &Block{Height: height, Prev: prev, Entries: entries}
+	Sign(b, w.prop)
+	return b
+}
+
+func (w *world) attestAll(b *Block) {
+	for _, v := range w.vals {
+		b.Atts = append(b.Atts, Attest(b, v))
+	}
+}
+
+func TestCommitAndReplay(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b1 := w.block(entry(1), entry(2))
+	w.attestAll(b1)
+	if err := w.c.Append(*b1); err != nil {
+		t.Fatal(err)
+	}
+	b2 := w.block(entry(3))
+	w.attestAll(b2)
+	if err := w.c.Append(*b2); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := w.c.LookupRoot(entry(2).Root); !ok || e.FileSize != 200 {
+		t.Fatal("committed entry not found")
+	}
+	if len(w.c.AllEntries()) != 3 || w.c.Len() != 2 {
+		t.Fatalf("entries=%d blocks=%d", len(w.c.AllEntries()), w.c.Len())
+	}
+
+	// A fresh replica replays the same blocks to the same state —
+	// replication is just re-validation.
+	w2 := newWorld(DefaultConfig())
+	w2.reps = w.reps // same reputation view
+	w2.c = New(DefaultConfig(), func(n ports.NodeID) int64 { return w.reps[n] })
+	for _, blk := range w.c.Blocks(0) {
+		if err := w2.c.Append(blk); err != nil {
+			t.Fatalf("replay: %v", err)
+		}
+	}
+	h1, n1 := w.c.Head()
+	h2, n2 := w2.c.Head()
+	if h1 != h2 || n1 != n2 {
+		t.Fatal("replicas diverged after replaying identical blocks")
+	}
+}
+
+func TestLowReputationProposerRejected(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	w.reps[idOf(w.prop)] = 5 // a nobody
+	b := w.block(entry(1))
+	if err := w.c.ValidateProposal(b); !errors.Is(err, ErrLowReputation) {
+		t.Fatalf("want ErrLowReputation, got %v", err)
+	}
+}
+
+func TestQuorumRules(t *testing.T) {
+	w := newWorld(DefaultConfig()) // quorum 3
+
+	// Too few attestations.
+	b := w.block(entry(1))
+	b.Atts = []Attestation{Attest(b, w.vals[0]), Attest(b, w.vals[1])}
+	if err := w.c.Append(*b); !errors.Is(err, ErrNoQuorum) {
+		t.Fatalf("2 of 3: want ErrNoQuorum, got %v", err)
+	}
+	// Duplicates don't stack.
+	b.Atts = []Attestation{Attest(b, w.vals[0]), Attest(b, w.vals[0]), Attest(b, w.vals[0])}
+	if err := w.c.Append(*b); !errors.Is(err, ErrNoQuorum) {
+		t.Fatalf("duplicates: want ErrNoQuorum, got %v", err)
+	}
+	// Self-attestation doesn't count.
+	b.Atts = []Attestation{Attest(b, w.prop), Attest(b, w.vals[0]), Attest(b, w.vals[1])}
+	if err := w.c.Append(*b); !errors.Is(err, ErrNoQuorum) {
+		t.Fatalf("self-attest: want ErrNoQuorum, got %v", err)
+	}
+	// Low-rep attesters don't count.
+	w.reps[idOf(w.vals[2])] = 0
+	b.Atts = []Attestation{Attest(b, w.vals[0]), Attest(b, w.vals[1]), Attest(b, w.vals[2])}
+	if err := w.c.Append(*b); !errors.Is(err, ErrNoQuorum) {
+		t.Fatalf("low-rep attester: want ErrNoQuorum, got %v", err)
+	}
+	// Exactly quorum commits.
+	w.reps[idOf(w.vals[2])] = 1000
+	b.Atts = []Attestation{Attest(b, w.vals[0]), Attest(b, w.vals[1]), Attest(b, w.vals[2])}
+	if err := w.c.Append(*b); err != nil {
+		t.Fatalf("exact quorum: %v", err)
+	}
+}
+
+func TestTamperAndForgery(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b := w.block(entry(1))
+	w.attestAll(b)
+
+	// Tampering with entries after signing breaks everything.
+	tampered := *b
+	tampered.Entries = []ports.Entry{entry(9)}
+	if err := w.c.Append(tampered); err == nil {
+		t.Fatal("tampered block must not commit")
+	}
+	// A forged attestation (sig from a different block) is fatal.
+	other := w.block(entry(7))
+	forged := *b
+	forged.Atts = append([]Attestation(nil), b.Atts[:2]...)
+	forged.Atts = append(forged.Atts, Attest(other, w.vals[3]))
+	if err := w.c.Append(forged); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("forged attestation: want ErrBadSignature, got %v", err)
+	}
+}
+
+func TestDupRootAndWrongParent(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b := w.block(entry(1))
+	w.attestAll(b)
+	if err := w.c.Append(*b); err != nil {
+		t.Fatal(err)
+	}
+	dup := w.block(entry(1))
+	if err := w.c.ValidateProposal(dup); !errors.Is(err, ErrDupRoot) {
+		t.Fatalf("want ErrDupRoot, got %v", err)
+	}
+	stale := &Block{Height: 0, Prev: ports.Hash{}, Entries: []ports.Entry{entry(2)}}
+	Sign(stale, w.prop)
+	if err := w.c.ValidateProposal(stale); !errors.Is(err, ErrWrongParent) {
+		t.Fatalf("want ErrWrongParent, got %v", err)
+	}
+}
+
+func TestEncodeDecodeRoundtrip(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b := w.block(entry(1), entry(2))
+	w.attestAll(b)
+	got, err := Decode(Encode(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Hash() != b.Hash() || len(got.Atts) != len(b.Atts) {
+		t.Fatal("block mangled by encode/decode")
+	}
+	blocks, err := DecodeBlocks(EncodeBlocks([]Block{*b}))
+	if err != nil || len(blocks) != 1 || blocks[0].Hash() != b.Hash() {
+		t.Fatalf("blocks roundtrip: %v", err)
+	}
+}

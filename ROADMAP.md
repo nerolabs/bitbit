@@ -50,18 +50,16 @@ Link keys are content-derived, so convergent dedup extends to the links
 themselves. Infrastructure relays ciphertext end to end; caretakers do
 their whole job inside the layout ring.
 
-### M12 — The chain
-Replace the hosted registry with an append-only block chain of
-registry entries, maintained by the daemons themselves:
-- Blocks hold top-level identifiers + manifest chunk pointers only
-  (manifests stay chunked off-chain — the chain stays small).
-- Reputation-weighted quorum: a proposer with sufficient reputation
-  (audit passes, uptime, served bytes) proposes; a block commits only
-  with attestations from a quorum of high-reputation daemons. New
-  nodes earn write access slowly. Deliberately not proof-of-work;
-  cheap, and honest about its trust model.
-- Every daemon replicates the chain; ports.Registry is the seam, so
-  core logic doesn't change.
+### M12 — The chain (DONE)
+The registry is an append-only block chain maintained by the daemons
+(core/chain, node validator role). Blocks hold entries only (manifests
+stay sealed off-chain); commits require a quorum of Ed25519
+attestations from validators whose reputation (credit.Reputation:
+audits + serving) clears the threshold — each validator judging by its
+OWN ledger. Replicas re-validate everything, latecomers sync and
+re-check history, chainstore persists across restarts, and chainhost
+fronts the chain as ports.Registry so swarm add/get work unchanged.
+Not PoW, and honest about it: see docs/math/08-quorum-chains.md.
 
 ### M13 — Web frontends (embedded in the daemon)
 Go binary serves a localhost web UI (go:embed, zero extra runtime):

@@ -59,6 +59,12 @@ const (
 	MsgHasChunkReply   // Found
 	MsgChallenge       // ChunkID + Nonce: prove you hold this shard of Proof.Root
 	MsgChallengeReply  // Found + Proof + Tag
+	MsgProposeBlock    // Data: CBOR block awaiting attestation
+	MsgAttestReply     // OK + Data: CBOR attestation (or OK=false refusal)
+	MsgCommitBlock     // Data: CBOR block with quorum attached
+	MsgCommitAck       // OK
+	MsgGetChain        // Height: send me blocks from here up
+	MsgChainReply      // Data: CBOR []Block
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:
@@ -96,12 +102,14 @@ type Message struct {
 	// the network's storage for the M9 capacity estimate.
 	CapUsed  int64
 	CapTotal int64
+	// Height is the chain-sync cursor (MsgGetChain).
+	Height uint64
 }
 
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply:
 		return true
 	}
 	return false

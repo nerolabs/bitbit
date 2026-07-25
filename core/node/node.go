@@ -12,9 +12,11 @@ package node
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 
+	"github.com/nerolabs/bitbit/core/chain"
 	"github.com/nerolabs/bitbit/core/dht"
 	"github.com/nerolabs/bitbit/core/link"
 	"github.com/nerolabs/bitbit/ports"
@@ -49,15 +51,16 @@ var ErrTimeout = errors.New("node: request timed out")
 
 // Stats are per-node counters the sim reports on.
 type Stats struct {
-	QueriesSent    int // DHT + fetch requests issued
-	Timeouts       int
-	ChunksServed   int
-	ChunksReceived int // chunks pushed to us via StoreChunk
-	BytesServed    int64
-	Probes         int // shard availability checks (repair loop)
-	Repairs        int // stripes repaired
-	ShardsRebuilt  int // shards reconstructed and re-distributed
-	RepairFailures int // repair attempts that couldn't reconstruct (retried next sweep)
+	QueriesSent     int // DHT + fetch requests issued
+	Timeouts        int
+	ChunksServed    int
+	ChunksReceived  int // chunks pushed to us via StoreChunk
+	BytesServed     int64
+	Probes          int // shard availability checks (repair loop)
+	Repairs         int // stripes repaired
+	ShardsRebuilt   int // shards reconstructed and re-distributed
+	RepairFailures  int // repair attempts that couldn't reconstruct (retried next sweep)
+	BlocksCommitted int // chain blocks appended to the local replica
 }
 
 type pending struct {
@@ -105,6 +108,12 @@ type Node struct {
 	// themselves, the raw material of the network capacity estimate.
 	capRep   ports.CapacityReporter
 	peerCaps map[ports.NodeID]capInfo
+
+	// validator role (M12): the local chain replica and the signing key
+	// (nil = not a validator).
+	chain    *chain.Chain
+	signer   ed25519.PrivateKey
+	onCommit func(chain.Block)
 }
 
 type capInfo struct{ used, total int64 }
@@ -195,6 +204,10 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		delete(n.pending, msg.RID)
 		p.cancel()
 		p.cb(msg, nil)
+		return
+	}
+
+	if n.handleChain(from, msg) {
 		return
 	}
 

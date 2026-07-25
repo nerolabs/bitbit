@@ -99,6 +99,18 @@ func (l *Ledger) Audits(n ports.NodeID) (passed, failed int) {
 	return a.auditsPassed, a.auditsFailed
 }
 
+// Reputation condenses a node's observed history into the number the
+// chain consults (M12): storage honesty weighs most, failed audits
+// bite hard, and serving earns steadily — a hoarder that stores but
+// never serves builds reputation slowly, per the freeloader doctrine.
+// Like everything in this ledger it is naively gameable; the chain's
+// protection is that each validator computes it from its OWN
+// observations, so lying to one buys nothing with the others.
+func (l *Ledger) Reputation(n ports.NodeID) int64 {
+	a := l.acct(n)
+	return int64(a.auditsPassed)*25 - int64(a.auditsFailed)*250 + a.servedBytes/(64<<10)
+}
+
 func (l *Ledger) Balance(n ports.NodeID) int64      { return l.acct(n).balance }
 func (l *Ledger) CanPublish(n ports.NodeID) bool    { return l.acct(n).balance >= l.fee }
 func (l *Ledger) Fee() int64                        { return l.fee }

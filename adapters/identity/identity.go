@@ -57,6 +57,10 @@ func (id *Identity) Public() ed25519.PublicKey {
 	return id.priv.Public().(ed25519.PublicKey)
 }
 
+// Signer exposes the private key for chain signing (M12): proposals and
+// attestations are signed by the same key whose hash is the NodeID.
+func (id *Identity) Signer() ed25519.PrivateKey { return id.priv }
+
 // NodeID is the identity's network name: the hash of its public key.
 func (id *Identity) NodeID() ports.NodeID {
 	return sha256.Sum256(id.Public())

@@ -46,6 +46,11 @@ Beyond the original handoff:
   the share handle is a bitbit link (root + key), and a one-way key
   hierarchy yields CARE LINKS — repair and audit rights with no
   ability to decrypt. Infrastructure now hosts noise describing noise
+- ✅ M12 — the chain: the registry is an append-only block chain kept
+  by the daemons; blocks commit only with a quorum of attestations
+  from validators with EARNED reputation (audits + serving), fresh
+  identities can't write, every replica re-validates everything
+  (`sim run consensus`, or three `daemon -validator` processes)
 
 Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
 encrypted manifests, the reputation-quorum chain, web frontends, and
