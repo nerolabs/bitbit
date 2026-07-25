@@ -1,3 +1,6 @@
 .shardnet/
 bitbit
 *.bin
+
+# build artifacts (produced by build.sh; published via GitHub Releases)
+dist/
