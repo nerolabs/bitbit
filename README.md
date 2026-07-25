@@ -5,7 +5,20 @@ real product from day one, simulated in-process until it needs real
 sockets. See `HANDOFF.md` for the full design brief and
 `docs/math/` for friendly explanations of the math.
 
-## Status: HANDOFF complete (M1–M5), plus M6–M7
+> **Early & experimental — 0.x, unaudited.** Silt is published to get
+> technical feedback, not to be trusted with data you can't afford to
+> lose. Please read the **[threat model](docs/threat-model.md)** — it
+> names the weak parts on purpose — and help us break it.
+
+## Status: feature-complete core; durability + scale backbone done
+
+The milestones below (M1–M14) are done, plus the Phase 1 durability
+backbone: column-based placement, failure-domain-aware spreading, a
+caretaker dispersion audit, and demand-responsive replication (see
+[`ROADMAP.md`](ROADMAP.md) and [`docs/design/column-placement.md`](docs/design/column-placement.md)).
+It has **not** had an independent security review — the
+[threat model](docs/threat-model.md) is the honest account of what's
+weak.
 
 - ✅ M1 — chunk → encrypt → hash → manifest → Merkle root, and back;
   CLI `add`/`get` against a content-addressed disk store
