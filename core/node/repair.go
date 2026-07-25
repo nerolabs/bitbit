@@ -344,11 +344,35 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		for _, id := range unfetched {
 			missing[id] = true
 		}
-		var toPlace []shardRef
+		var toPlace, survivors []shardRef
 		for _, r := range stripeRefs {
 			if missing[r.id] {
 				toPlace = append(toPlace, r)
+			} else {
+				survivors = append(survivors, r)
 			}
+		}
+		// Anti-affinity, the same invariant Distribute enforces at publish
+		// time: no node should hold two shards of one stripe, so one death
+		// costs the stripe at most one shard. Repair used to re-place on the
+		// raw closest nodes, which lets a stripe drift onto a shrinking set
+		// of hosts over many cycles. Seed a per-stripe host count from the
+		// surviving shards' current homes (so a lone rebuilt shard still
+		// avoids them), keep it updated as we place, and prefer candidates
+		// that don't already hold this stripe.
+		held := make(map[ports.NodeID]int)
+		var seedHolders func(i int, then func())
+		seedHolders = func(i int, then func()) {
+			if i == len(survivors) {
+				then()
+				return
+			}
+			n.resolveProviders(survivors[i].id, func(ps []ports.NodeID) {
+				for _, p := range ps {
+					held[p]++
+				}
+				seedHolders(i+1, then)
+			})
 		}
 		var place func(i int)
 		place = func(i int) {
@@ -362,14 +386,17 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path}
 			}
 			n.IterativeFindNode(r.id, func(closest []ports.NodeID) {
-				n.placeAt(r.id, shards[r.pos], proof, closest, n.cfg.Replication, nil, func(placed int) {
-					if placed > 0 {
-						n.Stats.ShardsRebuilt++
-					}
-					place(i + 1)
-				})
+				candidates := preferAvoiding(closest, held)
+				n.placeAt(r.id, shards[r.pos], proof, candidates, n.cfg.Replication,
+					func(target ports.NodeID) { held[target]++ },
+					func(placed int) {
+						if placed > 0 {
+							n.Stats.ShardsRebuilt++
+						}
+						place(i + 1)
+					})
 			})
 		}
-		place(0)
+		seedHolders(0, func() { place(0) })
 	})
 }

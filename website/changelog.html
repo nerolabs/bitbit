@@ -37,7 +37,7 @@
 <h3>Added</h3>
 <ul>
 <li><b>Content-addressed storage</b> — every fragment is named by the SHA-256 of its bytes; verification is intrinsic, so hosts are never trusted.</li>
-<li><b>Erasure coding</b> — Reed-Solomon stripes (default any 10 of 16 rebuild the file); a repair loop restores redundancy as machines fail.</li>
+<li><b>Erasure coding</b> — Reed-Solomon stripes (default any 10 of 16 rebuild the file); a repair loop restores redundancy as machines fail, and — like the initial placement — keeps each stripe&#x27;s shards spread across distinct hosts as it rebuilds, so one machine&#x27;s death never costs a stripe more than a single shard.</li>
 <li><b>Encryption at every level</b> — chunks and manifests are both ciphertext; a file&#x27;s share handle is a <em>link</em> (<span class="mono">silt:v1:root:key</span>) whose one-way key hierarchy also yields <em>care links</em> that grant repair and audit without the ability to decrypt.</li>
 <li><b>The swarm</b> — Kademlia routing, provider records, and multi-node fetch over a deterministic simulator or real mutual-TLS sockets; identity is a keypair and a node&#x27;s ID is the hash of its public key.</li>
 <li><b>Capacity</b> — nodes pledge a fixed budget (<span class="mono">-capacity 2G</span>); placement spills over as nodes fill, and every node estimates the whole network&#x27;s size from local gossip alone.</li>
