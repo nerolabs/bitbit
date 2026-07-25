@@ -17,7 +17,10 @@ download links resolve to real binaries.
 - **Content-addressed storage** — every fragment is named by the SHA-256
   of its bytes; verification is intrinsic, so hosts are never trusted.
 - **Erasure coding** — Reed-Solomon stripes (default any 10 of 16 rebuild
-  the file); a repair loop restores redundancy as machines fail.
+  the file); a repair loop restores redundancy as machines fail, and — like
+  the initial placement — keeps each stripe's shards spread across distinct
+  hosts as it rebuilds, so one machine's death never costs a stripe more
+  than a single shard.
 - **Encryption at every level** — chunks and manifests are both
   ciphertext; a file's share handle is a *link* (`silt:v1:root:key`)
   whose one-way key hierarchy also yields *care links* that grant repair

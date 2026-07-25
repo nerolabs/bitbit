@@ -21,6 +21,20 @@ Work captured for later, most-strategic first. The milestone history
   `docs/`; auto-render `ROADMAP.md` into a public `website/roadmap.html`
   the way the changelog is rendered today.
 
+### Observability & debugging
+- **`--debug` mode → `debug.log`.** Give the client a `--debug` flag that
+  writes `warn`/`error`/`fatal` events to a `debug.log` while it runs, so a
+  failure in the field leaves an artifact we can pull into Claude Code to
+  diagnose — turning one-off crashes into fixes and durability over time.
+  Needs a small leveled logger behind a `ports` interface (core stays pure;
+  the file sink is an adapter), structured enough to grep, quiet by default.
+- **An `info` level to validate assumptions.** Above the error tiers, an
+  `info` setting that narrates the normal path (chunks placed, stripes
+  repaired, quorum reached, providers resolved) so we can confirm the
+  system behaves as designed under real-world conditions, not just in the
+  deterministic sim. Same logger; `--debug` implies a verbose threshold,
+  `info` a normal one. Keep it off the hot path when disabled.
+
 ### Review-gated contributions
 - **Nothing reaches mainline or a release without review by Andrew +
   Claude.** Branch protection requires a PR + green CI on `main`/`staging`
@@ -59,12 +73,15 @@ actively managed. Decisions and tasks, priority order:
   addressing prevents random concentration but not *correlated* failure
   (16 shards on 16 IDs in one datacenter). Pairs naturally with column
   placement (the n columns should land in n distinct domains).
-- **Repair preserves anti-affinity** — *small, verified gap.* Repair
-  re-places rebuilt shards on the raw closest nodes without the
-  `preferAvoiding` stripe-spreading that initial `Distribute` uses
-  (`core/node/repair.go`), so stripes can drift toward clustering over
-  many repair cycles. Column placement subsumes this; if that's deferred,
-  fix repair directly first.
+- **Repair preserves anti-affinity** — *done (Phase 0).* Repair used to
+  re-place rebuilt shards on the raw closest nodes without the
+  `preferAvoiding` stripe-spreading that `Distribute` applies, so stripes
+  drifted toward clustering over many repair cycles. `repairStripe` now
+  seeds a per-stripe host count from the surviving shards' current
+  providers and prefers candidates that don't already hold the stripe;
+  `sim`'s `TestRepairPreservesStripeAntiAffinity` proves repair stays
+  within +1 of the publish baseline where the old path drifted +2 to +4.
+  Column placement will subsume this later.
 - **Dispersion audit** — the caretaker repair loop counts *reachable
   shards* per stripe; extend it to count distinct *hosts and domains* per
   stripe and trigger redistribution below a diversity threshold. Turns
