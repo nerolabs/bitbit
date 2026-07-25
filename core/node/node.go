@@ -66,6 +66,7 @@ type Stats struct {
 	Repairs         int // stripes repaired
 	ShardsRebuilt   int // shards reconstructed and re-distributed
 	RepairFailures  int // repair attempts that couldn't reconstruct (retried next sweep)
+	Dispersals      int // stripes re-spread by the dispersion audit (over-concentrated in a domain)
 	BlocksCommitted int // chain blocks appended to the local replica
 }
 

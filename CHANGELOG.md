@@ -39,6 +39,11 @@ download links resolve to real binaries.
   spread a file's columns across distinct domains, so an entire domain
   going dark costs a stripe as little as possible — not just distinct node
   IDs, but distinct *domains*.
+- **Dispersion audit** — a caretaker doesn't just keep a stripe *alive*, it
+  keeps it *spread*: each sweep it confirms which domains actually hold each
+  column, and if any one domain holds enough of a stripe that losing it
+  would drop below the recovery threshold, it seeds extra copies into other
+  domains until no single domain failure could break the file.
 - **Capacity** — nodes pledge a fixed budget (`-capacity 2G`); placement
   spills over as nodes fill, and every node estimates the whole network's
   size from local gossip alone.

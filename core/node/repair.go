@@ -178,14 +178,22 @@ func (n *Node) repairRootWithLayout(entry ports.Entry, ch link.CareHandle, done 
 	// chunk the swarm no longer holds.
 	n.healManifest(entry.ManifestChunks, 0, func() {
 		reachable := make(map[ports.ChunkID]bool, len(refs))
+		// shardDoms records the failure domains each shard's providers span,
+		// so repairStripes can spot a stripe whose shards have concentrated
+		// into too few domains (the dispersion audit) even when the raw
+		// count is fine.
+		shardDoms := make(map[ports.ChunkID]map[uint64]bool, len(refs))
 		var probeNext func(i int)
 		probeNext = func(i int) {
 			if i == len(refs) {
-				n.repairStripes(m, p, refs, reachable, 0, done)
+				n.repairStripes(m, p, refs, reachable, shardDoms, 0, done)
 				return
 			}
-			n.probeShard(refs[i].id, colKey(m.Root(), refs[i].pos), true, func(ok bool) {
+			n.probeShard(refs[i].id, colKey(m.Root(), refs[i].pos), true, func(ok bool, domains map[uint64]bool) {
 				reachable[refs[i].id] = ok
+				if ok {
+					shardDoms[refs[i].id] = domains
+				}
 				probeNext(i + 1)
 			})
 		}
@@ -200,7 +208,7 @@ func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
 	}
 	id := ids[i]
 	next := func() { n.healManifest(ids, i+1, done) }
-	n.probeShard(id, id, false, func(ok bool) {
+	n.probeShard(id, id, false, func(ok bool, _ map[uint64]bool) {
 		if ok {
 			next()
 			return
@@ -242,34 +250,45 @@ func storedShards(m *manifest.Layout, p erasure.Params) []shardRef {
 	return refs
 }
 
-// probeShard answers "does anyone have this chunk?" via provider
-// records confirmed with a cheap HasChunk round-trip. includeLocal
-// counts our own store as availability; the manifest-heal path sets it
-// false to ask specifically whether the SWARM still holds the chunk.
-func (n *Node) probeShard(id ports.ChunkID, key ports.Hash, includeLocal bool, done func(bool)) {
+// probeShard answers "does anyone have this chunk?" and reports the set
+// of failure domains that actually HOLD it (each provider confirmed with a
+// HasChunk round-trip — a bare provider record isn't trusted, so a stale
+// record can't fool the dispersion audit into thinking a column is spread
+// when it isn't). The audit uses that set to tell a column living in one
+// domain (fragile) from one already across two (safe), and to see the
+// difference after it adds a copy. includeLocal counts our own store; the
+// manifest-heal path sets it false to ask whether the SWARM still holds it.
+func (n *Node) probeShard(id ports.ChunkID, key ports.Hash, includeLocal bool, done func(ok bool, domains map[uint64]bool)) {
 	n.Stats.Probes++
+	domains := map[uint64]bool{}
+	found := false
 	if includeLocal {
 		if ok, _ := n.store.Has(bg(), id); ok {
-			done(true)
-			return
+			found = true
+			if n.domainID != 0 {
+				domains[n.domainID] = true
+			}
 		}
 	}
 	n.resolveProviders(key, func(provs []ports.NodeID) {
 		var try func(i int)
 		try = func(i int) {
 			if i >= len(provs) {
-				done(false)
+				done(found, domains)
 				return
 			}
 			if provs[i] == n.id {
 				try(i + 1)
 				return
 			}
-			n.request(provs[i], ports.Message{Kind: ports.MsgHasChunk, ChunkID: id},
+			pr := provs[i]
+			n.request(pr, ports.Message{Kind: ports.MsgHasChunk, ChunkID: id},
 				func(resp ports.Message, err error) {
 					if err == nil && resp.Found {
-						done(true)
-						return
+						found = true
+						if d := n.domainOf(pr); d != 0 {
+							domains[d] = true
+						}
 					}
 					try(i + 1)
 				})
@@ -278,10 +297,13 @@ func (n *Node) probeShard(id ports.ChunkID, key ports.Hash, includeLocal bool, d
 	})
 }
 
-// repairStripes walks the stripes, repairing each one whose losses
-// exceed the slack.
+// repairStripes walks the stripes, repairing each one whose losses exceed
+// the slack — and, as the dispersion audit, also re-spreading any stripe
+// whose reachable shards have concentrated so far into one failure domain
+// that losing that domain would drop it below k (the same n-k budget that
+// guards shard loss, applied to domain loss).
 func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardRef,
-	reachable map[ports.ChunkID]bool, stripe int, done func()) {
+	reachable map[ports.ChunkID]bool, shardDoms map[ports.ChunkID]map[uint64]bool, stripe int, done func()) {
 
 	numStripes := p.Stripes(len(m.Chunks))
 	if stripe == numStripes {
@@ -290,20 +312,49 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 	}
 	var stripeRefs []shardRef
 	missing := 0
+	// exclusive[d] counts this stripe's columns whose only known domain is
+	// d — those a failure of domain d would take out. A column already
+	// spread across ≥2 domains survives any single one and isn't counted.
+	exclusive := map[uint64]int{}
 	for _, r := range refs {
 		if r.stripe == stripe {
 			stripeRefs = append(stripeRefs, r)
 			if !reachable[r.id] {
 				missing++
+			} else if doms := shardDoms[r.id]; len(doms) == 1 {
+				for d := range doms {
+					exclusive[d]++
+				}
 			}
 		}
 	}
-	next := func() { n.repairStripes(m, p, refs, reachable, stripe+1, done) }
-	if missing == 0 || missing <= n.cfg.RepairSlack {
-		next()
+	worst, dominant := 0, uint64(0)
+	for d, c := range exclusive {
+		if c > worst {
+			worst, dominant = c, d
+		}
+	}
+	// Losing the dominant domain would cost more than the n-k budget →
+	// re-spread its exclusive columns even though the shard count is fine.
+	var disperseShards map[ports.ChunkID]bool
+	if worst > p.N-p.K {
+		disperseShards = map[ports.ChunkID]bool{}
+		for _, r := range stripeRefs {
+			if doms := shardDoms[r.id]; len(doms) == 1 && doms[dominant] {
+				disperseShards[r.id] = true
+			}
+		}
+	}
+
+	next := func() { n.repairStripes(m, p, refs, reachable, shardDoms, stripe+1, done) }
+	if missing > n.cfg.RepairSlack || len(disperseShards) > 0 {
+		if len(disperseShards) > 0 && missing <= n.cfg.RepairSlack {
+			n.Stats.Dispersals++
+		}
+		n.repairStripe(m, p, stripeRefs, disperseShards, dominant, next)
 		return
 	}
-	n.repairStripe(m, p, stripeRefs, next)
+	next()
 }
 
 // repairStripe fetches whatever shards of the stripe it can get —
@@ -313,7 +364,7 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 // fresh nodes. The caretaker keeps nothing afterward — it's a
 // paramedic, not a hoarder. A failed attempt (below k fetchable) is
 // counted and simply retried on the next sweep.
-func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, done func()) {
+func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, disperseShards map[ports.ChunkID]bool, avoidDomain uint64, done func()) {
 	leaves := m.Leaves()
 	root := m.Root()
 	realData := 0
@@ -385,10 +436,41 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		// survivors), so repair rebuilds spread rather than converging onto
 		// a few hosts as churn shrinks the network. (r.pos is the shard's
 		// column: 0..k-1 data, k..n-1 parity.)
+		// Dispersion audit: after rebuilding, place ONE extra copy of each
+		// over-exposed column (those living in only the crowded domain) on a
+		// domain the stripe isn't already using. The pinned column stays put;
+		// this just adds diversity, so next sweep sees it spread across ≥2
+		// domains and stops flagging it.
+		var toSpread []shardRef
+		for _, r := range stripeRefs {
+			if disperseShards[r.id] && shards[r.pos] != nil {
+				toSpread = append(toSpread, r)
+			}
+		}
+		var spread func(i int)
+		spread = func(i int) {
+			if i == len(toSpread) {
+				cleanup()
+				return
+			}
+			r := toSpread[i]
+			var proof *ports.StorageProof
+			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
+				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
+			}
+			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
+				// Steer the extra copy AWAY from the crowded domain specifically,
+				// so an over-exposed column gains a holder in a different one.
+				candidates := n.preferFreshDomain(closest, map[uint64]int{avoidDomain: 1})
+				n.placeAt(r.id, shards[r.pos], proof, candidates, 1, nil,
+					func(int) { spread(i + 1) })
+			})
+		}
+
 		var place func(i int)
 		place = func(i int) {
 			if i == len(toPlace) {
-				cleanup()
+				spread(0)
 				return
 			}
 			r := toPlace[i]
