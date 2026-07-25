@@ -35,6 +35,19 @@ Work captured for later, most-strategic first. The milestone history
   deterministic sim. Same logger; `--debug` implies a verbose threshold,
   `info` a normal one. Keep it off the hot path when disabled.
 
+### Build log / narrative
+- **A public "how it was built" log.** A chronological, human-readable
+  narrative of building Silt — the milestones, the design forks (placement
+  spectrum, takedown-by-revocation, the reputation-quorum chain), the
+  fresh-eyes council, the dead ends. Distinct from the CHANGELOG (what
+  shipped) and ROADMAP (what's next): this is the *story and reasoning*.
+  Likely never a released product, but valuable as a LinkedIn build series
+  and an artifact future employers can inspect (cf.
+  `getcamino.app/how-i-was-built/log`, from an earlier project). Could
+  render from a `docs/buildlog/` of dated entries into a
+  `website/buildlog.html`, same pipeline as the changelog. Keep it strictly
+  about *building the infrastructure* — no Aslan/resolver crossover.
+
 ### Review-gated contributions
 - **Nothing reaches mainline or a release without review by Andrew +
   Claude.** Branch protection requires a PR + green CI on `main`/`staging`
