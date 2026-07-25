@@ -153,17 +153,19 @@
     <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:16ch">Run the client. It serves while it fetches.</h2>
     <p class="dim" style="margin-top:1rem;max-width:58ch">One self-contained binary — no runtime, no install. The desktop client
     consumes and contributes in the same process: downloading and helping carry
-    the network are the same act.</p>
-    <div class="dls">
-      <div class="dl"><h4>macOS</h4><p>Apple Silicon &amp; Intel · ~9 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
-      <div class="dl"><h4>Windows</h4><p>x64 · ~10 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
-      <div class="dl"><h4>Linux</h4><p>x64 &amp; arm64 · ~9 MB</p><a href="https://github.com/nerolabs/silt/releases" class="btn">Download</a></div>
-    </div>
-    <p class="dim" style="margin-top:1.4rem;font-size:0.9rem">Prefer to build it yourself? It's Go, no cgo:</p>
-    <pre class="code"><span class="c"># clone and build for your machine — or all five targets at once</span>
+    the network are the same act. It's Go with no cgo, so building it yourself
+    takes one command:</p>
+    <pre class="code"><span class="c"># clone and build for your machine…</span>
 git clone https://github.com/nerolabs/silt && cd silt
-<span class="o">go</span> build -o silt ./cmd/silt   <span class="c"># then:</span>  ./silt client
+<span class="o">go</span> build -o silt ./cmd/silt   &&   ./silt client
+
+<span class="c"># …or cross-compile every target at once</span>
 <span class="o">./build.sh</span> v0.1               <span class="c"># → dist/silt-v0.1-&lt;os&gt;-&lt;arch&gt;</span></pre>
+    <p class="dim" style="margin-top:1.4rem">
+      Signed prebuilt binaries for <b style="color:var(--bone);font-weight:500">macOS,
+      Windows, and Linux</b> arrive with the first tagged release —
+      <a href="changelog.html">follow the changelog</a> to know when.
+    </p>
   </div>
 </section>
 
@@ -201,7 +203,7 @@ git clone https://github.com/nerolabs/silt && cd silt
         <a href="#how">How it works</a>
         <a href="node.html">Run a node</a>
         <a href="docs.html">Documentation</a>
-        <a href="docs.html#api">API reference</a>
+        <a href="changelog.html">Changelog</a>
         <a href="https://github.com/nerolabs/silt">Source (GitHub)</a>
       </nav>
     </div>

@@ -1,0 +1,30 @@
+# Deploy config for the Silt website, versioned in the repo so the build
+# is reproducible and reviewable. Netlify's Git integration reads this:
+#   push to main      → production  (silthq.com)
+#   push to staging   → branch deploy (staging--<site>.netlify.app,
+#                       or staging.silthq.com if you add the CNAME)
+#   pull request      → deploy preview (a unique URL, posted on the PR)
+#
+# The build step regenerates the changelog page from CHANGELOG.md so the
+# published page can never drift from the source of truth.
+
+[build]
+  command = "python3 scripts/gen_changelog.py"
+  publish = "website"
+
+[build.environment]
+  PYTHON_VERSION = "3.12"
+
+# Canonical host is the bare apex. Send www there.
+[[redirects]]
+  from = "https://www.silthq.com/*"
+  to = "https://silthq.com/:splat"
+  status = 301
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"

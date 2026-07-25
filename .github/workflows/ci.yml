@@ -1,0 +1,50 @@
+name: CI
+
+# Gates every push and pull request: the Go suite, formatting, and a
+# link-check of the website. Branch protection should require these
+# before merging to main or staging.
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+jobs:
+  go:
+    name: Go — vet, fmt, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^dist/' || true)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+  website:
+    name: Website — changelog + link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate changelog page
+        run: python3 scripts/gen_changelog.py
+      - name: Fail if changelog page is stale
+        run: |
+          if ! git diff --quiet -- website/changelog.html; then
+            echo "website/changelog.html is out of date; run scripts/gen_changelog.py and commit."
+            git --no-pager diff -- website/changelog.html
+            exit 1
+          fi
+      - name: Link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --exclude-mail --exclude 'localhost|127\.0\.0\.1|silthq\.com|pages\.dev' website
+          fail: true

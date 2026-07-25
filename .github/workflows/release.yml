@@ -1,0 +1,35 @@
+name: Release
+
+# Dormant until you push a version tag. Cutting a release is then one
+# command:  git tag v0.1.0 && git push origin v0.1.0
+# This builds the cross-platform binaries and publishes a GitHub Release
+# with notes pulled from CHANGELOG.md — which is what makes the site's
+# download links resolve to real files.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Sanity check
+        run: go vet ./... && go test ./...
+      - name: Build binaries (mac/windows/linux)
+        run: ./build.sh "${GITHUB_REF_NAME}"
+      - name: Extract release notes
+        run: python3 scripts/release_notes.py "${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: dist/*
+          fail_on_unmatched_files: true

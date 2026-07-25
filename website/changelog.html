@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt changelog</title>
+<meta name="description" content="Notable changes to Silt, release by release.">
+<link rel="canonical" href="https://silthq.com/changelog.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .doc h2.rel { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  .doc h2.rel .v { font-family:var(--display); }
+  .doc h2.rel .d { font-family:var(--mono); font-size:0.8rem; color:var(--drab); letter-spacing:0.04em; }
+  .doc h2.rel.unreleased .v::after { content:" ·"; color:var(--ochre); }
+  .doc h2.rel.unreleased { color:var(--ochre); }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="wordmark" style="text-decoration:none">Sil<b>t</b></a>
+  <span class="spacer"></span>
+  <a href="/#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+<div class="doc">
+  <p class="eyebrow">Changelog</p>
+  <h1>What's changed</h1>
+<p class="lead">All notable changes to Silt are recorded here. The format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>, and the project aims to follow <a href="https://semver.org/">Semantic Versioning</a>.</p>
+<p>This log is published at <a href="https://silthq.com/changelog.html">silthq.com/changelog</a>.</p>
+<h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
+<h3>Added</h3>
+<ul>
+<li>Public website (silthq.com) with brand, docs, operator guide, and downloads.</li>
+<li>Continuous delivery: PR previews, a <span class="mono">staging</span> environment, and production deploys from <span class="mono">main</span>.</li>
+</ul>
+<h2 class="rel released"><span class="v">0.1.0</span><span class="d">2026-07-25</span></h2>
+<p>The first public cut. Silt is a distributed, encrypted, erasure-coded storage network whose nodes cannot know what they carry.</p>
+<h3>Added</h3>
+<ul>
+<li><b>Content-addressed storage</b> — every fragment is named by the SHA-256 of its bytes; verification is intrinsic, so hosts are never trusted.</li>
+<li><b>Erasure coding</b> — Reed-Solomon stripes (default any 10 of 16 rebuild the file); a repair loop restores redundancy as machines fail.</li>
+<li><b>Encryption at every level</b> — chunks and manifests are both ciphertext; a file&#x27;s share handle is a <em>link</em> (<span class="mono">silt:v1:root:key</span>) whose one-way key hierarchy also yields <em>care links</em> that grant repair and audit without the ability to decrypt.</li>
+<li><b>The swarm</b> — Kademlia routing, provider records, and multi-node fetch over a deterministic simulator or real mutual-TLS sockets; identity is a keypair and a node&#x27;s ID is the hash of its public key.</li>
+<li><b>Capacity</b> — nodes pledge a fixed budget (<span class="mono">-capacity 2G</span>); placement spills over as nodes fill, and every node estimates the whole network&#x27;s size from local gossip alone.</li>
+<li><b>Proof-of-retrieval audits</b> — hosts are challenged to prove possession with a fresh nonce; those that keep the proof but drop the data are slashed.</li>
+<li><b>The registry chain</b> — an append-only chain kept by the operators; blocks commit only with a quorum of attestations from validators whose reputation (audits + serving) is earned, not bought.</li>
+<li><b>Genesis</b> — every fresh network is born carrying a founding manifesto in block 0, declared identically on every node.</li>
+<li><b>Web UI</b> — an embedded dashboard, publish/fetch pages, and a network observatory, served by the daemon.</li>
+<li><b>Desktop client</b> — one binary that consumes and serves at once, keeps a link-book library, and runs on macOS, Windows, and Linux.</li>
+</ul>
+  <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
+</div>
+<footer><div class="wrap"><div class="meta">
+  <span>silthq.com</span><span>·</span><span class="dim">the infrastructure is not the content</span>
+</div></div></footer>
+</body>
+</html>

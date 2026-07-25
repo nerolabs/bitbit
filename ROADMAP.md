@@ -106,3 +106,14 @@ design. Silt ships zero Aslan code, ever.
   eventually).
 - NAT traversal (daemons on home networks) — likely relay-assisted,
   post-M12.
+
+## Release engineering (TODO)
+- **Cut the v0.1 release + publish signed binaries.** Deliberately not
+  done yet (Andrew, 2026-07-25). The site's download section points at
+  build-from-source until then. When ready: move CHANGELOG "Unreleased"
+  into a dated version, `git tag v0.1.0 && git push origin v0.1.0` — the
+  release workflow builds the Mac/Windows/Linux binaries and publishes a
+  GitHub Release, at which point the download links resolve. Consider
+  code-signing/notarization (macOS) and a checksums file before a wide
+  public push.
+- Website publishing + DNS: see DEPLOYMENT.md (Netlify, apex at Namecheap).
