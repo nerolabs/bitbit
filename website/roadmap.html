@@ -84,8 +84,9 @@
 <li>Column-based placement (<span class="mono">docs/design/column-placement.md</span>) — <b>done</b>: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.</li>
 <li>Failure-domain-aware placement — <b>done</b>: nodes gossip a domain label; publish and repair both spread columns across distinct domains (best-effort), roughly halving worst-domain co-residence. Bounds the cross-column co-residence #5 left open.</li>
 <li>Dispersion audit — <b>done</b>: caretakers tally the domains that actually hold each stripe&#x27;s columns and re-spread any stripe a single domain failure could break, until no domain loss drops it below k. Also surfaces the per-stripe domain spread the content-blind observatory can&#x27;t compute.</li>
-<li>Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).</li>
+<li>Demand-responsive dispersion — <b>done</b> (push half): a node whose chunk runs hot pushes leased cache copies to more hosts (across domains); reads refresh them, cooldown expires them, so hot files fan out and contract elastically. Pull-cache tier (fetchers cache near readers) is the noted follow-up.</li>
 </ol>
+<p><b>Phase 1 is complete</b> — the durability + scale backbone is in. Next is the launch-gating track (independent security + legal review, then v0.1); see below.</p>
 <p><b>Phase 2 — production trustworthiness (feeds the external security audit).</b></p>
 <ol>
 <li>Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.</li>

@@ -112,6 +112,10 @@ type Message struct {
 	// across distinct domains, not just node IDs. 0 means "unset" — treated
 	// as its own unique domain, never a grouping constraint.
 	Domain uint64
+	// Lease marks a StoreChunk as a demand-driven cache copy: the receiver
+	// holds and serves it but lets it expire if it stops being read, so a
+	// hot file fans out under load and contracts on cooldown.
+	Lease bool
 	// Height is the chain-sync cursor (MsgGetChain).
 	Height uint64
 }

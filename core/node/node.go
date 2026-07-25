@@ -41,6 +41,15 @@ type Config struct {
 	// domains, so a whole domain failing costs a stripe as little as
 	// possible. Empty = unset (each such node is its own unique domain).
 	Domain string
+	// Demand-responsive dispersion: a node that serves a chunk more than
+	// HotThreshold times within a DemandInterval pushes FanoutReplicas
+	// extra cache copies to other hosts (leased, so they expire after
+	// LeaseTTL of not being read). Baseline Replication is the floor; heat
+	// a temporary multiplier. HotThreshold 0 disables the whole mechanism.
+	HotThreshold   int
+	DemandInterval ports.Duration
+	LeaseTTL       ports.Duration
+	FanoutReplicas int
 }
 
 func DefaultConfig() Config {
@@ -50,6 +59,10 @@ func DefaultConfig() Config {
 		Replication:    3,
 		RepairInterval: 60 * ports.Second,
 		RepairSlack:    2,
+		HotThreshold:   8,
+		DemandInterval: 60 * ports.Second,
+		LeaseTTL:       180 * ports.Second,
+		FanoutReplicas: 2,
 	}
 }
 
@@ -122,6 +135,14 @@ type Node struct {
 	domainID    uint64
 	peerDomains map[ports.NodeID]uint64
 
+	// demand-responsive dispersion: serveLoad counts recent serves per
+	// chunk (decayed each demand tick); leases holds the expiry of each
+	// cache copy we took on under load; demandRunning guards the tick loop,
+	// which sleeps itself when there's nothing hot or leased to manage.
+	serveLoad     map[ports.ChunkID]int
+	leases        map[ports.ChunkID]ports.Time
+	demandRunning bool
+
 	// validator role (M12): the local chain replica and the signing key
 	// (nil = not a validator).
 	chain    *chain.Chain
@@ -155,6 +176,8 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		pending:     make(map[uint64]*pending),
 		proofs:      make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains: make(map[ports.NodeID]uint64),
+		serveLoad:   make(map[ports.ChunkID]int),
+		leases:      make(map[ports.ChunkID]ports.Time),
 	}
 	if cfg.Domain != "" {
 		n.domainID = domainHash(cfg.Domain)
@@ -287,6 +310,9 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 				if msg.Proof != nil {
 					n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
 				}
+				if msg.Lease {
+					n.takeLease(msg.ChunkID) // demand-driven cache copy: hold, but let it expire
+				}
 			}
 		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: ok})
@@ -305,6 +331,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		if n.ledger != nil {
 			n.ledger.RecordServe(n.id, from, msg.ChunkID, int64(len(c.Data)))
 		}
+		n.bumpDemand(msg.ChunkID)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: true, Data: c.Data})
 	case ports.MsgHasChunk:
 		ok, _ := n.store.Has(bg(), msg.ChunkID)

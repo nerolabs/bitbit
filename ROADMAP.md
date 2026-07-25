@@ -126,7 +126,9 @@ network is empty.
 5. Column-based placement (`docs/design/column-placement.md`) — **done**: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.
 6. Failure-domain-aware placement — **done**: nodes gossip a domain label; publish and repair both spread columns across distinct domains (best-effort), roughly halving worst-domain co-residence. Bounds the cross-column co-residence #5 left open.
 7. Dispersion audit — **done**: caretakers tally the domains that actually hold each stripe's columns and re-spread any stripe a single domain failure could break, until no domain loss drops it below k. Also surfaces the per-stripe domain spread the content-blind observatory can't compute.
-8. Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).
+8. Demand-responsive dispersion — **done** (push half): a node whose chunk runs hot pushes leased cache copies to more hosts (across domains); reads refresh them, cooldown expires them, so hot files fan out and contract elastically. Pull-cache tier (fetchers cache near readers) is the noted follow-up.
+
+**Phase 1 is complete** — the durability + scale backbone is in. Next is the launch-gating track (independent security + legal review, then v0.1); see below.
 
 **Phase 2 — production trustworthiness (feeds the external security audit).**
 8. Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.
