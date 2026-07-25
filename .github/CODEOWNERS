@@ -1,0 +1,11 @@
+# Code owners are auto-requested for review on any matching change.
+# Nothing merges to a protected branch without their approval.
+
+# Everything is owned by the maintainer for now.
+*       @nerolabs
+
+# Core is the load-bearing, safety-critical surface — call it out
+# explicitly so it's never merged without deliberate review.
+/core/          @nerolabs
+/ports/         @nerolabs
+/.github/       @nerolabs
