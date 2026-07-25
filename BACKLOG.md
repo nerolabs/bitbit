@@ -7,12 +7,13 @@ Work captured for later, most-strategic first. The milestone history
 ## Engineering & process
 
 ### Harden the CI/CD gate
-- **Integration tests before every commit.** The suite already runs on
-  every push/PR (`go test ./...`, gofmt, vet, link check, changelog
-  sync — required on `main` and `staging`). Add: multi-process
-  end-to-end tests (spin real daemons over TCP, publish → chain-commit →
-  fetch, assert bit-perfect) run in CI, not just the in-process sim;
-  a race-detector build (`go test -race`); and a coverage floor.
+- **Integration tests before every commit.** The suite runs on every
+  push/PR (`go test ./...`, gofmt, vet, link check, changelog sync —
+  required on `main` and `staging`). A race-detector build
+  (`go test -race`) and a 45% coverage floor are now in (Phase 0). Still
+  to add (Phase 2): multi-process end-to-end tests — spin real daemons
+  over TCP, publish → chain-commit → fetch, assert bit-perfect — run in
+  CI, not just the in-process sim.
 - **The website ships with the code.** Make documentation, the
   changelog, and the public roadmap first-class build outputs so a
   mainline change can't land without its docs. Concretely: a CI check

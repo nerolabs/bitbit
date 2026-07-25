@@ -1,8 +1,9 @@
 name: CI
 
-# Gates every push and pull request: the Go suite, formatting, and a
-# link-check of the website. Branch protection should require these
-# before merging to main or staging.
+# Gates every push and pull request: the Go suite (with a coverage
+# floor), formatting, a race-detector build, and a link-check of the
+# website. Branch protection should require these before merging to main
+# or staging.
 on:
   push:
     branches: [main, staging]
@@ -26,8 +27,27 @@ jobs:
           fi
       - name: go vet
         run: go vet ./...
-      - name: go test
-        run: go test ./...
+      - name: go test + coverage floor
+        run: |
+          go test -coverprofile=cover.out ./...
+          total=$(go tool cover -func=cover.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
+          floor=45.0
+          echo "total coverage: ${total}% (floor ${floor}%)"
+          if awk "BEGIN {exit !($total < $floor)}"; then
+            echo "::error::coverage ${total}% is below the ${floor}% floor"; exit 1
+          fi
+
+  race:
+    name: Go — race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: go test -race
+        run: go test -race ./...
 
   website:
     name: Website — changelog + links
