@@ -81,9 +81,10 @@
 </ol>
 <p><b>Phase 1 — the durability backbone, BEFORE launch (main engineering bet).</b></p>
 <ol>
-<li>Column-based placement (<span class="mono">docs/design/column-placement.md</span>) — reads become ~k conversations, anti-affinity optimal and automatic.</li>
-<li>Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5.</li>
+<li>Column-based placement (<span class="mono">docs/design/column-placement.md</span>) — <b>done</b>: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.</li>
+<li>Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5, and also bounds the cross-column co-residence #5 leaves open. <b>Next.</b></li>
 <li>Dispersion audit as an enforced invariant (built on the Phase 0 measurement).</li>
+<li>Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).</li>
 </ol>
 <p><b>Phase 2 — production trustworthiness (feeds the external security audit).</b></p>
 <ol>

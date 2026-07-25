@@ -1,8 +1,11 @@
 # Design: column-based placement
 
-**Status:** proposed (design only; no code changes). Captures a decision
-from discussion so it isn't lost, and defines the next storage-layer
-milestone. See [BACKLOG.md](../../BACKLOG.md) and [ROADMAP.md](../../ROADMAP.md).
+**Status:** implemented (Phase 1). Placement, provider records, retrieval,
+repair, and audit all operate on columns; the manifest is unchanged. See
+[BACKLOG.md](../../BACKLOG.md) and [ROADMAP.md](../../ROADMAP.md). Two
+follow-ups remain and are called out below: failure-domain-aware placement
+(bounding *cross-column* co-residence) and demand-responsive dispersion
+(handling hot files at scale).
 
 ## The problem
 
@@ -117,6 +120,39 @@ to column (or column-segment)**. What is preserved:
   failure-domain backlog item).
 - Whether to keep a small amount of per-chunk fanout for the very hottest
   files as an explicit cache tier.
+
+## Demand-responsive dispersion (hot files at scale)
+
+The network is meant to reach worldwide scale, and that changes the risk.
+A column of a popular file lives on only `Replication` hosts. If one file
+draws, say, a quarter of all retrieval traffic while its columns sit on a
+handful of nodes among millions, those nodes get **hit hard** — a hotspot
+that hurts latency and can look like a self-inflicted DoS. Concentration
+is good for a cold file (cheap, tidy reads) and dangerous for a hot one.
+
+So replication must be **elastic with demand**, not fixed:
+
+- **Fan out on heat.** Track per-column serve rate (bytes/sec, request
+  count). When a column runs hot, raise its replication — spread copies to
+  more hosts (and, with failure-domain hints, more domains) so load
+  divides. A reader already gets `n` candidate columns for `k` needed, so
+  more holders per column means more parallel sources.
+- **Contract on cooldown.** When demand falls, let the extra replicas
+  expire (TTL/lease) so a flash-popular file doesn't permanently hoard
+  capacity. Baseline `Replication` is the floor; heat is a temporary
+  multiplier.
+- **Where the signal lives.** Serving nodes see their own load; caretakers
+  (via care-links) can aggregate it per column without decrypting content.
+  The caretaker/announce path is the natural place to raise or retire
+  replicas — the same machinery that already repairs.
+- **Push vs. pull cache tier.** An alternative/complement: let a node that
+  served a chunk under load *offer* to cache it and announce as an extra
+  provider (opportunistic, demand-pull), decaying when unused. This keeps
+  the hot set naturally near the readers.
+
+This is elasticity in the *number of copies*, orthogonal to the column
+*grouping* that this doc establishes. It's captured as its own backlog
+item; the grouping had to land first so there's a unit to replicate.
 
 ## Relationship to the other placement work
 

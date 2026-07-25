@@ -123,9 +123,10 @@ network is empty.
 4. Docs-ship-with-code CI check + auto-rendered `website/roadmap.html`.
 
 **Phase 1 — the durability backbone, BEFORE launch (main engineering bet).**
-5. Column-based placement (`docs/design/column-placement.md`) — reads become ~k conversations, anti-affinity optimal and automatic.
-6. Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5.
+5. Column-based placement (`docs/design/column-placement.md`) — **done**: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.
+6. Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5, and also bounds the cross-column co-residence #5 leaves open. **Next.**
 7. Dispersion audit as an enforced invariant (built on the Phase 0 measurement).
+8. Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).
 
 **Phase 2 — production trustworthiness (feeds the external security audit).**
 8. Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.

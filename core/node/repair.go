@@ -56,19 +56,32 @@ func (n *Node) AnnounceHeld(done func(int)) {
 		return
 	}
 	dht.SortByDistance(n.id, ids) // List order is map-random; sort for determinism
-	kept := ids[:0]
+	// Announce under each chunk's PLACEMENT key — its column key when
+	// coded, its own id otherwise — since that's where readers look. A
+	// whole column shares one key, so we announce it once.
+	seen := make(map[ports.Hash]bool)
+	var keys []ports.Hash
+	held := 0
 	for _, id := range ids {
 		if n.chunkDenied(id) {
 			continue // don't advertise taken-down content
 		}
-		n.provs.Add(id, n.id)
-		kept = append(kept, id)
+		key := ports.Hash(id)
+		if p, ok := n.proofs[id]; ok {
+			key = placementKey(p.Root, id, p.Column)
+		}
+		n.provs.Add(key, n.id)
+		held++
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
 	}
-	n.announceAll(kept, func() { done(len(kept)) })
+	n.announceAll(keys, func() { done(held) })
 }
 
-// announceAll plants "I have chunk H" records on the K closest nodes to
-// each chunk ID.
+// announceAll plants "I have this" records on the K closest nodes to each
+// placement key.
 func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
 	var next func(i int)
 	next = func(i int) {
@@ -171,7 +184,7 @@ func (n *Node) repairRootWithLayout(entry ports.Entry, ch link.CareHandle, done 
 				n.repairStripes(m, p, refs, reachable, 0, done)
 				return
 			}
-			n.probeShard(refs[i].id, true, func(ok bool) {
+			n.probeShard(refs[i].id, colKey(m.Root(), refs[i].pos), true, func(ok bool) {
 				reachable[refs[i].id] = ok
 				probeNext(i + 1)
 			})
@@ -187,7 +200,7 @@ func (n *Node) healManifest(ids []ports.ChunkID, i int, done func()) {
 	}
 	id := ids[i]
 	next := func() { n.healManifest(ids, i+1, done) }
-	n.probeShard(id, false, func(ok bool) {
+	n.probeShard(id, id, false, func(ok bool) {
 		if ok {
 			next()
 			return
@@ -233,7 +246,7 @@ func storedShards(m *manifest.Layout, p erasure.Params) []shardRef {
 // records confirmed with a cheap HasChunk round-trip. includeLocal
 // counts our own store as availability; the manifest-heal path sets it
 // false to ask specifically whether the SWARM still holds the chunk.
-func (n *Node) probeShard(id ports.ChunkID, includeLocal bool, done func(bool)) {
+func (n *Node) probeShard(id ports.ChunkID, key ports.Hash, includeLocal bool, done func(bool)) {
 	n.Stats.Probes++
 	if includeLocal {
 		if ok, _ := n.store.Has(bg(), id); ok {
@@ -241,7 +254,7 @@ func (n *Node) probeShard(id ports.ChunkID, includeLocal bool, done func(bool)) 
 			return
 		}
 	}
-	n.resolveProviders(id, func(provs []ports.NodeID) {
+	n.resolveProviders(key, func(provs []ports.NodeID) {
 		var try func(i int)
 		try = func(i int) {
 			if i >= len(provs) {
@@ -303,15 +316,27 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, done func()) {
 	leaves := m.Leaves()
 	root := m.Root()
-	ids := make([]ports.ChunkID, len(stripeRefs))
 	realData := 0
-	for i, r := range stripeRefs {
-		ids[i] = r.id
+	for _, r := range stripeRefs {
 		if r.pos < p.K {
 			realData++
 		}
 	}
-	n.fetchAll(ids, func(unfetched []ports.ChunkID) {
+	// What we already hold as a provider (a caretaker can be the closest
+	// node to a column key, making it the legitimate host of that column)
+	// must survive the paramedic cleanup below — otherwise repair would
+	// delete the very shards it is meant to preserve. Only the copies we
+	// fetch for THIS repair are temporary.
+	heldBefore := make(map[ports.ChunkID]bool, len(stripeRefs))
+	for _, r := range stripeRefs {
+		if ok, _ := n.store.Has(bg(), r.id); ok {
+			heldBefore[r.id] = true
+		}
+	}
+	// Fetch by column: a stripe's shards register under their column key,
+	// not their own id, so a plain fetchAll (which resolves by id) would
+	// find nothing and every repair would fail to reconstruct.
+	n.fetchStripeByColumn(root, stripeRefs, func(unfetched []ports.ChunkID) {
 		// Build the stripe from whatever actually arrived.
 		shards := make([][]byte, p.N)
 		for _, r := range stripeRefs {
@@ -321,7 +346,9 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		}
 		cleanup := func() {
 			for _, r := range stripeRefs {
-				n.store.Delete(bg(), r.id)
+				if !heldBefore[r.id] { // keep what we host; drop only fetched copies
+					n.store.Delete(bg(), r.id)
+				}
 			}
 			done()
 		}
@@ -344,36 +371,18 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		for _, id := range unfetched {
 			missing[id] = true
 		}
-		var toPlace, survivors []shardRef
+		var toPlace []shardRef
 		for _, r := range stripeRefs {
 			if missing[r.id] {
 				toPlace = append(toPlace, r)
-			} else {
-				survivors = append(survivors, r)
 			}
 		}
-		// Anti-affinity, the same invariant Distribute enforces at publish
-		// time: no node should hold two shards of one stripe, so one death
-		// costs the stripe at most one shard. Repair used to re-place on the
-		// raw closest nodes, which lets a stripe drift onto a shrinking set
-		// of hosts over many cycles. Seed a per-stripe host count from the
-		// surviving shards' current homes (so a lone rebuilt shard still
-		// avoids them), keep it updated as we place, and prefer candidates
-		// that don't already hold this stripe.
-		held := make(map[ports.NodeID]int)
-		var seedHolders func(i int, then func())
-		seedHolders = func(i int, then func()) {
-			if i == len(survivors) {
-				then()
-				return
-			}
-			n.resolveProviders(survivors[i].id, func(ps []ports.NodeID) {
-				for _, p := range ps {
-					held[p]++
-				}
-				seedHolders(i+1, then)
-			})
-		}
+		// Re-seed each rebuilt shard onto its COLUMN — the nodes closest to
+		// colKey(root, pos) — so it rejoins the hosts its column-siblings
+		// already live on. Anti-affinity is then structural, not a heuristic:
+		// a column holder carries one shard of each stripe, so repair can't
+		// drift a stripe onto a doubled-up host the way per-chunk re-placement
+		// could. (r.pos is the shard's column: 0..k-1 data, k..n-1 parity.)
 		var place func(i int)
 		place = func(i int) {
 			if i == len(toPlace) {
@@ -383,12 +392,10 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 			r := toPlace[i]
 			var proof *ports.StorageProof
 			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
-				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path}
+				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
 			}
-			n.IterativeFindNode(r.id, func(closest []ports.NodeID) {
-				candidates := preferAvoiding(closest, held)
-				n.placeAt(r.id, shards[r.pos], proof, candidates, n.cfg.Replication,
-					func(target ports.NodeID) { held[target]++ },
+			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
+				n.placeAt(r.id, shards[r.pos], proof, closest, n.cfg.Replication, nil,
 					func(placed int) {
 						if placed > 0 {
 							n.Stats.ShardsRebuilt++
@@ -397,6 +404,6 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 					})
 			})
 		}
-		seedHolders(0, func() { place(0) })
+		place(0)
 	})
 }

@@ -101,13 +101,20 @@ func (n *Node) Audit(reg ports.Registry, ch link.CareHandle, done func(AuditRepo
 			return
 		}
 		leaves := m.Leaves()
+		root := m.Root()
 		var nextLeaf func(i int)
 		nextLeaf = func(i int) {
 			if i == len(leaves) {
 				done(report)
 				return
 			}
-			n.auditLeaf(leaves[i], &report, func() { nextLeaf(i + 1) })
+			// Providers live under the column key for coded shards; resolve
+			// the audit there, but challenge the individual shard by id.
+			key := ports.Hash(leaves[i])
+			if col := columnAt(i, len(m.Chunks), m.K, m.N); col != noColumn {
+				key = colKey(root, col)
+			}
+			n.auditLeaf(leaves[i], key, &report, func() { nextLeaf(i + 1) })
 		}
 		nextLeaf(0)
 	})
@@ -119,8 +126,8 @@ type challengeAnswer struct {
 	tag    []byte
 }
 
-func (n *Node) auditLeaf(id ports.ChunkID, report *AuditReport, done func()) {
-	n.resolveProviders(id, func(provs []ports.NodeID) {
+func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, report *AuditReport, done func()) {
+	n.resolveProviders(key, func(provs []ports.NodeID) {
 		n.rid++ // draw a fresh, deterministic nonce from the request counter
 		nonce := n.rid
 		var answers []challengeAnswer

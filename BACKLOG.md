@@ -73,20 +73,37 @@ spread, but reading a file of S stripes costs ~S×k separate
 lookups-and-fetches, and concentration/failure-domain risks aren't
 actively managed. Decisions and tasks, priority order:
 
-- **Column-based placement** — *the backbone; next storage milestone.*
-  Place whole **columns** (one shard position across all stripes), keyed
-  by `hash(root‖j)`, instead of individual chunks. Reads become **k
-  conversations for the whole file** regardless of size, unit-failure
-  costs exactly one shard per stripe (lose up to n−k columns and still
-  rebuild), and anti-affinity becomes optimal and automatic. Design and
-  tradeoffs written up in
-  [docs/design/column-placement.md](docs/design/column-placement.md).
-- **Failure-domain-aware placement** — *highest-value durability item.*
-  Nodes advertise a domain hint (AS / rack / geo / operator); placement
-  spreads across distinct **domains**, not just node IDs. Content
-  addressing prevents random concentration but not *correlated* failure
-  (16 shards on 16 IDs in one datacenter). Pairs naturally with column
-  placement (the n columns should land in n distinct domains).
+- **Column-based placement** — *done (Phase 1).* Placement, provider
+  records, retrieval, repair, and audit now operate on whole **columns**
+  (one shard position across all stripes), keyed by `hash(root‖j)`, instead
+  of individual chunks. A column's providers are found in one lookup,
+  unit-failure costs exactly one shard per stripe (lose up to n−k columns
+  and still rebuild), and within-column anti-affinity is structural.
+  Manifest chunks and uncoded files keep per-chunk placement. Design and
+  tradeoffs in
+  [docs/design/column-placement.md](docs/design/column-placement.md);
+  proven by the `scatter`, `churn`, `capacity`, `audit`, and
+  anti-affinity sims.
+- **Failure-domain-aware placement** — *highest-value durability item;
+  next.* Nodes advertise a domain hint (AS / rack / geo / operator);
+  placement spreads columns across distinct **domains**, not just node IDs.
+  Content addressing prevents random concentration but not *correlated*
+  failure (16 columns in one datacenter). Also bounds the **cross-column
+  co-residence** column placement leaves open: today one host can be
+  closest to several column keys (and capacity spill piles more on), so a
+  stripe can gather a few shards on one host — the caps/capacity sims now
+  assert only the red line (< k on any host). Spreading columns across
+  domains is the real fix.
+- **Demand-responsive dispersion** — *elastic replication for hot files.*
+  A column of a popular file lives on only `Replication` hosts; at
+  worldwide scale a file taking a large share of retrieval traffic would
+  hammer those few hosts. Make replication **elastic**: fan a hot column
+  out to more hosts/domains as its serve rate climbs, and let the extra
+  copies expire on cooldown (baseline `Replication` is the floor, heat a
+  temporary multiplier). Serving nodes see load; caretakers can aggregate
+  it per column without decrypting. Orthogonal to the column *grouping* —
+  it varies the *number of copies*. See the design doc's
+  "demand-responsive dispersion" section.
 - **Repair preserves anti-affinity** — *done (Phase 0).* Repair used to
   re-place rebuilt shards on the raw closest nodes without the
   `preferAvoiding` stripe-spreading that `Distribute` applies, so stripes
