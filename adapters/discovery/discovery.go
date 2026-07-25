@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nerolabs/bitbit/adapters/tcpnet"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/tcpnet"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Parse reads one "ID@host:port" peer string.

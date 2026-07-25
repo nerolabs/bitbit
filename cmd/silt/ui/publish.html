@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silt — publish</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="logo">si<span>lt</span></div>
+  <a href="library.html">Library</a>
+  <a href="/">Daemon</a>
+  <a href="publish.html" class="active">Publish</a>
+  <a href="fetch.html">Fetch</a>
+  <a href="observatory.html">Observatory</a>
+</nav>
+<main>
+  <h1>Publish a file</h1>
+  <p class="dim" style="margin-bottom:1rem">
+    Chunk → encrypt → erasure-code → scatter across the swarm → register the
+    root on the chain. What comes back is a <b>silt link</b>: the only key
+    to the file that will ever exist. The network keeps ciphertext; you keep
+    the meaning.</p>
+
+  <div class="drop" id="drop">drop a file here, or click to choose
+    <input type="file" id="file" style="display:none"></div>
+  <div class="row">
+    <label class="dim">mode</label>
+    <select id="mode" style="width:auto">
+      <option value="convergent">convergent — dedups globally; fine for shareable data</option>
+      <option value="private">private — random keys; existence stays secret</option>
+    </select>
+    <button id="go" disabled>publish</button>
+  </div>
+  <div id="msg"></div>
+</main>
+<script>
+const drop = document.getElementById("drop"), fileIn = document.getElementById("file"),
+      go = document.getElementById("go"), msg = document.getElementById("msg");
+let file = null;
+drop.onclick = () => fileIn.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); pick(e.dataTransfer.files[0]); };
+fileIn.onchange = () => pick(fileIn.files[0]);
+function pick(f) { if (!f) return; file = f; drop.textContent = f.name + " (" + f.size + " bytes)"; go.disabled = false; }
+
+go.onclick = async () => {
+  go.disabled = true; msg.innerHTML = `<span class="dim">chunking, encrypting, scattering…</span>`;
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("mode", document.getElementById("mode").value);
+  try {
+    const r = await fetch("/api/publish", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    msg.innerHTML = `
+      <p class="ok" style="margin:0.6rem 0">✓ ${j.name} scattered — ${j.placed} chunk replicas placed</p>
+      <h2>silt link — share to grant reading</h2>
+      <div class="linkbox" onclick="copy(this)">${j.link}</div>
+      <h2>care link — grants repair &amp; audit, cannot decrypt</h2>
+      <div class="linkbox" onclick="copy(this)">${j.careLink}</div>
+      <p class="note">Click a link to copy. Lose the silt link and the file is
+      noise forever — the network cannot help you; that is the point of it.</p>`;
+  } catch (e) {
+    msg.innerHTML = `<p class="bad">✗ ${e.message}</p>`;
+  }
+  go.disabled = false;
+};
+function copy(el) { navigator.clipboard.writeText(el.textContent); el.style.borderColor = "var(--ok)"; }
+</script>
+</body>
+</html>

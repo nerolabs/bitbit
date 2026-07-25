@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nerolabs/bitbit/adapters/eventloop"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/eventloop"
+	"github.com/nerolabs/silt/ports"
 )
 
 type Clock struct {

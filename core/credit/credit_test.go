@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 func id(b byte) ports.NodeID { return ports.HashBytes([]byte{b}) }

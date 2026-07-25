@@ -33,7 +33,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Config sets the consensus thresholds. Zero MinRep values make a

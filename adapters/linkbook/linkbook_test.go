@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/linkbook"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/linkbook"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/ports"
 )
 
 func aLink(seed byte) string {

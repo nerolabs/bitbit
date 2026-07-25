@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nerolabs/bitbit/core/credit"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/credit"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 func gatedEntry(rootByte byte, publisher ports.NodeID) ports.Entry {

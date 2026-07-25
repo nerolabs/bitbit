@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 func key(seed int64) ed25519.PrivateKey {

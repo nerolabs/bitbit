@@ -20,10 +20,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 func copyProof(p ports.StorageProof) ports.StorageProof {

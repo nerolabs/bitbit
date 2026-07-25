@@ -1,4 +1,4 @@
-# BitBit Roadmap — from swarm to product
+# Silt Roadmap — from swarm to product
 
 Where this is going (per Andrew, 2026-07-25), structured into
 milestones. M1–M8 are done; this file governs what comes next.
@@ -12,7 +12,7 @@ milestones. M1–M8 are done; this file governs what comes next.
   identifiers into human meaning (names, descriptions) is deliberately
   NOT this system — a separate layer, like DNS atop IP, built by
   whoever wants to build it.
-- **Capacity is pledged, not assumed.** `bitbit daemon -capacity 2G`
+- **Capacity is pledged, not assumed.** `silt daemon -capacity 2G`
   contributes exactly that much. The network continuously knows its own
   total size. No daemon needs any whole file — just chunks.
 - **Writes are earned.** Publishing to the chain requires coordination
@@ -44,7 +44,7 @@ density (math note 06) to compute total network capacity.
 Manifests are sealed blobs: layout encrypted under a layout key, with
 the decryption material boxed under a content key inside. Both keys
 derive one-way (HKDF) from the link key — the share handle is
-`bitbit:v1:root:key`, and its degraded form `bitbitcare:v1:root:layoutkey`
+`silt:v1:root:key`, and its degraded form `siltcare:v1:root:layoutkey`
 grants repair/audit WITHOUT decryption (see docs/math/07-key-hierarchy.md).
 Link keys are content-derived, so convergent dedup extends to the links
 themselves. Infrastructure relays ciphertext end to end; caretakers do
@@ -62,13 +62,13 @@ fronts the chain as ports.Registry so swarm add/get work unchanged.
 Not PoW, and honest about it: see docs/math/08-quorum-chains.md.
 
 ### M13 — Web frontends (DONE)
-`daemon -ui ADDR` serves an embedded localhost web UI (cmd/bitbit/ui,
+`daemon -ui ADDR` serves an embedded localhost web UI (cmd/silt/ui,
 go:embed, JSON API on the same port, zero extra runtime):
 - **Daemon dashboard**: pledge used/total, chunks, served bytes,
   self-estimated network size/storage, chain height, and the opaque
   top-level roots it holds shards of. Auto-refreshes.
 - **Publish page**: drag a file → scatter via an in-process ephemeral
-  client (staging never touches the pledge) → returns the bitbit link
+  client (staging never touches the pledge) → returns the silt link
   AND the care link.
 - **Fetch page**: paste a link → fetch, verify, decrypt, download.
 - **Observatory**: aggregates any list of daemon UIs — observed
@@ -78,7 +78,7 @@ go:embed, JSON API on the same port, zero extra runtime):
   assemble.
 
 ### M14 — Desktop client (DONE)
-`bitbit client`: one binary that consumes AND serves (pledges disk by
+`silt client`: one binary that consumes AND serves (pledges disk by
 default — every client a node), keeps a link-book library (the files
 you hold keys for; the network's other identifiers stay opaque to you,
 the Aslan boundary made visible), bootstraps via discovery, and opens
@@ -91,7 +91,7 @@ polish that consumes the binary unchanged. See docs/desktop-client.md.
 Meaning lives above the infrastructure, in a separate codebase with
 its own distributed record chain: name/description/tags → (root,
 manifest key). See docs/aslan-boundary.md for the full boundary
-design. BitBit ships zero Aslan code, ever.
+design. Silt ships zero Aslan code, ever.
 
 ## Reputation inputs (feeding M12)
 - Storage honesty: M7 audit pass rate.

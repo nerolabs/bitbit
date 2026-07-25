@@ -1,4 +1,4 @@
-// Package erasure wraps github.com/klauspost/reedsolomon with bitbit's
+// Package erasure wraps github.com/klauspost/reedsolomon with silt's
 // stripe conventions. See docs/math/03-reed-solomon.md for why this
 // works.
 //

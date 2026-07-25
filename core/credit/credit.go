@@ -16,7 +16,7 @@ package credit
 import (
 	"sort"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 type account struct {

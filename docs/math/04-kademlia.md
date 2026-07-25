@@ -69,7 +69,7 @@ contains only T's true neighborhood, and the lookup converges. Our test
 finds the exact true top-8 of 500 nodes in ≤ a handful of rounds and a
 few dozen messages — check `TestLookupConvergesInLogNRounds`.
 
-## How bitbit uses it
+## How silt uses it
 
 - **Provider records, not chunks.** The DHT stores tiny claims — "node
   X has chunk H" — placed on the nodes closest to H. Chunks themselves

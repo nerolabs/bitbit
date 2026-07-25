@@ -3,7 +3,7 @@ package chain
 import (
 	"context"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // ReplicaRegistry exposes a chain replica through the ports.Registry

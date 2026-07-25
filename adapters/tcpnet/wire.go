@@ -3,7 +3,7 @@ package tcpnet
 import (
 	"github.com/fxamacker/cbor/v2"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // envelope is the on-the-wire frame: who sent it, where to reach them,

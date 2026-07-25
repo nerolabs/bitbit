@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Log is an in-memory ports.Registry.

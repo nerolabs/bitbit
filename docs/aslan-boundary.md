@@ -1,12 +1,12 @@
-# The Aslan Boundary: why BitBit must never know what it carries
+# The Aslan Boundary: why Silt must never know what it carries
 
 (Aslan = working codename for the separate resolver product. This doc
-lives in the BitBit repo only to define the BOUNDARY — Aslan itself is
+lives in the Silt repo only to define the BOUNDARY — Aslan itself is
 a different codebase, different repo, different deployment, on purpose.)
 
 ## The legal architecture
 
-BitBit's stance is the common-carrier stance, engineered rather than
+Silt's stance is the common-carrier stance, engineered rather than
 argued:
 
 - A **chunk** is ciphertext. Without a manifest key it is
@@ -28,25 +28,25 @@ publishes meaning.
 
 ## What Aslan is
 
-Aslan is to BitBit what DNS is to IP: a resolver from human meaning to
+Aslan is to Silt what DNS is to IP: a resolver from human meaning to
 opaque identifiers. It is a *separate product* with its own chain (or
 other distributed store) whose records are, at minimum:
 
 ```
 { name/title, description, tags, preview…,        ← meaning (Aslan's business)
-  bitbit_root: 32 bytes, manifest_key: 32 bytes,  ← the pointer (the only coupling)
+  silt_root: 32 bytes, manifest_key: 32 bytes,  ← the pointer (the only coupling)
   publisher signature }
 ```
 
 Users browse/search Aslan; clicking a record hands `root + key` (a
-"bitbit link") to any BitBit client, which fetches ciphertext from the
-infrastructure and decrypts locally. BitBit never sees Aslan traffic;
+"silt link") to any Silt client, which fetches ciphertext from the
+infrastructure and decrypts locally. Silt never sees Aslan traffic;
 Aslan never touches chunks.
 
 Design notes for whoever builds it (possibly us, in a different repo):
 
-- **Coupling is one-way and thin.** Aslan depends on the bitbit-link
-  format only. BitBit has zero knowledge of Aslan — no hooks, no
+- **Coupling is one-way and thin.** Aslan depends on the silt-link
+  format only. Silt has zero knowledge of Aslan — no hooks, no
   callbacks, no shared code. Multiple competing resolvers must be
   possible (that's what makes each one genuinely separate).
 - **Aslan carries the content responsibility.** Because Aslan records
@@ -58,7 +58,7 @@ Design notes for whoever builds it (possibly us, in a different repo):
   own nodes, records ordered by namespace/name with proof-of-ownership
   of names (first-claim + signature, or auction — Aslan's problem);
   full-text/tag search built client-side or by indexers. Aslan can even
-  store its own bulk data (previews, posters) IN BitBit — it's just
+  store its own bulk data (previews, posters) IN Silt — it's just
   another publisher.
 
 ## Bandwidth is a pledge too (per Andrew, 2026-07-25)

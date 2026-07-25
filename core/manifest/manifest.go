@@ -14,9 +14,9 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/ports"
 )
 
 const Version = 1

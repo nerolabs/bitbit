@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nerolabs/bitbit/adapters/eventloop"
-	"github.com/nerolabs/bitbit/adapters/identity"
-	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/adapters/tcpnet"
-	"github.com/nerolabs/bitbit/adapters/walltime"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/eventloop"
+	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/adapters/tcpnet"
+	"github.com/nerolabs/silt/adapters/walltime"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 type realNode struct {

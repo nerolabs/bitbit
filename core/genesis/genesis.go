@@ -24,13 +24,13 @@ import (
 	"crypto/sha256"
 	_ "embed"
 
-	"github.com/nerolabs/bitbit/core/chain"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 //go:embed manifesto.txt
@@ -40,7 +40,7 @@ var Manifesto []byte
 // It is public knowledge on purpose — the genesis block's authority
 // comes from being identical everywhere, not from a secret. No later
 // block may use this identity (it earns no reputation).
-var genesisKeySeed = sha256.Sum256([]byte("bitbit/genesis/v1/founding-key"))
+var genesisKeySeed = sha256.Sum256([]byte("silt/genesis/v1/founding-key"))
 
 // Key returns the fixed genesis signing key.
 func Key() ed25519.PrivateKey { return ed25519.NewKeyFromSeed(genesisKeySeed[:]) }

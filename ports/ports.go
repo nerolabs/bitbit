@@ -80,7 +80,7 @@ type ChunkStore interface {
 }
 
 // CapacityReporter is implemented by stores with a fixed pledge
-// ("bitbit daemon -capacity 2G"). Nodes whose store reports capacity
+// ("silt daemon -capacity 2G"). Nodes whose store reports capacity
 // piggyback it on every message, which is how the network learns its
 // own total size.
 type CapacityReporter interface {

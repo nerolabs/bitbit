@@ -29,7 +29,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 type Identity struct {

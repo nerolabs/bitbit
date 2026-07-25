@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silt — daemon</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="logo">si<span>lt</span></div>
+  <a href="library.html">Library</a>
+  <a href="/" class="active">Daemon</a>
+  <a href="publish.html">Publish</a>
+  <a href="fetch.html">Fetch</a>
+  <a href="observatory.html">Observatory</a>
+  <span id="ident" class="mono dim" style="margin-left:auto"></span>
+</nav>
+<main>
+  <h1>This daemon <span id="validator" class="pill">validator: ?</span></h1>
+  <div class="grid">
+    <div class="card"><h2>Storage pledge</h2>
+      <div class="big" id="cap">—</div><div class="sub" id="capsub"></div>
+      <div class="bar"><i id="capbar" style="width:0%"></i></div></div>
+    <div class="card"><h2>Chunks held</h2>
+      <div class="big" id="chunks">—</div><div class="sub">anonymous ciphertext shards</div></div>
+    <div class="card"><h2>Served</h2>
+      <div class="big" id="served">—</div><div class="sub" id="servedsub">bytes to requesting peers</div></div>
+    <div class="card"><h2>Network (self-estimated)</h2>
+      <div class="big" id="netsize">—</div><div class="sub" id="netsub"></div></div>
+    <div class="card"><h2>Chain</h2>
+      <div class="big" id="chain">—</div><div class="sub" id="chainsub"></div></div>
+    <div class="card"><h2>Peers · uptime</h2>
+      <div class="big" id="peers">—</div><div class="sub" id="uptime"></div></div>
+  </div>
+
+  <h2>Top-level identifiers this daemon holds shards of</h2>
+  <p class="dim" style="margin-bottom:0.6rem;font-size:0.85rem">
+    Opaque roots and shard counts — all a daemon can know about its own contents.</p>
+  <table id="roots"><thead><tr><th>root</th><th>shards held</th></tr></thead><tbody></tbody></table>
+  <p class="note">Auto-refreshes every 3s.</p>
+</main>
+<script>
+const fmtB = b => b >= 1<<30 ? (b/(1<<30)).toFixed(2)+" GB" : b >= 1<<20 ? (b/(1<<20)).toFixed(1)+" MB"
+              : b >= 1024 ? (b/1024).toFixed(1)+" KB" : b+" B";
+async function refresh() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    document.getElementById("ident").textContent = s.id.slice(0,16)+"…";
+    const v = document.getElementById("validator");
+    v.textContent = s.validator ? "validator" : "storage node";
+    v.className = "pill" + (s.validator ? " on" : "");
+    if (s.capTotal > 0) {
+      document.getElementById("cap").textContent = fmtB(s.capUsed);
+      document.getElementById("capsub").textContent = "of " + fmtB(s.capTotal) + " pledged";
+      document.getElementById("capbar").style.width = (100*s.capUsed/s.capTotal).toFixed(1)+"%";
+    } else {
+      document.getElementById("cap").textContent = "∞";
+      document.getElementById("capsub").textContent = "no pledge bound (-capacity to set)";
+    }
+    document.getElementById("chunks").textContent = s.chunks;
+    document.getElementById("served").textContent = fmtB(s.stats.BytesServed||0);
+    document.getElementById("servedsub").textContent =
+      (s.stats.ChunksServed||0)+" chunks · "+(s.stats.ChunksReceived||0)+" received";
+    const n = s.network;
+    document.getElementById("netsize").textContent = "~"+Math.round(n.EstimatedNodes)+" nodes";
+    document.getElementById("netsub").textContent =
+      fmtB(n.EstimatedUsed)+" / "+fmtB(n.EstimatedTotal)+" est. network storage";
+    document.getElementById("chain").textContent = s.chain ? "height "+s.chain.height : "—";
+    document.getElementById("chainsub").textContent =
+      s.chain ? s.chain.entries+" registered identifiers" : "not a validator";
+    document.getElementById("peers").textContent = s.peers;
+    document.getElementById("uptime").textContent = "up "+Math.floor(s.uptimeSec/60)+"m "+(s.uptimeSec%60)+"s";
+
+    const roots = await (await fetch("/api/roots")).json();
+    document.querySelector("#roots tbody").innerHTML = (roots||[]).map(r =>
+      `<tr><td class="mono">${r.root}</td><td>${r.shards}</td></tr>`).join("")
+      || `<tr><td colspan=2 class="dim">nothing hosted yet</td></tr>`;
+  } catch (e) { /* daemon restarting; keep trying */ }
+}
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silt — observatory</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="logo">si<span>lt</span></div>
+  <a href="library.html">Library</a>
+  <a href="/">Daemon</a>
+  <a href="publish.html">Publish</a>
+  <a href="fetch.html">Fetch</a>
+  <a href="observatory.html" class="active">Observatory</a>
+</nav>
+<main>
+  <h1>Network observatory</h1>
+  <p class="dim" style="margin-bottom:0.8rem">
+    Aggregates live state from every daemon UI you list (this one is
+    included automatically). All of it is knowledge any participant can
+    assemble — the observatory holds no privileged view.</p>
+  <div class="row">
+    <input type="text" id="peers" placeholder="other daemon UIs, comma-separated: http://127.0.0.1:8082, http://127.0.0.1:8083">
+    <button id="go">observe</button>
+  </div>
+
+  <div class="grid" id="totals" style="margin-top:1rem"></div>
+
+  <h2>Daemons</h2>
+  <table id="daemons"><thead><tr>
+    <th>daemon</th><th>role</th><th>pledge</th><th>chunks</th><th>served</th><th>chain</th>
+  </tr></thead><tbody></tbody></table>
+
+  <h2 style="margin-top:1.4rem">Files on the network — distribution health</h2>
+  <p class="dim" style="margin-bottom:0.6rem;font-size:0.85rem">
+    Every registered top-level identifier, and how its shards spread across
+    the daemons observed. More daemons per root = healthier.</p>
+  <table id="files"><thead><tr>
+    <th>root</th><th>size</th><th>shards seen</th><th>daemons hosting</th>
+  </tr></thead><tbody></tbody></table>
+  <p class="note">Refreshes every 4s while observing. Serving bandwidth is the
+  delta of bytes-served between refreshes, summed across daemons.</p>
+</main>
+<script>
+const fmtB = b => b >= 1<<30 ? (b/(1<<30)).toFixed(2)+" GB" : b >= 1<<20 ? (b/(1<<20)).toFixed(1)+" MB"
+              : b >= 1024 ? (b/1024).toFixed(1)+" KB" : (b||0)+" B";
+let timer = null, lastServed = null, lastAt = 0;
+
+document.getElementById("go").onclick = () => {
+  clearInterval(timer);
+  lastServed = null;
+  observe(); timer = setInterval(observe, 4000);
+};
+
+function bases() {
+  const extra = document.getElementById("peers").value.split(",").map(s => s.trim()).filter(Boolean);
+  return [location.origin, ...extra];
+}
+
+async function observe() {
+  const urls = bases();
+  const results = await Promise.all(urls.map(async u => {
+    try {
+      const [status, roots, registry] = await Promise.all([
+        (await fetch(u + "/api/status")).json(),
+        (await fetch(u + "/api/roots")).json(),
+        (await fetch(u + "/api/registry")).json(),
+      ]);
+      return { u, status, roots: roots||[], registry: registry||[] };
+    } catch { return { u, dead: true }; }
+  }));
+  const live = results.filter(r => !r.dead);
+
+  // Totals
+  let capUsed = 0, capTotal = 0, served = 0, chunks = 0;
+  for (const r of live) {
+    capUsed += r.status.capUsed; capTotal += r.status.capTotal;
+    served += r.status.stats.BytesServed || 0; chunks += r.status.chunks;
+  }
+  const now = Date.now();
+  let rate = "";
+  if (lastServed !== null && now > lastAt) {
+    rate = fmtB(Math.max(0, served - lastServed) / ((now - lastAt)/1000)) + "/s";
+  }
+  lastServed = served; lastAt = now;
+  const est = live.length ? live[0].status.network : {EstimatedNodes:0,EstimatedTotal:0};
+  document.getElementById("totals").innerHTML = `
+    <div class="card"><h2>Daemons observed</h2><div class="big">${live.length}</div>
+      <div class="sub">${results.length - live.length} unreachable</div></div>
+    <div class="card"><h2>Pledged storage (observed)</h2><div class="big">${fmtB(capUsed)}</div>
+      <div class="sub">of ${fmtB(capTotal)} · network self-estimate ${fmtB(est.EstimatedTotal)}</div></div>
+    <div class="card"><h2>Chunks hosted</h2><div class="big">${chunks}</div>
+      <div class="sub">across observed daemons</div></div>
+    <div class="card"><h2>Serving bandwidth</h2><div class="big">${rate || "—"}</div>
+      <div class="sub">${fmtB(served)} served all-time</div></div>`;
+
+  // Per-daemon table
+  document.querySelector("#daemons tbody").innerHTML = results.map(r => r.dead
+    ? `<tr><td class="mono">${r.u}</td><td colspan=5 class="bad">unreachable</td></tr>`
+    : `<tr><td class="mono">${r.status.id.slice(0,16)}…</td>
+        <td>${r.status.validator ? '<span class="pill on">validator</span>' : '<span class="pill">storage</span>'}</td>
+        <td>${r.status.capTotal ? fmtB(r.status.capUsed)+" / "+fmtB(r.status.capTotal) : "∞"}</td>
+        <td>${r.status.chunks}</td>
+        <td>${fmtB(r.status.stats.BytesServed||0)}</td>
+        <td>${r.status.chain ? "h"+r.status.chain.height : "—"}</td></tr>`).join("");
+
+  // Files: union of registries + shard spread across daemons
+  const reg = new Map();
+  for (const r of live) for (const e of r.registry) reg.set(e.root, e);
+  const spread = new Map(); // root → {shards, daemons}
+  for (const r of live) for (const row of r.roots) {
+    const s = spread.get(row.root) || { shards: 0, daemons: 0 };
+    s.shards += row.shards; s.daemons += 1;
+    spread.set(row.root, s);
+  }
+  document.querySelector("#files tbody").innerHTML =
+    [...reg.values()].map(e => {
+      const s = spread.get(e.root) || { shards: 0, daemons: 0 };
+      const cls = s.daemons >= 3 ? "ok" : s.daemons >= 1 ? "warn" : "bad";
+      return `<tr><td class="mono">${e.root}</td><td>${fmtB(e.fileSize)}</td>
+        <td>${s.shards}</td><td class="${cls}">${s.daemons}</td></tr>`;
+    }).join("") || `<tr><td colspan=4 class="dim">no files registered yet</td></tr>`;
+}
+</script>
+</body>
+</html>

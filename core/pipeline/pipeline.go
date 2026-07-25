@@ -17,12 +17,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nerolabs/bitbit/core/chunk"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/chunk"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/ports"
 )
 
 // DefaultChunkSize is 64 KiB for the sim (64 MiB is the production
@@ -42,7 +42,7 @@ type Options struct {
 	Publisher ports.NodeID
 }
 
-// Add ingests r and returns the file's bitbit link: the Merkle root
+// Add ingests r and returns the file's silt link: the Merkle root
 // (its public name) plus the link key (the private capability). The link
 // key is the hash of the plaintext manifest, so convergent content
 // yields the same link every time — dedup extends all the way up to the

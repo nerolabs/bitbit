@@ -1,4 +1,4 @@
-// Package link defines the bitbit link — the share handle for a file —
+// Package link defines the silt link — the share handle for a file —
 // and its one-way key hierarchy:
 //
 //	link key  ──HKDF──►  layout key  (decrypts stripe structure)
@@ -21,16 +21,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/ports"
 )
 
 const (
-	fullPrefix = "bitbit:v1:"
-	carePrefix = "bitbitcare:v1:"
+	fullPrefix = "silt:v1:"
+	carePrefix = "siltcare:v1:"
 
-	layoutDomain  = "bitbit/link/v1/layout"
-	contentDomain = "bitbit/link/v1/content"
+	layoutDomain  = "silt/link/v1/layout"
+	contentDomain = "silt/link/v1/content"
 )
 
 // Handle is the full capability: retrieve and decrypt.

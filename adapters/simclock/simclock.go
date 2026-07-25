@@ -9,7 +9,7 @@ package simclock
 import (
 	"container/heap"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 type event struct {

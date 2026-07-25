@@ -8,19 +8,19 @@
 // only the layout key yields a Layout — everything repair and audit
 // need, nothing a reader wants. Opening with both keys yields the full
 // Manifest. Keys are supplied by the caller (core/link derives them
-// from the bitbit link); this package just does the boxing.
+// from the silt link); this package just does the boxing.
 package manifest
 
 import (
 	"fmt"
 
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/ports"
 )
 
 const (
-	layoutDomain  = "bitbit/manifest/v1/layout"
-	secretsDomain = "bitbit/manifest/v1/secrets"
+	layoutDomain  = "silt/manifest/v1/layout"
+	secretsDomain = "silt/manifest/v1/secrets"
 )
 
 // Layout is the repair-grade view of a file: which chunks, which

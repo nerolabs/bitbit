@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/diskstore"
-	"github.com/nerolabs/bitbit/adapters/storetest"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/diskstore"
+	"github.com/nerolabs/silt/adapters/storetest"
+	"github.com/nerolabs/silt/ports"
 )
 
 func TestConformance(t *testing.T) {

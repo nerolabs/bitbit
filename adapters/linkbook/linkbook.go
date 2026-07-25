@@ -1,4 +1,4 @@
-// Package linkbook persists the bitbit links a user holds — the files
+// Package linkbook persists the silt links a user holds — the files
 // they actually have keys for. This is the honest core of the client's
 // "library": the chain lists opaque roots the network hosts, but only a
 // link (root + key) opens one, and keys arrive out of band (or via a
@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nerolabs/bitbit/core/link"
+	"github.com/nerolabs/silt/core/link"
 )
 
 // Item is one saved link with optional user-supplied label and the time

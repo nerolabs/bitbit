@@ -3,9 +3,9 @@ package sim
 import (
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/simnet"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/simnet"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/ports"
 )
 
 func nodeDefaultConfig() node.Config { return node.DefaultConfig() }

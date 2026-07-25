@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nerolabs/bitbit/adapters/identity"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/ports"
 )
 
 // entryJSON is the wire form (hex strings, greppable), mirroring

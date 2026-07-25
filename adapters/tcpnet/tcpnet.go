@@ -38,9 +38,9 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"github.com/nerolabs/bitbit/adapters/eventloop"
-	"github.com/nerolabs/bitbit/adapters/identity"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/eventloop"
+	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/ports"
 )
 
 const maxFrame = 32 << 20 // sanity cap; a frame carries at most one chunk

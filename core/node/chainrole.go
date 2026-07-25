@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/nerolabs/bitbit/core/chain"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/ports"
 )
 
 // EnableChain turns on the validator role: ch is this node's replica,

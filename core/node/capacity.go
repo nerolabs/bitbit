@@ -6,8 +6,8 @@
 package node
 
 import (
-	"github.com/nerolabs/bitbit/core/dht"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/dht"
+	"github.com/nerolabs/silt/ports"
 )
 
 // NetEstimate is one node's view of the whole network.

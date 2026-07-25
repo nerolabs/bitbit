@@ -1,5 +1,5 @@
 // The capacity scenario — M9's demo. Every node pledges a fixed
-// budget ("bitbit daemon -capacity 2G" writ small). Files are added
+// budget ("silt daemon -capacity 2G" writ small). Files are added
 // until the network fills: spill-over placement keeps chunks landing
 // while any node has room, stripe anti-affinity keeps each node's
 // death cheap, and every node independently estimates the network's
@@ -11,16 +11,16 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/nerolabs/bitbit/adapters/capstore"
-	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/adapters/simnet"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	linkpkg "github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/capstore"
+	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/adapters/simnet"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	linkpkg "github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 type CapacityOpts struct {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/identity"
+	"github.com/nerolabs/silt/adapters/identity"
 )
 
 func TestSaveLoadRoundtrip(t *testing.T) {

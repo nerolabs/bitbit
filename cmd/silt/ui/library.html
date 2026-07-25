@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silt — library</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="logo">si<span>lt</span></div>
+  <a href="library.html" class="active">Library</a>
+  <a href="publish.html">Publish</a>
+  <a href="/">Node</a>
+  <a href="observatory.html">Observatory</a>
+  <span id="contrib" class="mono dim" style="margin-left:auto"></span>
+</nav>
+<main>
+  <h1>Your library</h1>
+  <p class="dim" style="margin-bottom:1rem">
+    Files you hold a <b>link</b> for. The network hosts many more identifiers,
+    but a link is a key — without one, a file is noise you can see the shape
+    of but never open. Paste links here as you receive them.</p>
+
+  <div class="row">
+    <input type="text" id="link" placeholder="paste a silt:v1:… link">
+    <input type="text" id="label" placeholder="a name for you (optional)" style="max-width:220px">
+    <button id="add">add</button>
+  </div>
+  <div id="msg"></div>
+
+  <table id="lib" style="margin-top:1rem"><thead><tr>
+    <th>name</th><th>root</th><th>size</th><th>status</th><th></th>
+  </tr></thead><tbody></tbody></table>
+
+  <p class="note" id="opaque"></p>
+</main>
+<script>
+const fmtB = b => !b ? "—" : b >= 1<<20 ? (b/(1<<20)).toFixed(1)+" MB"
+              : b >= 1024 ? (b/1024).toFixed(1)+" KB" : b+" B";
+
+async function refresh() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    document.getElementById("contrib").textContent =
+      s.capTotal > 0 ? "contributing " + fmtB(s.capUsed) + " / " + fmtB(s.capTotal)
+                     : "consume-only";
+    const lib = await (await fetch("/api/library")).json();
+    document.querySelector("#lib tbody").innerHTML = (lib.library||[]).map(f => {
+      const status = f.onChain
+        ? `<span class="ok">available (${f.manifestChunks||""}on network)</span>`
+        : `<span class="warn">not seen on this network</span>`;
+      return `<tr>
+        <td>${f.label || '<span class="dim">unnamed</span>'}</td>
+        <td class="mono">${f.root.slice(0,24)}…</td>
+        <td>${fmtB(f.fileSize)}</td>
+        <td>${status}</td>
+        <td style="text-align:right">
+          <button class="get" data-link="${f.link}">get</button>
+          <button class="rm" data-root="${f.root}" style="background:transparent;color:var(--dim);border:1px solid var(--border)">remove</button>
+        </td></tr>`;
+    }).join("") || `<tr><td colspan=5 class="dim">no links yet — paste one above</td></tr>`;
+
+    document.getElementById("opaque").textContent =
+      `The network hosts ${lib.networkFiles} registered identifier(s); ` +
+      `${lib.opaqueToYou} of them you have no key for (opaque to you, by design).`;
+
+    document.querySelectorAll(".get").forEach(b => b.onclick = () => get(b.dataset.link, b));
+    document.querySelectorAll(".rm").forEach(b => b.onclick = () => remove(b.dataset.root));
+  } catch (e) { /* node starting */ }
+}
+
+document.getElementById("add").onclick = async () => {
+  const link = document.getElementById("link").value.trim();
+  const label = document.getElementById("label").value.trim();
+  if (!link) return;
+  const fd = new FormData(); fd.append("link", link); fd.append("label", label);
+  const r = await fetch("/api/library/add", { method: "POST", body: fd });
+  const j = await r.json();
+  const msg = document.getElementById("msg");
+  if (!r.ok) { msg.innerHTML = `<p class="bad">✗ ${j.error}</p>`; return; }
+  msg.innerHTML = "";
+  document.getElementById("link").value = ""; document.getElementById("label").value = "";
+  refresh();
+};
+
+async function remove(root) {
+  const fd = new FormData(); fd.append("root", root);
+  await fetch("/api/library/remove", { method: "POST", body: fd });
+  refresh();
+}
+
+async function get(link, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch("/api/fetch?link=" + encodeURIComponent(link));
+    if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error||r.status); }
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (link.split(":")[2]||"file").slice(0,16) + ".bin";
+    a.click();
+    btn.textContent = "✓ got";
+  } catch (e) { btn.textContent = "✗ " + e.message; }
+  setTimeout(() => { btn.disabled = false; btn.textContent = "get"; }, 2500);
+}
+
+refresh(); setInterval(refresh, 4000);
+</script>
+</body>
+</html>

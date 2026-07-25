@@ -3,7 +3,7 @@ package dht
 import (
 	"math/big"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // EstimateNetworkSize infers how many nodes exist in the whole network

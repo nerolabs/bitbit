@@ -3,7 +3,7 @@ package link
 import (
 	"testing"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 func handle() Handle {
@@ -56,8 +56,8 @@ func TestKeyHierarchyIsOneWay(t *testing.T) {
 }
 
 func TestRejectsJunk(t *testing.T) {
-	for _, s := range []string{"", "bitbit:v1:tooshort", "notalink", "bitbit:v1:xx:yy",
-		"bitbitcare:v1:" + handle().Root.String()} {
+	for _, s := range []string{"", "silt:v1:tooshort", "notalink", "silt:v1:xx:yy",
+		"siltcare:v1:" + handle().Root.String()} {
 		if _, err := Parse(s); err == nil {
 			t.Errorf("Parse(%q) should fail", s)
 		}

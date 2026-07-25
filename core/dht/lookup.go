@@ -1,6 +1,6 @@
 package dht
 
-import "github.com/nerolabs/bitbit/ports"
+import "github.com/nerolabs/silt/ports"
 
 // Lookup is the iterative Kademlia lookup as a pure state machine. The
 // caller (core/node) owns all I/O: it asks NextQueries() who to contact,

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/fileregistry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/fileregistry"
+	"github.com/nerolabs/silt/ports"
 )
 
 func TestPersistsAcrossReopen(t *testing.T) {

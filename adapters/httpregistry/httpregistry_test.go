@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/httpregistry"
-	"github.com/nerolabs/bitbit/adapters/identity"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/httpregistry"
+	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 func TestClientServerRoundtrip(t *testing.T) {

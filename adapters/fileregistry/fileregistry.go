@@ -13,8 +13,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 type Registry struct {

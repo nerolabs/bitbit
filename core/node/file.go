@@ -14,12 +14,12 @@ import (
 	"io"
 	"sort"
 
-	"github.com/nerolabs/bitbit/core/dht"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/dht"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Distribute pushes every chunk of a locally-added file — manifest

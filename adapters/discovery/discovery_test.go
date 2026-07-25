@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/discovery"
-	"github.com/nerolabs/bitbit/adapters/tcpnet"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/discovery"
+	"github.com/nerolabs/silt/adapters/tcpnet"
+	"github.com/nerolabs/silt/ports"
 )
 
 func peer(b byte, addr string) tcpnet.Peer {

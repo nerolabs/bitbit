@@ -5,11 +5,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/core/chain"
-	"github.com/nerolabs/bitbit/core/genesis"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/genesis"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 // The load-bearing property: every node, building genesis independently

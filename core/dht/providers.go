@@ -1,6 +1,6 @@
 package dht
 
-import "github.com/nerolabs/bitbit/ports"
+import "github.com/nerolabs/silt/ports"
 
 // Providers is the provider-record store: "these nodes claim to have
 // chunk H". Records live on the nodes whose IDs are closest to H —

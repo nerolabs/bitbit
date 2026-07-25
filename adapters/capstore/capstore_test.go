@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nerolabs/bitbit/adapters/capstore"
-	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/adapters/storetest"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/capstore"
+	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/adapters/storetest"
+	"github.com/nerolabs/silt/ports"
 )
 
 func TestConformance(t *testing.T) {

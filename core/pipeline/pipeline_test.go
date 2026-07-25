@@ -8,14 +8,14 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/nerolabs/bitbit/adapters/memstore"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 const testChunkSize = 1024

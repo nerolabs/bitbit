@@ -3,7 +3,7 @@ package registry
 import (
 	"context"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Gated wraps the append-only log with credit gating: publishing costs

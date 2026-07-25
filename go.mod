@@ -1,4 +1,4 @@
-module github.com/nerolabs/bitbit
+module github.com/nerolabs/silt
 
 go 1.26.5
 

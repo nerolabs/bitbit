@@ -13,13 +13,13 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/nerolabs/bitbit/adapters/simnet"
-	"github.com/nerolabs/bitbit/core/credit"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/core/registry"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/simnet"
+	"github.com/nerolabs/silt/core/credit"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/registry"
+	"github.com/nerolabs/silt/ports"
 )
 
 type AuditOpts struct {

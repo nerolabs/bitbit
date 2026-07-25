@@ -1,5 +1,5 @@
 // Package chainhost fronts a validator's chain replica as a
-// ports.Registry for HTTP clients — the piece that lets `bitbit swarm
+// ports.Registry for HTTP clients — the piece that lets `silt swarm
 // add/get` keep working unchanged after the registry becomes a chain.
 // Publish triggers a consensus round on the daemon's event loop and
 // blocks the (goroutine-per-request) HTTP handler until commit or
@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nerolabs/bitbit/adapters/eventloop"
-	"github.com/nerolabs/bitbit/core/chain"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/eventloop"
+	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/ports"
 )
 
 type Host struct {

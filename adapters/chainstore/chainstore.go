@@ -7,7 +7,7 @@ package chainstore
 import (
 	"os"
 
-	"github.com/nerolabs/bitbit/core/chain"
+	"github.com/nerolabs/silt/core/chain"
 )
 
 // Load reads blocks from path; a missing file is an empty history.

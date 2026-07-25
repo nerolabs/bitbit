@@ -7,7 +7,7 @@ package dht
 import (
 	"sort"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Distance is the Kademlia metric: XOR of the two IDs, compared as a

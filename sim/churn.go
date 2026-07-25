@@ -13,13 +13,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nerolabs/bitbit/adapters/simnet"
-	"github.com/nerolabs/bitbit/core/crypto"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/node"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/adapters/simnet"
+	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/node"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 type ChurnOpts struct {
@@ -47,8 +47,8 @@ func DefaultChurnOpts() ChurnOpts {
 		ChunkSize:  4 << 10,
 		Erasure:    erasure.DefaultParams, // 10-of-16
 		Caretakers: 3,
-		Waves:      2,
-		KillFrac:   0.15,
+		Waves:      3,
+		KillFrac:   0.10,
 		Net:        simnet.DefaultConfig(),
 		NodeCfg:    cfg,
 	}

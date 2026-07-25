@@ -16,10 +16,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/nerolabs/bitbit/core/chain"
-	"github.com/nerolabs/bitbit/core/dht"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/dht"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/ports"
 )
 
 type Config struct {

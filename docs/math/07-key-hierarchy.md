@@ -2,7 +2,7 @@
 
 ## The problem
 
-BitBit needs three levels of access to one file, held by three kinds of
+Silt needs three levels of access to one file, held by three kinds of
 actors who don't trust each other:
 
 - **Infrastructure** (daemons) stores and serves shards. It must know
@@ -14,13 +14,13 @@ actors who don't trust each other:
 - **Readers** get everything.
 
 In a centralized system you'd build an access-control list and a server
-to enforce it. BitBit has no server to trust, so the permissions have to
+to enforce it. Silt has no server to trust, so the permissions have to
 be made of mathematics: what you can do IS what you can decrypt.
 
 ## The construction: one-way derivation
 
 Everything hangs off one 32-byte value, the *link key* (the second half
-of a bitbit link):
+of a silt link):
 
 ```
 linkKey ──HKDF("…/layout")──► layoutKey
@@ -88,5 +88,5 @@ preventing them from climbing back up.
 Code: `core/link` (the hierarchy), `core/crypto` SealBox/DeriveKey
 (the boxes), `core/manifest/sealed.go` (the two-layer blob),
 `core/node/repair.go` (`repairRootWithLayout` — a caretaker doing its
-whole job inside the layout ring). Try it: `bitbit add` prints both
-links; `bitbit info <care-link>` shows stripes with mode "(sealed)".
+whole job inside the layout ring). Try it: `silt add` prints both
+links; `silt info <care-link>` shows stripes with mode "(sealed)".

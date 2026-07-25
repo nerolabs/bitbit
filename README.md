@@ -1,4 +1,4 @@
-# BitBit
+# Silt
 
 A content-addressed, erasure-coded, distributed file store — built as a
 real product from day one, simulated in-process until it needs real
@@ -43,7 +43,7 @@ Beyond the original handoff:
   flags → DNS seeds → peer exchange, address book persisted for
   flagless warm restarts)
 - ✅ M11 — encrypted manifests: manifests are ciphertext twice over;
-  the share handle is a bitbit link (root + key), and a one-way key
+  the share handle is a silt link (root + key), and a one-way key
   hierarchy yields CARE LINKS — repair and audit rights with no
   ability to decrypt. Infrastructure now hosts noise describing noise
 - ✅ M12 — the chain: the registry is an append-only block chain kept
@@ -53,11 +53,11 @@ Beyond the original handoff:
   (`sim run consensus`, or three `daemon -validator` processes)
 - ✅ M13 — web UI: `daemon -ui 127.0.0.1:8081` serves an embedded
   dashboard (pledge, chunks, network estimate, chain, held roots), a
-  drag-and-drop publish page (→ bitbit link + care link), a
+  drag-and-drop publish page (→ silt link + care link), a
   paste-a-link fetch page, and a network observatory that aggregates
   many daemons — capacity, serving bandwidth, per-file shard spread.
   One Go binary, `go:embed`, zero extra runtime
-- ✅ M14 — desktop client: `bitbit client` consumes AND serves in one
+- ✅ M14 — desktop client: `silt client` consumes AND serves in one
   process (pledges disk by default), keeps a link-book library (files
   you hold keys for — the rest of the network is opaque to you by
   design), and opens a browser UI. `build.sh` cross-compiles Mac /
@@ -75,48 +75,48 @@ The guided version of everything below — with what to look for at each
 step — is [`docs/v1-test.md`](docs/v1-test.md).
 
 ```sh
-go build -o bitbit ./cmd/bitbit
+go build -o silt ./cmd/silt
 
-./bitbit add somefile.pdf            # prints the file's Merkle root
-./bitbit ls                          # registry contents
-./bitbit info <root>                 # stripe map: every shard, its stripe, its presence
-./bitbit get <root> -o restored.pdf  # full verify-everything retrieval
-./bitbit add secret.txt -mode private  # random key, no dedup, no confirmation attack
-./bitbit add big.iso -k 4 -n 7       # custom erasure geometry
+./silt add somefile.pdf            # prints the file's Merkle root
+./silt ls                          # registry contents
+./silt info <root>                 # stripe map: every shard, its stripe, its presence
+./silt get <root> -o restored.pdf  # full verify-everything retrieval
+./silt add secret.txt -mode private  # random key, no dedup, no confirmation attack
+./silt add big.iso -k 4 -n 7       # custom erasure geometry
 
 # the network, simulated: 100 nodes, 3% packet loss, 8 nodes killed
-./bitbit sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
+./silt sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
 
 # the money demo: watch repair outrun two waves of node death
-./bitbit sim run churn -seed 11
+./silt sim run churn -seed 11
 
 # the economy: hosts earn per byte served; freeloaders go broke
-./bitbit sim run economy -seed 21
+./silt sim run economy -seed 21
 
 # storage audits: liars keep the proof, ditch the data, get caught
-./bitbit sim run audit -seed 31
+./silt sim run audit -seed 31
 
 # the same core over real TCP sockets on localhost
-./bitbit net demo -nodes 8
+./silt net demo -nodes 8
 ```
 
 ## Run a real swarm (separate processes)
 
 ```sh
 # terminal 1: seed daemon, also hosts the swarm registry
-./bitbit daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store d1
+./silt daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store d1
 # it prints:  peer: <ID>@127.0.0.1:7101   ← this is your bootstrap string
 
 # terminals 2..n: more daemons
-./bitbit daemon -listen 127.0.0.1:7102 -store d2 \
+./silt daemon -listen 127.0.0.1:7102 -store d2 \
   -bootstrap <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
 
 # publish from anywhere: an ephemeral client joins, scatters, leaves
-./bitbit swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+./silt swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
 # → prints the root hash; the client keeps nothing
 
 # retrieve from anywhere (kill a daemon first, for sport)
-./bitbit swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+./silt swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
 ```
 
 Daemons use real disk stores and survive restarts (they re-announce
@@ -124,7 +124,7 @@ what they hold). `-serve-registry` is the v1 "single honest instance"
 made reachable over HTTP — the seam a chain replaces someday. No TLS,
 no auth: trusted networks only, and the code says so out loud.
 
-Chunks land in `.bitbit/objects/` named by SHA-256. Add the same file
+Chunks land in `.silt/objects/` named by SHA-256. Add the same file
 twice in (default) convergent mode and you get the same root with zero
 new bytes stored. Delete or corrupt up to n−k shards per stripe
 (default: any 6 of 16) and `get` silently reconstructs them from parity;

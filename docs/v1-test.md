@@ -11,7 +11,7 @@ behind each step, the reading order is
 
 ```sh
 cd <repo root>
-go build -o bitbit ./cmd/bitbit
+go build -o silt ./cmd/silt
 ```
 
 (If `go` isn't found, your shell doesn't have Homebrew on PATH — use
@@ -21,18 +21,18 @@ go build -o bitbit ./cmd/bitbit
 
 ```sh
 head -c 1000000 /dev/urandom > demo.bin   # any file works; a PDF is more fun
-./bitbit add demo.bin
+./silt add demo.bin
 ```
 
 It prints a 64-char hex string — the file's Merkle root, its one true
 global name. Then:
 
 ```sh
-./bitbit get <that-root> -o restored.bin
+./silt get <that-root> -o restored.bin
 cmp demo.bin restored.bin && echo BIT-PERFECT
 ```
 
-Also try `./bitbit add demo.bin` a second time: same root, zero new
+Also try `./silt add demo.bin` a second time: same root, zero new
 bytes stored — that's convergent encryption deduplicating. (For files
 whose *existence* is a secret, `add -mode private` trades dedup away;
 see the confirmation attack in
@@ -41,18 +41,18 @@ see the confirmation attack in
 ## 2. The math made tangible — delete shards, `get` anyway
 
 ```sh
-./bitbit info <root>
+./silt info <root>
 ```
 
 This prints the stripe map: every 64 KiB chunk of your file, grouped
 into stripes of 10 data + 6 parity shards, each named by its hash. Now
 vandalize it — pick any **6** shard hashes from one stripe and delete
 their files (chunks live at
-`.bitbit/objects/<first-2-hex-chars>/<hash>`):
+`.silt/objects/<first-2-hex-chars>/<hash>`):
 
 ```sh
-rm .bitbit/objects/ab/abcdef...   # ×6, any mix of data and parity
-./bitbit get <root> -o back.bin && cmp demo.bin back.bin \
+rm .silt/objects/ab/abcdef...   # ×6, any mix of data and parity
+./silt get <root> -o back.bin && cmp demo.bin back.bin \
   && echo "SURVIVED 6 DELETIONS"
 ```
 
@@ -68,7 +68,7 @@ Run `info` again to see ✗ marks next to everything you killed.
 ## 3. The network — 100 simulated nodes, lossy links, dead peers
 
 ```sh
-./bitbit sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
+./silt sim run scatter -nodes 100 -loss 0.03 -kill 8 -seed 7
 ```
 
 Node A adds a 1 MB file, pushes every chunk out to the swarm via
@@ -80,7 +80,7 @@ message/drop/timeout counts.
 ## 4. The money demo — a file outruns the death of a third of the network
 
 ```sh
-./bitbit sim run churn -seed 11
+./silt sim run churn -seed 11
 ```
 
 Worth watching line by line: `shards/stripe` is live redundancy for all
@@ -94,7 +94,7 @@ exists once; Reed-Solomon is the entire safety net.
 ## 5. The economy — freeloaders go broke
 
 ```sh
-./bitbit sim run economy -seed 21
+./silt sim run economy -seed 21
 ```
 
 Four phases: everyone gets a grant worth one publish, everyone spends

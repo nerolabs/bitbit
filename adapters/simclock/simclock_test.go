@@ -3,7 +3,7 @@ package simclock
 import (
 	"testing"
 
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/ports"
 )
 
 func TestFiresInTimeOrderWithStableTies(t *testing.T) {

@@ -10,12 +10,12 @@
 package node
 
 import (
-	"github.com/nerolabs/bitbit/core/dht"
-	"github.com/nerolabs/bitbit/core/erasure"
-	"github.com/nerolabs/bitbit/core/link"
-	"github.com/nerolabs/bitbit/core/manifest"
-	"github.com/nerolabs/bitbit/core/pipeline"
-	"github.com/nerolabs/bitbit/ports"
+	"github.com/nerolabs/silt/core/dht"
+	"github.com/nerolabs/silt/core/erasure"
+	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
 
 // Care makes this node a caretaker of root: the repair loop starts

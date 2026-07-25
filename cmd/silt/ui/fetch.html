@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Silt — fetch</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="logo">si<span>lt</span></div>
+  <a href="library.html">Library</a>
+  <a href="/">Daemon</a>
+  <a href="publish.html">Publish</a>
+  <a href="fetch.html" class="active">Fetch</a>
+  <a href="observatory.html">Observatory</a>
+</nav>
+<main>
+  <h1>Fetch a file</h1>
+  <p class="dim" style="margin-bottom:1rem">
+    Paste a silt link. The swarm is asked for the shards, every hash is
+    verified, missing pieces are rebuilt from parity, and decryption happens
+    with the key inside your link — the network never sees it.</p>
+  <div class="row">
+    <input type="text" id="link" placeholder="silt:v1:…">
+    <button id="go">fetch</button>
+  </div>
+  <div id="msg"></div>
+</main>
+<script>
+const go = document.getElementById("go"), msg = document.getElementById("msg");
+go.onclick = async () => {
+  const link = document.getElementById("link").value.trim();
+  if (!link) return;
+  go.disabled = true;
+  msg.innerHTML = `<span class="dim">resolving providers, fetching shards, verifying…</span>`;
+  try {
+    const r = await fetch("/api/fetch?link=" + encodeURIComponent(link));
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || r.status);
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = (link.split(":")[2] || "file").slice(0, 16) + ".bin";
+    a.click();
+    msg.innerHTML = `<p class="ok">✓ ${blob.size} bytes retrieved, verified, decrypted — downloading</p>`;
+  } catch (e) {
+    msg.innerHTML = `<p class="bad">✗ ${e.message}</p>`;
+  }
+  go.disabled = false;
+};
+</script>
+</body>
+</html>

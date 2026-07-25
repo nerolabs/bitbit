@@ -39,7 +39,7 @@ k data shards  ──encode──►  n total shards  ──lose any ≤ n−k�
 (In practice the encoding is arranged so the first k shards *are* the
 original data unchanged — a "systematic" code — so reading an intact file
 requires no math at all. Parity only gets touched when something is
-missing. That's why `bitbit get` on a healthy store never decodes.)
+missing. That's why `silt get` on a healthy store never decodes.)
 
 ## The finite field footnote
 
@@ -57,7 +57,7 @@ instructions at several GB/s — the same library MinIO runs in
 production. We do not hand-roll field arithmetic; HANDOFF forbids it and
 history agrees.
 
-## What bitbit does with it
+## What silt does with it
 
 - Stripe = k consecutive 64 KiB ciphertext chunks (confirmed geometry:
   coding across chunks, so every shard is itself a normal
@@ -72,8 +72,8 @@ history agrees.
   re-verified against the hash the Merkle root committed to — we trust
   the math, but we check it anyway.
 
-Try it: `bitbit info <root>` prints the stripe map; delete up to n−k
-of any stripe's files out of `.bitbit/objects/` and `get` won't even
+Try it: `silt info <root>` prints the stripe map; delete up to n−k
+of any stripe's files out of `.silt/objects/` and `get` won't even
 mention it. Delete one more and it tells you exactly which stripe died
 and why. Code: `core/erasure/erasure.go`, wiring in
 `core/pipeline/pipeline.go` (`fetchDataChunks`).

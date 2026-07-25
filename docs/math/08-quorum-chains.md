@@ -15,16 +15,16 @@ structure plus one social rule:
 - **The rule**: who gets to append? Everything interesting about a
   blockchain lives in this one question.
 
-## Why BitBit doesn't mine
+## Why Silt doesn't mine
 
 Bitcoin's answer is proof-of-work: appending costs electricity, and
 history is whichever chain burned the most of it. That is a marvel of
 adversarial engineering — and wildly wrong for a storage registry. PoW
 buys permissionless global consensus at the price of enormous waste and
-probabilistic finality; BitBit's registry needs cheap, immediate
+probabilistic finality; Silt's registry needs cheap, immediate
 finality among parties who already maintain measurable relationships.
 
-Because BitBit nodes already EARN measurable reputations — passed
+Because Silt nodes already EARN measurable reputations — passed
 storage audits (note 05), bytes served, all attached to unforgeable
 key-hashed identities (M10) — the network has something Bitcoin's
 anonymous miners never had: a native notion of standing. So the rule is
@@ -78,5 +78,5 @@ whoever runs the server.
 
 Code: `core/chain` (blocks, rules), `core/node/chainrole.go` (propose /
 attest / commit / sync), `credit.Reputation` (the standing formula).
-Run `bitbit sim run consensus` for the deterministic version, or three
-`bitbit daemon -validator` processes for the real one.
+Run `silt sim run consensus` for the deterministic version, or three
+`silt daemon -validator` processes for the real one.

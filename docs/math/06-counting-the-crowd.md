@@ -5,7 +5,7 @@
 "Seven hundred daemons at 2G each — the network holds 1.4TB, and every
 node should know it." But no node can see the network. A Kademlia node
 knows O(k·log N) peers out of N; there is no roster, no census-taker,
-and asking everyone would BE the census problem. Yet each BitBit node
+and asking everyone would BE the census problem. Yet each Silt node
 continuously reports a network-total capacity that lands within a few
 percent of the truth. Two small ideas do it.
 
@@ -39,7 +39,7 @@ few percent once averaged over observers.
 ## Idea 2: gossip — the average pledge rides along for free
 
 Knowing N is half the answer; the other half is the average pledge.
-Every BitBit message already travels between peers, so every message
+Every Silt message already travels between peers, so every message
 now carries two extra integers: the sender's used and total capacity.
 Each node passively accumulates a sample of pledges from everyone it
 happens to talk to — no survey round-trips, no extra messages at all.
@@ -66,5 +66,5 @@ knowing it.
 
 Code: `core/dht/estimate.go` (the density estimate),
 `core/node/capacity.go` (the combination), capacity gossip stamped in
-`node.send`. Run `bitbit sim run capacity` to watch 38 bounded nodes
+`node.send`. Run `silt sim run capacity` to watch 38 bounded nodes
 fill up while every one of them tracks the total.

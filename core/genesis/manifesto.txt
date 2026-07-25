@@ -1,14 +1,14 @@
-BitBit — Genesis
+Silt — Genesis
 ================
 
-This is the first file on every BitBit network: the block from which
+This is the first file on every Silt network: the block from which
 all others descend, carried by every node, hosted by the whole swarm,
 retrievable by anyone, forever. It holds no secret. It is here to say
 what this network is for.
 
     The infrastructure is not the content.
 
-A BitBit node stores and serves anonymous, encrypted fragments. It
+A Silt node stores and serves anonymous, encrypted fragments. It
 cannot read what it holds; it was built, deliberately, to be unable to.
 Chunks are ciphertext. Manifests are ciphertext describing ciphertext.
 A file's public name is thirty-two bytes of hash that reveal nothing —
