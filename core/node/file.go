@@ -50,6 +50,11 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	manifestN := len(entry.ManifestChunks)
 	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
 	placed := 0
+	// usedDomains counts how many of this file's columns already live in
+	// each failure domain, so the next column prefers a domain not yet
+	// used — spreading columns across AS/rack/geo/operator, not just node
+	// IDs, so one domain failing costs a stripe at most one shard.
+	usedDomains := map[uint64]int{}
 
 	// Placement groups: each is one DHT key and the chunks that share it.
 	// Manifest chunks and uncoded data are one-per-group under their own
@@ -59,6 +64,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	type group struct {
 		key     ports.Hash
 		members []int // indices into ids
+		column  bool  // a coded column (domain-spread); vs manifest/uncoded
 	}
 	var groups []group
 	for i := 0; i < manifestN; i++ {
@@ -80,7 +86,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 		}
 		sort.Ints(cols) // deterministic order
 		for _, col := range cols {
-			groups = append(groups, group{key: colKey(root, col), members: byCol[col]})
+			groups = append(groups, group{key: colKey(root, col), members: byCol[col], column: true})
 		}
 	}
 
@@ -92,6 +98,13 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 		}
 		grp := groups[g]
 		n.IterativeFindNode(grp.key, func(closest []ports.NodeID) {
+			// Steer a coded column onto a domain no other column has used
+			// yet. Manifest chunks and uncoded files place on raw closest —
+			// they carry no column anti-affinity to preserve.
+			candidates := closest
+			if grp.column {
+				candidates = n.preferFreshDomain(closest, usedDomains)
+			}
 			var nextMember func(k int)
 			nextMember = func(k int) {
 				if k == len(grp.members) {
@@ -114,8 +127,15 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 							Total: p.Total, Path: p.Path, Column: columnOfLeaf(m, li)}
 					}
 				}
-				n.placeAt(id, c.Data, proof, closest, n.cfg.Replication,
-					func(ports.NodeID) { placed++ },
+				n.placeAt(id, c.Data, proof, candidates, n.cfg.Replication,
+					func(target ports.NodeID) {
+						placed++
+						if grp.column {
+							if d := n.domainOf(target); d != 0 {
+								usedDomains[d]++
+							}
+						}
+					},
 					func(int) {
 						if !keepLocal {
 							src.Delete(bg(), id)
@@ -272,14 +292,16 @@ func (n *Node) fetchColumn(root ports.Hash, col int, ids []ports.ChunkID, done f
 
 // fetchStripeByColumn pulls each shard of one stripe from its own
 // column's providers (each shard sits in a different column), verifying
-// on receipt. Reports which ids couldn't be fetched. Repair uses this to
-// gather a stripe's survivors before reconstructing.
-func (n *Node) fetchStripeByColumn(root ports.Hash, refs []shardRef, done func(unfetched []ports.ChunkID)) {
+// on receipt. Reports which ids couldn't be fetched, plus the failure
+// domains the surviving columns live in — so repair can re-seed the
+// rebuilt columns into domains the survivors aren't already using.
+func (n *Node) fetchStripeByColumn(root ports.Hash, refs []shardRef, done func(unfetched []ports.ChunkID, usedDomains map[uint64]int)) {
 	var unfetched []ports.ChunkID
+	usedDomains := map[uint64]int{}
 	var next func(i int)
 	next = func(i int) {
 		if i == len(refs) {
-			done(unfetched)
+			done(unfetched, usedDomains)
 			return
 		}
 		r := refs[i]
@@ -287,6 +309,13 @@ func (n *Node) fetchStripeByColumn(root ports.Hash, refs []shardRef, done func(u
 			n.fetchFrom(r.id, provs, func(ok bool) {
 				if !ok {
 					unfetched = append(unfetched, r.id)
+				} else {
+					for _, p := range provs { // note the surviving column's domain
+						if d := n.domainOf(p); d != 0 {
+							usedDomains[d]++
+							break
+						}
+					}
 				}
 				next(i + 1)
 			})

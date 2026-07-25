@@ -65,7 +65,9 @@ func TestRepairPreservesStripeAntiAffinity(t *testing.T) {
 	// concern this fix doesn't claim to solve.)
 	o.Caretakers = 1
 	for _, seed := range []int64{1, 2, 3, 7, 11} {
-		cl := NewCluster(seed, o.Nodes, o.Net, o.NodeCfg)
+		// Spread nodes across domains so repair exercises its
+		// domain-aware re-placement, not just the column path.
+		cl := NewClusterWithDomains(seed, o.Nodes, o.Net, o.NodeCfg, o.Nodes/3)
 		a := cl.Nodes[0]
 		z := cl.Nodes[len(cl.Nodes)-1]
 		caretakers := cl.Nodes[1 : 1+o.Caretakers]

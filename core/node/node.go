@@ -36,6 +36,11 @@ type Config struct {
 	// before repair kicks in (repair when missing > slack).
 	RepairInterval ports.Duration
 	RepairSlack    int
+	// Domain is the operator's failure-domain label (AS / rack / geo /
+	// operator). Placement spreads a file's columns across distinct
+	// domains, so a whole domain failing costs a stripe as little as
+	// possible. Empty = unset (each such node is its own unique domain).
+	Domain string
 }
 
 func DefaultConfig() Config {
@@ -110,6 +115,12 @@ type Node struct {
 	capRep   ports.CapacityReporter
 	peerCaps map[ports.NodeID]capInfo
 
+	// failure-domain gossip: domainID is this node's own domain hash
+	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
+	// placement can spread columns across distinct domains.
+	domainID    uint64
+	peerDomains map[ports.NodeID]uint64
+
 	// validator role (M12): the local chain replica and the signing key
 	// (nil = not a validator).
 	chain    *chain.Chain
@@ -133,15 +144,19 @@ func (n *Node) SetLiar(v bool) { n.liar = v }
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
-		cfg:     cfg,
-		id:      id,
-		clock:   clock,
-		tr:      tr,
-		store:   store,
-		table:   dht.NewTable(id, cfg.K),
-		provs:   dht.NewProviders(),
-		pending: make(map[uint64]*pending),
-		proofs:  make(map[ports.ChunkID]ports.StorageProof),
+		cfg:         cfg,
+		id:          id,
+		clock:       clock,
+		tr:          tr,
+		store:       store,
+		table:       dht.NewTable(id, cfg.K),
+		provs:       dht.NewProviders(),
+		pending:     make(map[uint64]*pending),
+		proofs:      make(map[ports.ChunkID]ports.StorageProof),
+		peerDomains: make(map[ports.NodeID]uint64),
+	}
+	if cfg.Domain != "" {
+		n.domainID = domainHash(cfg.Domain)
 	}
 	if rep, ok := store.(ports.CapacityReporter); ok {
 		n.capRep = rep
@@ -159,6 +174,7 @@ func (n *Node) send(to ports.NodeID, msg ports.Message) error {
 	if n.capRep != nil {
 		msg.CapUsed, msg.CapTotal = n.capRep.Capacity()
 	}
+	msg.Domain = n.domainID
 	return n.tr.Send(to, msg)
 }
 
@@ -198,6 +214,9 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 	n.table.Observe(from) // any message is proof of life
 	if msg.CapTotal > 0 {
 		n.peerCaps[from] = capInfo{used: msg.CapUsed, total: msg.CapTotal}
+	}
+	if msg.Domain != 0 {
+		n.peerDomains[from] = msg.Domain
 	}
 
 	if msg.IsReply() {

@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/binary"
+	"sort"
 
 	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/ports"
@@ -62,4 +63,40 @@ func placementKey(root ports.Hash, id ports.ChunkID, column int) ports.Hash {
 		return id
 	}
 	return colKey(root, column)
+}
+
+// domainHash reduces a failure-domain label to a gossipable 64-bit id.
+func domainHash(label string) uint64 {
+	h := ports.HashBytes([]byte(label))
+	return binary.BigEndian.Uint64(h[:8])
+}
+
+// domainOf returns a node's failure-domain id (0 if unknown or unset),
+// or this node's own for itself.
+func (n *Node) domainOf(id ports.NodeID) uint64 {
+	if id == n.id {
+		return n.domainID
+	}
+	return n.peerDomains[id]
+}
+
+// preferFreshDomain reorders candidates to put those in the least-used
+// failure domains first (stable, so XOR distance breaks ties within a
+// domain). Domain 0 (unset/unknown) is always treated as fresh — an
+// unknown node is assumed independent and never penalized. This is
+// anti-affinity as preference, not veto: a shard on a repeated domain
+// still beats a shard nowhere.
+func (n *Node) preferFreshDomain(candidates []ports.NodeID, used map[uint64]int) []ports.NodeID {
+	if len(used) == 0 {
+		return candidates
+	}
+	score := func(id ports.NodeID) int {
+		if d := n.domainOf(id); d != 0 {
+			return used[d]
+		}
+		return 0
+	}
+	out := append([]ports.NodeID(nil), candidates...)
+	sort.SliceStable(out, func(i, j int) bool { return score(out[i]) < score(out[j]) })
+	return out
 }

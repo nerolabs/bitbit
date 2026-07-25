@@ -158,9 +158,13 @@ item; the grouping had to land first so there's a unit to replicate.
 
 Column placement is the backbone; three smaller items in the backlog
 compose with it:
-1. **Failure-domain-aware placement** — spread the n columns across n
-   distinct domains (AS/rack/geo/operator), not just node IDs. This is
-   the highest-value durability item and pairs naturally here.
+1. **Failure-domain-aware placement** — *done.* Nodes gossip a domain
+   label (AS/rack/geo/operator); publish spreads the n columns across
+   distinct domains and repair re-seeds rebuilt columns into domains the
+   survivors aren't using, so a whole domain failing costs a stripe as
+   little as possible. Best-effort (spreads across the peer domains a
+   placer has learned), which also bounds the cross-column co-residence
+   noted above.
 2. **Repair preserves anti-affinity** — a verified gap today (repair
    re-places on raw closest nodes without the `preferAvoiding` ordering).
    Column placement subsumes it, but if column placement is deferred, fix

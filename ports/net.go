@@ -107,6 +107,11 @@ type Message struct {
 	// the network's storage for the M9 capacity estimate.
 	CapUsed  int64
 	CapTotal int64
+	// Domain is a hash of the operator's failure-domain label (AS / rack /
+	// geo / operator), gossiped so placement can spread a file's columns
+	// across distinct domains, not just node IDs. 0 means "unset" — treated
+	// as its own unique domain, never a grouping constraint.
+	Domain uint64
 	// Height is the chain-sync cursor (MsgGetChain).
 	Height uint64
 }

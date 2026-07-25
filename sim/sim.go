@@ -48,6 +48,21 @@ func NewCluster(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Confi
 // has settled routing tables.
 func NewClusterWithStores(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Config,
 	storeFor func(i int) ports.ChunkStore) *Cluster {
+	return newCluster(seed, nNodes, netCfg, nodeCfg, storeFor, nil)
+}
+
+// NewClusterWithDomains is NewCluster with nodes spread across nDomains
+// failure domains (round-robin) — for exercising placement's domain
+// awareness. Other scenarios leave domains unset so their placement isn't
+// perturbed.
+func NewClusterWithDomains(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Config, nDomains int) *Cluster {
+	return newCluster(seed, nNodes, netCfg, nodeCfg,
+		func(int) ports.ChunkStore { return memstore.New() },
+		func(i int) string { return fmt.Sprintf("dom%d", i%nDomains) })
+}
+
+func newCluster(seed int64, nNodes int, netCfg simnet.Config, nodeCfg node.Config,
+	storeFor func(i int) ports.ChunkStore, domainFor func(i int) string) *Cluster {
 	sched := simclock.New()
 	net := simnet.New(sched, seed, netCfg)
 	rng := rand.New(rand.NewSource(seed))
@@ -57,7 +72,11 @@ func NewClusterWithStores(seed int64, nNodes int, netCfg simnet.Config, nodeCfg 
 		var id ports.NodeID
 		rng.Read(id[:])
 		ep := net.Endpoint(id)
-		cl.Nodes = append(cl.Nodes, node.New(id, nodeCfg, sched, ep, storeFor(i)))
+		cfg := nodeCfg
+		if domainFor != nil {
+			cfg.Domain = domainFor(i)
+		}
+		cl.Nodes = append(cl.Nodes, node.New(id, cfg, sched, ep, storeFor(i)))
 	}
 	for i, nd := range cl.Nodes {
 		if i == 0 {

@@ -124,7 +124,7 @@ network is empty.
 
 **Phase 1 — the durability backbone, BEFORE launch (main engineering bet).**
 5. Column-based placement (`docs/design/column-placement.md`) — **done**: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.
-6. Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5, and also bounds the cross-column co-residence #5 leaves open. **Next.**
+6. Failure-domain-aware placement — **done**: nodes gossip a domain label; publish and repair both spread columns across distinct domains (best-effort), roughly halving worst-domain co-residence. Bounds the cross-column co-residence #5 left open.
 7. Dispersion audit as an enforced invariant (built on the Phase 0 measurement).
 8. Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).
 

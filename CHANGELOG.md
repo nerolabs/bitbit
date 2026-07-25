@@ -34,6 +34,11 @@ download links resolve to real binaries.
   a reader finds a column in a single lookup, and losing a host costs a
   stripe exactly one shard (up to n−k columns can go and the file still
   rebuilds). Placement, retrieval, repair, and audits all speak columns.
+- **Failure-domain-aware placement** — a node can declare a failure-domain
+  label (AS / rack / geo / operator) and gossips it; placement and repair
+  spread a file's columns across distinct domains, so an entire domain
+  going dark costs a stripe as little as possible — not just distinct node
+  IDs, but distinct *domains*.
 - **Capacity** — nodes pledge a fixed budget (`-capacity 2G`); placement
   spills over as nodes fill, and every node estimates the whole network's
   size from local gossip alone.
