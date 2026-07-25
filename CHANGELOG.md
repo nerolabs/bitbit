@@ -6,12 +6,16 @@ follow [Semantic Versioning](https://semver.org/).
 
 This log is published at [silthq.com/changelog](https://silthq.com/changelog.html).
 
-## [Unreleased]
+## [0.1.0] — 2026-07-25
 
-Nothing has shipped yet — Silt has not cut its first tagged release.
-Everything below will land as **0.1.0**, the first public release. When
-it's tagged, this section becomes the dated `0.1.0` entry and the
-download links resolve to real binaries.
+**The first release — early, experimental, and unaudited.** Silt 0.1.0 is
+published to get technical feedback, not to be trusted with data you can't
+afford to lose. Please read the
+**[threat model](https://github.com/nerolabs/silt/blob/main/docs/threat-model.md)** —
+it names the weak parts on purpose (a toy proof-of-retrieval, unhardened
+Sybil/eclipse, a quorum-not-BFT chain, and more) — and help us break it.
+Binaries are **not** code-signed; verify them against the attached
+`SHA256SUMS`.
 
 ### Added
 - **Content-addressed storage** — every fragment is named by the SHA-256
@@ -81,4 +85,4 @@ download links resolve to real binaries.
 - **Governance & strategy docs** — the fresh-eyes council, risk register,
   launch plan, safety/takedown model, and `GOVERNANCE.md`.
 
-[Unreleased]: https://github.com/nerolabs/silt/commits/main
+[0.1.0]: https://github.com/nerolabs/silt/releases/tag/v0.1.0

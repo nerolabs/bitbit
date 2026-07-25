@@ -33,8 +33,8 @@
   <h1>What's changed</h1>
 <p class="lead">All notable changes to Silt are recorded here. The format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>, and the project aims to follow <a href="https://semver.org/">Semantic Versioning</a>.</p>
 <p>This log is published at <a href="https://silthq.com/changelog.html">silthq.com/changelog</a>.</p>
-<h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
-<p>Nothing has shipped yet — Silt has not cut its first tagged release. Everything below will land as <b>0.1.0</b>, the first public release. When it&#x27;s tagged, this section becomes the dated <span class="mono">0.1.0</span> entry and the download links resolve to real binaries.</p>
+<h2 class="rel released"><span class="v">0.1.0</span><span class="d">2026-07-25</span></h2>
+<p><b>The first release — early, experimental, and unaudited.</b> Silt 0.1.0 is published to get technical feedback, not to be trusted with data you can&#x27;t afford to lose. Please read the <b><a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">threat model</a></b> — it names the weak parts on purpose (a toy proof-of-retrieval, unhardened Sybil/eclipse, a quorum-not-BFT chain, and more) — and help us break it. Binaries are <b>not</b> code-signed; verify them against the attached <span class="mono">SHA256SUMS</span>.</p>
 <h3>Added</h3>
 <ul>
 <li><b>Content-addressed storage</b> — every fragment is named by the SHA-256 of its bytes; verification is intrinsic, so hosts are never trusted.</li>
