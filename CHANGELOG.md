@@ -44,6 +44,12 @@ download links resolve to real binaries.
   column, and if any one domain holds enough of a stripe that losing it
   would drop below the recovery threshold, it seeds extra copies into other
   domains until no single domain failure could break the file.
+- **Demand-responsive dispersion** — storage flexes with popularity. A node
+  that finds itself serving a chunk hard pushes leased cache copies to more
+  hosts (spread across domains) so readers divide across more sources; when
+  the reads cool off, the copies expire and the file contracts back to its
+  baseline. A flash-popular file fans out without permanently hoarding
+  capacity.
 - **Capacity** — nodes pledge a fixed budget (`-capacity 2G`); placement
   spills over as nodes fill, and every node estimates the whole network's
   size from local gossip alone.

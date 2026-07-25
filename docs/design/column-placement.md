@@ -130,6 +130,9 @@ handful of nodes among millions, those nodes get **hit hard** — a hotspot
 that hurts latency and can look like a self-inflicted DoS. Concentration
 is good for a cold file (cheap, tidy reads) and dangerous for a hot one.
 
+*Status: the push half is implemented — see below; the pull-cache tier is
+a noted follow-up.*
+
 So replication must be **elastic with demand**, not fixed:
 
 - **Fan out on heat.** Track per-column serve rate (bytes/sec, request

@@ -96,16 +96,19 @@ actively managed. Decisions and tasks, priority order:
   shows it roughly halves worst-domain co-residence vs domain-blind
   placement on an identical layout. Remaining polish: querying a candidate's
   domain when gossip hasn't reached it yet, and domain-aware capacity spill.
-- **Demand-responsive dispersion** — *elastic replication for hot files.*
-  A column of a popular file lives on only `Replication` hosts; at
-  worldwide scale a file taking a large share of retrieval traffic would
-  hammer those few hosts. Make replication **elastic**: fan a hot column
-  out to more hosts/domains as its serve rate climbs, and let the extra
-  copies expire on cooldown (baseline `Replication` is the floor, heat a
-  temporary multiplier). Serving nodes see load; caretakers can aggregate
-  it per column without decrypting. Orthogonal to the column *grouping* —
-  it varies the *number of copies*. See the design doc's
-  "demand-responsive dispersion" section.
+- **Demand-responsive dispersion** — *done (Phase 1, push half).* Each node
+  counts how often it serves each chunk (decayed every demand tick); when
+  one crosses `HotThreshold`, it **pushes** `FanoutReplicas` leased cache
+  copies to other hosts, steered away from its own failure domain, which
+  announce as providers so readers divide across more sources. The copies
+  are **leased**: reads refresh them, and if the file cools they expire
+  after `LeaseTTL`, so a flash-popular file can't permanently hoard
+  capacity (baseline `Replication` stays the floor). The demand loop sleeps
+  itself when nothing is hot or leased. `TestDemandFanoutAndCooldown` drives
+  a hammered file from 0 → 153 cache copies → back to 0.
+  **Follow-up (pull tier):** let a node that had to *fetch* a chunk under
+  load opportunistically cache and announce it, decaying when unused — so
+  hot copies also gravitate toward readers, not just away from hot holders.
 - **Repair preserves anti-affinity** — *done (Phase 0).* Repair used to
   re-place rebuilt shards on the raw closest nodes without the
   `preferAvoiding` stripe-spreading that `Distribute` applies, so stripes

@@ -36,6 +36,7 @@ type wireMsg struct {
 	CapTotal  int64      `cbor:"14,keyasint,omitempty"`
 	Height    uint64     `cbor:"15,keyasint,omitempty"`
 	Domain    uint64     `cbor:"16,keyasint,omitempty"`
+	Lease     bool       `cbor:"17,keyasint,omitempty"`
 }
 
 type wireProof struct {
@@ -78,6 +79,7 @@ func toWire(m ports.Message) wireMsg {
 	w.CapUsed, w.CapTotal = m.CapUsed, m.CapTotal
 	w.Height = m.Height
 	w.Domain = m.Domain
+	w.Lease = m.Lease
 	if len(m.Tag) > 0 {
 		w.Tag = append([]byte(nil), m.Tag...)
 	}
@@ -109,6 +111,7 @@ func fromWire(w wireMsg) ports.Message {
 	m.CapUsed, m.CapTotal = w.CapUsed, w.CapTotal
 	m.Height = w.Height
 	m.Domain = w.Domain
+	m.Lease = w.Lease
 	m.Tag = w.Tag
 	if w.Proof != nil {
 		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column}
