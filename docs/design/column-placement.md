@@ -1,0 +1,135 @@
+# Design: column-based placement
+
+**Status:** proposed (design only; no code changes). Captures a decision
+from discussion so it isn't lost, and defines the next storage-layer
+milestone. See [BACKLOG.md](../../BACKLOG.md) and [ROADMAP.md](../../ROADMAP.md).
+
+## The problem
+
+Silt today places every chunk **independently, by its own content
+hash**: `Distribute` runs an `IterativeFindNode(chunkID)` per chunk and
+puts it on the closest nodes to that hash. That is the *maximum-fanout*
+extreme of the placement spectrum. It gives excellent spread, but
+retrieval is inefficient:
+
+> To read a file of **S stripes** you resolve and fetch on the order of
+> **S×k** chunks from up to that many distinct nodes — a separate DHT
+> lookup and connection per chunk. You talk to a crowd to reassemble one
+> file.
+
+The real tuning knob is not "spread vs. concentrate." It is **how many
+chunks travel together as one placement unit**:
+
+| unit | conversations to read a file | failure of one unit costs | verdict |
+|------|------------------------------|---------------------------|---------|
+| 1 chunk | ~S×k | 1 chunk | max fanout — *today*; inefficient reads |
+| 1 **column** (S shards) | **k** | one shard **per stripe** | the sweet spot |
+| whole file | 1 | everything | catastrophic on failure |
+
+## The decision: place by column
+
+Lay the file out as a matrix — rows are stripes, columns are shard
+position `0…n-1`. A **column j** is "the j-th shard of every stripe."
+Place column j on the nodes closest to `hash(root ‖ j)` (not on the
+closest nodes to each individual chunk's hash).
+
+```
+            shard position →
+          0     1     2   …  k-1    k   … n-1
+ stripe 0 c00   c01   c02      c0,k-1  p00 … p0,m
+ stripe 1 c10   c11   c12      c1,k-1  p10 … p1,m
+   ⋮       │     │
+ stripe S ─┘     └─ column 1 = {c01,c11,…,cS1}   ← one node/group holds this
+          └─ column 0 = {c00,c10,…,cS0}
+                              (columns k…n-1 are parity)
+```
+
+Why the column is the principled unit — it is the **largest placement
+unit that still costs only one shard per stripe when it dies**, because
+it aligns the placement boundary with the erasure boundary:
+
+- **Retrieval** — a reader fetches any **k of the n columns** from the k
+  fastest column-holders; each fetch is one bulk stream of S shards, and
+  those k columns reconstruct *every* stripe. Cost: **k conversations for
+  the whole file, independent of its size** (vs. ~S×k today).
+- **Availability** — a column contributes exactly one shard to each
+  stripe, so losing a whole column costs each stripe exactly one shard.
+  You can lose up to **n−k entire columns** (nodes, batches) and still
+  rebuild everything — unit-failure maps precisely onto the erasure
+  budget.
+- **Anti-affinity, for free and optimal** — no node ever holds two
+  shards of the same stripe, because a column is one-per-stripe by
+  construction. This is the strongest possible anti-affinity, and it
+  makes failure-domain spreading easier too: you need n distinct domains
+  (one per column), not S×n.
+
+## Graceful degradation across file sizes
+
+- **Small files (one stripe):** column and chunk coincide — the scheme
+  is exactly per-chunk placement. No special case needed.
+- **Large files (many stripes):** a full column is a large object.
+  Sub-segment a column into stripe-ranges (a "column segment" = one shard
+  position × a bounded range of stripes) so no single stored/fetched
+  object is unbounded. The segment size (stripes per segment) is the one
+  remaining tuning parameter — it trades object size against
+  conversation count. Suggested target: segments sized so a read is a
+  few dozen conversations at most for any file.
+
+## What changes in the code
+
+The unit of **placement, routing, and provider records shifts from chunk
+to column (or column-segment)**. What is preserved:
+
+- **Chunks stay individually content-addressed and Merkle-verified.** We
+  keep intrinsic verification and the takedown-by-opaque-hash property
+  ([safety-denylist.md](../safety-denylist.md)). A column is a *grouping
+  for placement*, not a new trust unit.
+- Concretely:
+  - `Distribute` places columns: for each column j, one `IterativeFindNode(hash(root‖j))`, then push the column's shards to the closest nodes.
+  - **Provider records** say "node X holds column j of root R," so retrieval resolves **n column locations**, not S×n chunk locations.
+  - **Retrieval** fetches k columns (bulk), verifies each shard's hash against the manifest, reconstructs per stripe.
+  - **Repair** rebuilds at column granularity: a caretaker that finds a stripe short pulls surviving columns, reconstructs the missing shards, and re-seeds whole columns — and this is where the repair-time anti-affinity gap (below) disappears, since columns are inherently one-per-stripe.
+  - The **manifest** already lists shards in a fixed order; column j is a strided view over it, so no manifest format change is required — only a documented convention for the stride.
+
+## Tradeoffs (honest)
+
+- **Chunk-level placement dedup weakens.** Placing by `hash(root‖j)`
+  means the same ciphertext chunk appearing in two *different* files
+  lands under different column keys. Whole-file dedup (identical content →
+  identical link) is unaffected, and a node still stores a repeated
+  ciphertext chunk once locally. Cross-file chunk-level placement dedup —
+  a marginal benefit today — is the cost.
+- **Hot columns.** A popular file concentrates read load on its n column
+  holders. Mitigate by replicating hot columns (the replication factor
+  can be per-column and demand-driven) and by the k-of-n choice giving
+  readers n candidates to spread across.
+- **Migration.** Existing per-chunk-placed files keep working (retrieval
+  can fall back to per-chunk resolution); new files use column placement.
+  A background re-placement can migrate old files opportunistically. No
+  flag-day.
+
+## Open questions
+
+- Segment size default, and whether it should adapt to file size or
+  network size.
+- Whether column placement keys should fold in a failure-domain hint so
+  the n columns land in n distinct domains by construction (ties into the
+  failure-domain backlog item).
+- Whether to keep a small amount of per-chunk fanout for the very hottest
+  files as an explicit cache tier.
+
+## Relationship to the other placement work
+
+Column placement is the backbone; three smaller items in the backlog
+compose with it:
+1. **Failure-domain-aware placement** — spread the n columns across n
+   distinct domains (AS/rack/geo/operator), not just node IDs. This is
+   the highest-value durability item and pairs naturally here.
+2. **Repair preserves anti-affinity** — a verified gap today (repair
+   re-places on raw closest nodes without the `preferAvoiding` ordering).
+   Column placement subsumes it, but if column placement is deferred, fix
+   repair directly first.
+3. **Dispersion audit** — the caretaker loop counts reachable shards per
+   stripe; extend it to count distinct *hosts and domains* per stripe and
+   trigger redistribution below a diversity threshold, turning the
+   observatory's health signal into an enforced invariant.
