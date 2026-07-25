@@ -30,9 +30,12 @@ jobs:
         run: go vet ./...
       - name: go test + coverage floor
         run: |
-          go test -coverprofile=cover.out ./...
+          # -coverpkg=./... credits cross-package coverage, so the pure
+          # core packages (exercised by the sim, which has no unit tests of
+          # its own) count toward the total instead of showing as 0%.
+          go test -coverpkg=./... -coverprofile=cover.out ./...
           total=$(go tool cover -func=cover.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
-          floor=45.0
+          floor=60.0
           echo "total coverage: ${total}% (floor ${floor}%)"
           if awk "BEGIN {exit !($total < $floor)}"; then
             echo "::error::coverage ${total}% is below the ${floor}% floor"; exit 1

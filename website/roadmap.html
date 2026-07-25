@@ -83,7 +83,7 @@
 <ol>
 <li>Column-based placement (<span class="mono">docs/design/column-placement.md</span>) — <b>done</b>: placement, retrieval, repair, and audits operate on columns; a column is found in one lookup and within-column anti-affinity is structural.</li>
 <li>Failure-domain-aware placement — <b>done</b>: nodes gossip a domain label; publish and repair both spread columns across distinct domains (best-effort), roughly halving worst-domain co-residence. Bounds the cross-column co-residence #5 left open.</li>
-<li>Dispersion audit as an enforced invariant (built on the Phase 0 measurement).</li>
+<li>Dispersion audit — <b>done</b>: caretakers tally the domains that actually hold each stripe&#x27;s columns and re-spread any stripe a single domain failure could break, until no domain loss drops it below k. Also surfaces the per-stripe domain spread the content-blind observatory can&#x27;t compute.</li>
 <li>Demand-responsive dispersion — elastic replication so hot files fan out across more hosts under load and contract on cooldown (matters at worldwide scale).</li>
 </ol>
 <p><b>Phase 2 — production trustworthiness (feeds the external security audit).</b></p>

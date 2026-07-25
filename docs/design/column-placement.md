@@ -169,7 +169,9 @@ compose with it:
    re-places on raw closest nodes without the `preferAvoiding` ordering).
    Column placement subsumes it, but if column placement is deferred, fix
    repair directly first.
-3. **Dispersion audit** — the caretaker loop counts reachable shards per
-   stripe; extend it to count distinct *hosts and domains* per stripe and
-   trigger redistribution below a diversity threshold, turning the
-   observatory's health signal into an enforced invariant.
+3. **Dispersion audit** — *done.* The caretaker sweep tallies the domains
+   that actually hold each stripe's columns (HasChunk-confirmed, so a stale
+   record can't fake spread) and re-spreads any stripe that a single domain
+   failure could drop below k — turning domain diversity into an enforced
+   invariant, and surfacing the per-stripe spread the content-blind
+   observatory can't compute.

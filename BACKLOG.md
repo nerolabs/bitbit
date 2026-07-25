@@ -115,11 +115,17 @@ actively managed. Decisions and tasks, priority order:
   `sim`'s `TestRepairPreservesStripeAntiAffinity` proves repair stays
   within +1 of the publish baseline where the old path drifted +2 to +4.
   Column placement will subsume this later.
-- **Dispersion audit** — the caretaker repair loop counts *reachable
-  shards* per stripe; extend it to count distinct *hosts and domains* per
-  stripe and trigger redistribution below a diversity threshold. Turns
-  the observatory's existing "daemons hosting per root" health signal
-  into an enforced invariant.
+- **Dispersion audit** — *done (Phase 1).* The caretaker sweep now, per
+  stripe, tallies the failure domains that actually hold each column
+  (confirmed by HasChunk, so a stale record can't fake spread). When one
+  domain exclusively holds more than the n-k budget of a stripe's columns —
+  a domain failure would drop it below k — it re-spreads: places one extra
+  copy of each over-exposed column into a domain the stripe isn't using,
+  until no single domain loss could break a stripe. `Stats.Dispersals`
+  counts it; `TestDispersionAuditRespreadsConcentratedStripe` drives a
+  two-domain publish (~8 of each stripe's 16 columns exclusive to each) to
+  full convergence. Also surfaces the per-stripe domain spread the
+  content-blind observatory couldn't compute.
 
 ## Strategy — the "fresh-eyes council"
 
