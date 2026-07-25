@@ -1,9 +1,10 @@
 name: CI
 
 # Gates every push and pull request: the Go suite (with a coverage
-# floor), formatting, a race-detector build, and a link-check of the
-# website. Branch protection should require these before merging to main
-# or staging.
+# floor), formatting, a race-detector build, a link-check plus
+# changelog/roadmap freshness for the website, and a docs-ship-with-code
+# check that a code change also touches the changelog. Branch protection
+# should require these before merging to main or staging.
 on:
   push:
     branches: [main, staging]
@@ -63,5 +64,36 @@ jobs:
             git --no-pager diff -- website/changelog.html
             exit 1
           fi
+      - name: Generate roadmap page
+        run: python3 scripts/gen_roadmap.py
+      - name: Fail if roadmap page is stale
+        run: |
+          if ! git diff --quiet -- website/roadmap.html; then
+            echo "website/roadmap.html is out of date; run scripts/gen_roadmap.py and commit."
+            git --no-pager diff -- website/roadmap.html
+            exit 1
+          fi
       - name: Check internal links resolve
         run: python3 scripts/check_links.py
+
+  docs-shipped:
+    name: Docs ship with code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a CHANGELOG entry when code changes
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "not a pull request — nothing to enforce"; exit 0
+          fi
+          files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          echo "changed files:"; echo "$files"
+          code=$(echo "$files" | grep -E '^(cmd|core|adapters)/' || true)
+          if [ -n "$code" ] && ! echo "$files" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::Code under cmd/, core/, or adapters/ changed but CHANGELOG.md was not updated. Add a line to the '## [Unreleased]' section (and re-run scripts/gen_changelog.py)."
+            echo "code files that triggered this:"; echo "$code"
+            exit 1
+          fi
+          echo "OK — docs ship with code"

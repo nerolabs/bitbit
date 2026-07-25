@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt roadmap</title>
+<meta name="description" content="Where Silt is going: milestones, the prioritized sequence, and what comes next.">
+<link rel="canonical" href="https://silthq.com/roadmap.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .doc ol { padding-left:1.2rem; }
+  .doc ol li { margin:0.4rem 0; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="wordmark" style="text-decoration:none">Sil<b>t</b></a>
+  <span class="spacer"></span>
+  <a href="/#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="changelog.html">Changelog</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+<div class="doc">
+  <p class="eyebrow">Roadmap</p>
+  <h1>Where Silt is going</h1>
+<p class="lead">Where this is going (per Andrew, 2026-07-25), structured into milestones. M1–M8 are done; this file governs what comes next.</p>
+<h2>The product stance</h2>
+<ul>
+<li><b>Daemons are infrastructure, not content.</b> A daemon stores and serves anonymous, encrypted chunks. It cannot know what it hosts: chunks are ciphertext, manifests are ciphertext, and the top-level identifier is an opaque hash carrying zero metadata. Resolving identifiers into human meaning (names, descriptions) is deliberately NOT this system — a separate layer, like DNS atop IP, built by whoever wants to build it.</li>
+<li><b>Capacity is pledged, not assumed.</b> <span class="mono">silt daemon -capacity 2G</span> contributes exactly that much. The network continuously knows its own total size. No daemon needs any whole file — just chunks.</li>
+<li><b>Writes are earned.</b> Publishing to the chain requires coordination among daemons with established reputation (M7&#x27;s audit history is the reputation seed). No single node&#x27;s say-so writes a block.</li>
+</ul>
+<h2>Milestones</h2>
+<h3>M9 — Capacity (NOW)</h3>
+<p>Bounded stores (<span class="mono">-capacity 2G</span>), refusal when full, spill-over placement (try the next-closest node when one refuses), stripe anti-affinity (never two shards of one stripe on one node when avoidable — one node death costs at most one shard per stripe), and network capacity accounting: every message piggybacks the sender&#x27;s used/total, and each node estimates network size from XOR-space density (math note 06) to compute total network capacity.</p>
+<h3>M10 — Identity, TLS, discovery (DONE)</h3>
+<ul>
+<li>NodeID = SHA-256(Ed25519 public key); all swarm connections are mutual TLS 1.3 pinned to the key (adapters/identity, tcpnet); registry over pinned HTTPS. No CA, no accounts — the identity IS the keypair, and reputation can&#x27;t be shed without it. Frames claiming a sender other than the handshake&#x27;s key are dropped.</li>
+<li>Discovery in layers (adapters/discovery): -bootstrap peer strings → -dns-seed TXT records → peer exchange, with the learned address book persisted to peers.json for flagless warm restarts.</li>
+</ul>
+<h3>M11 — Encrypted manifests (&quot;encrypted at all levels&quot;) (DONE)</h3>
+<p>Manifests are sealed blobs: layout encrypted under a layout key, with the decryption material boxed under a content key inside. Both keys derive one-way (HKDF) from the link key — the share handle is <span class="mono">silt:v1:root:key</span>, and its degraded form <span class="mono">siltcare:v1:root:layoutkey</span> grants repair/audit WITHOUT decryption (see docs/math/07-key-hierarchy.md). Link keys are content-derived, so convergent dedup extends to the links themselves. Infrastructure relays ciphertext end to end; caretakers do their whole job inside the layout ring.</p>
+<h3>M12 — The chain (DONE)</h3>
+<p>The registry is an append-only block chain maintained by the daemons (core/chain, node validator role). Blocks hold entries only (manifests stay sealed off-chain); commits require a quorum of Ed25519 attestations from validators whose reputation (credit.Reputation: audits + serving) clears the threshold — each validator judging by its OWN ledger. Replicas re-validate everything, latecomers sync and re-check history, chainstore persists across restarts, and chainhost fronts the chain as ports.Registry so swarm add/get work unchanged. Not PoW, and honest about it: see docs/math/08-quorum-chains.md.</p>
+<h3>M13 — Web frontends (DONE)</h3>
+<p><span class="mono">daemon -ui ADDR</span> serves an embedded localhost web UI (cmd/silt/ui, go:embed, JSON API on the same port, zero extra runtime):</p>
+<ul>
+<li><b>Daemon dashboard</b>: pledge used/total, chunks, served bytes, self-estimated network size/storage, chain height, and the opaque top-level roots it holds shards of. Auto-refreshes.</li>
+<li><b>Publish page</b>: drag a file → scatter via an in-process ephemeral client (staging never touches the pledge) → returns the silt link AND the care link.</li>
+<li><b>Fetch page</b>: paste a link → fetch, verify, decrypt, download.</li>
+<li><b>Observatory</b>: aggregates any list of daemon UIs — observed capacity, serving bandwidth (served-bytes delta), per-daemon roster, and every registered file with its shard spread (health = daemons hosting). No privileged view; it&#x27;s knowledge any participant can assemble.</li>
+</ul>
+<h3>M14 — Desktop client (DONE)</h3>
+<p><span class="mono">silt client</span>: one binary that consumes AND serves (pledges disk by default — every client a node), keeps a link-book library (the files you hold keys for; the network&#x27;s other identifiers stay opaque to you, the Aslan boundary made visible), bootstraps via discovery, and opens the web UI in your browser. build.sh cross-compiles Mac (Intel + Apple Silicon), Windows, and Linux (amd64 + arm64) from one source, CGO off, 5 self-contained 8-10 MB binaries. Tray/Tauri wrapping is optional polish that consumes the binary unchanged. See docs/desktop-client.md.</p>
+<h2>The resolver layer (&quot;Aslan&quot; — separate product)</h2>
+<p>Meaning lives above the infrastructure, in a separate codebase with its own distributed record chain: name/description/tags → (root, manifest key). See docs/aslan-boundary.md for the full boundary design. Silt ships zero Aslan code, ever.</p>
+<h2>Reputation inputs (feeding M12)</h2>
+<ul>
+<li>Storage honesty: M7 audit pass rate.</li>
+<li>Serving bandwidth: bytes-served rate (a storage-only hoarder that serves at a trickle is a freeloader too). The M9 capacity-gossip pattern extends to bandwidth totals.</li>
+<li>Endgame: every client is also a serving node — the M14 client pledges disk + uplink by default.</li>
+</ul>
+<h2>Open questions being explicitly deferred</h2>
+<ul>
+<li>Economic settlement across the chain (M5 credits become chain state eventually).</li>
+<li>NAT traversal (daemons on home networks) — likely relay-assisted, post-M12.</li>
+</ul>
+<h2>Prioritized sequence (agreed 2026-07-25)</h2>
+<p>Ordered by value = risk retired + capability unlocked, weighted by cost-of-delay, over effort. The governing decision: <b>the placement backbone lands <em>before</em> any public launch</b> — it changes placement/ routing wire semantics, and migrating a live network of independent operators through that is far more expensive than doing it while the network is empty.</p>
+<p><b>Phase 0 — cheap wins that de-risk everything after (days).</b></p>
+<ol>
+<li>Repair preserves stripe anti-affinity (closes a verified gap).</li>
+<li><span class="mono">-race</span> build + a coverage floor in CI.</li>
+<li>Dispersion <em>measurement</em> — surface distinct-hosts-per-stripe in the observatory.</li>
+<li>Docs-ship-with-code CI check + auto-rendered <span class="mono">website/roadmap.html</span>.</li>
+</ol>
+<p><b>Phase 1 — the durability backbone, BEFORE launch (main engineering bet).</b></p>
+<ol>
+<li>Column-based placement (<span class="mono">docs/design/column-placement.md</span>) — reads become ~k conversations, anti-affinity optimal and automatic.</li>
+<li>Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5.</li>
+<li>Dispersion audit as an enforced invariant (built on the Phase 0 measurement).</li>
+</ol>
+<p><b>Phase 2 — production trustworthiness (feeds the external security audit).</b></p>
+<ol>
+<li>Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.</li>
+<li>Multi-process e2e integration tests over real TCP/daemons.</li>
+<li>Denylist distribution/subscription (completes the abuse-handling story).</li>
+</ol>
+<p><b>Phase 3 — launch enablement (when the above are solid).</b></p>
+<ol>
+<li>Cut v0.1 + signed/notarized binaries + checksums, then execute the launch plan.</li>
+</ol>
+<p><b>Parallel throughout — non-coding, highest <em>overall</em> value, gates launch:</b> form the legal entity + DMCA agent + legal read (long lead time), and scope the independent security audit so Phase 2 feeds it. No wide launch precedes these (see <span class="mono">docs/risk-register.md</span>).</p>
+<h2>Release engineering (v0.1)</h2>
+<ul>
+<li><b>Cut the v0.1 release + publish signed binaries</b> — Phase 3. Not done yet (deliberately). The site&#x27;s downloads point at build-from-source until then. When ready: move CHANGELOG &quot;Unreleased&quot; into a dated version, <span class="mono">git tag v0.1.0 &amp;&amp; git push origin v0.1.0</span>; the release workflow builds the binaries and publishes a GitHub Release. Add code-signing/notarization (macOS) and a checksums file first.</li>
+<li>Website publishing + DNS: see DEPLOYMENT.md (Netlify, apex at Namecheap).</li>
+</ul>
+<h2>Storage-layer hardening (Phase 1 — before launch)</h2>
+<p>Details in <span class="mono">docs/design/column-placement.md</span> and <span class="mono">BACKLOG.md</span>. Moved ahead of launch (was &quot;post-launch&quot;) because the placement wire format must not ossify on a live network: column-based placement, then failure-domain-aware placement, then the dispersion audit.</p>
+  <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
+</div>
+<footer><div class="wrap"><div class="meta">
+  <span>silthq.com</span><span>·</span><span class="dim">the infrastructure is not the content</span>
+</div></div></footer>
+</body>
+</html>

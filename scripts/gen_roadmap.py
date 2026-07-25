@@ -1,33 +1,38 @@
 #!/usr/bin/env python3
-"""Render CHANGELOG.md into website/changelog.html, styled to match the
-site. CHANGELOG.md is the single source of truth; CI runs this before
-every deploy so the published page can never drift from the log.
+"""Render ROADMAP.md into website/roadmap.html, styled to match the site.
+ROADMAP.md is the single source of truth; CI runs this and fails if the
+page has drifted, so the public roadmap can never fall out of sync with
+the repo's plan.
 
-Deliberately dependency-free (stdlib only) so it runs on any CI runner
-without an install step."""
+Like gen_changelog.py, this is deliberately dependency-free (stdlib
+only) so it runs on any CI runner with no install step. It differs from
+the changelog renderer in one way that matters: the roadmap uses ordered
+(numbered) lists for its phases and milestones, so this supports both
+`- ` and `N. ` list items."""
 import html
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "CHANGELOG.md"
-OUT = ROOT / "website" / "changelog.html"
+SRC = ROOT / "ROADMAP.md"
+OUT = ROOT / "website" / "roadmap.html"
 
 
 def inline(s: str) -> str:
-    """Minimal inline markdown → HTML: escape, then code/bold/links."""
+    """Minimal inline markdown → HTML: escape, then code/bold/italics/links."""
     s = html.escape(s)
     s = re.sub(r"`([^`]+)`", r'<span class="mono">\1</span>', s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)  # bold first, may wrap inner *italics*
-    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)  # single-asterisk italics
+    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)
     s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', s)
     return s
 
 
 def render(md: str) -> str:
     body, para = [], []
-    in_list, intro_done, lead_used = False, False, False
+    intro_done, lead_used = False, False
+    list_kind = None  # None | "ul" | "ol"
 
     def flush_para():
         nonlocal para, lead_used
@@ -41,9 +46,17 @@ def render(md: str) -> str:
         para = []
 
     def close_list():
-        nonlocal in_list
-        if in_list:
-            body.append("</ul>"); in_list = False
+        nonlocal list_kind
+        if list_kind:
+            body.append(f"</{list_kind}>")
+            list_kind = None
+
+    def open_list(kind):
+        nonlocal list_kind
+        if list_kind != kind:
+            close_list()
+            body.append(f"<{kind}>")
+            list_kind = kind
 
     # Unwrap soft wraps: an indented continuation line folds onto the
     # line above it (how Markdown continues a list item or paragraph).
@@ -61,22 +74,17 @@ def render(md: str) -> str:
             continue
         if line.startswith("## "):
             flush_para(); close_list(); intro_done = True
-            m = re.match(r"^##\s+\[?([^\]\s]+)\]?\s*(?:—|-)?\s*(.*)$", line)
-            ver = m.group(1) if m else line[3:]
-            date = (m.group(2) or "").strip() if m else ""
-            tag = "unreleased" if ver.lower() == "unreleased" else "released"
-            body.append(
-                f'<h2 class="rel {tag}"><span class="v">{inline(ver)}</span>'
-                + (f'<span class="d">{inline(date)}</span>' if date else "")
-                + "</h2>")
+            body.append(f"<h2>{inline(line[3:])}</h2>")
         elif line.startswith("### "):
             flush_para(); close_list()
             body.append(f"<h3>{inline(line[4:])}</h3>")
         elif line.startswith("- "):
-            flush_para()
-            if not in_list:
-                body.append("<ul>"); in_list = True
+            flush_para(); open_list("ul")
             body.append(f"<li>{inline(line[2:])}</li>")
+        elif re.match(r"^\d+\.\s", line):
+            flush_para(); open_list("ol")
+            item = re.sub(r"^\d+\.\s", "", line)
+            body.append(f"<li>{inline(item)}</li>")
         elif line.strip() == "":
             flush_para(); close_list()
         else:
@@ -91,19 +99,16 @@ TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Silt changelog</title>
-<meta name="description" content="Notable changes to Silt, release by release.">
-<link rel="canonical" href="https://silthq.com/changelog.html">
+<title>Silt roadmap</title>
+<meta name="description" content="Where Silt is going: milestones, the prioritized sequence, and what comes next.">
+<link rel="canonical" href="https://silthq.com/roadmap.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
-  .doc h2.rel {{ display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }}
-  .doc h2.rel .v {{ font-family:var(--display); }}
-  .doc h2.rel .d {{ font-family:var(--mono); font-size:0.8rem; color:var(--drab); letter-spacing:0.04em; }}
-  .doc h2.rel.unreleased .v::after {{ content:" ·"; color:var(--ochre); }}
-  .doc h2.rel.unreleased {{ color:var(--ochre); }}
+  .doc ol {{ padding-left:1.2rem; }}
+  .doc ol li {{ margin:0.4rem 0; }}
 </style>
 </head>
 <body>
@@ -112,13 +117,13 @@ TEMPLATE = """<!doctype html>
   <span class="spacer"></span>
   <a href="/#how" class="hide-sm">How it works</a>
   <a href="node.html" class="hide-sm">Run a node</a>
-  <a href="roadmap.html" class="hide-sm">Roadmap</a>
+  <a href="changelog.html">Changelog</a>
   <a href="docs.html">Docs</a>
   <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
 </nav>
 <div class="doc">
-  <p class="eyebrow">Changelog</p>
-  <h1>What's changed</h1>
+  <p class="eyebrow">Roadmap</p>
+  <h1>Where Silt is going</h1>
 {body}
   <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
 </div>
