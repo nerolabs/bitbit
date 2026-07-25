@@ -7,6 +7,7 @@ package node
 
 import (
 	"github.com/nerolabs/bitbit/core/dht"
+	"github.com/nerolabs/bitbit/ports"
 )
 
 // NetEstimate is one node's view of the whole network.
@@ -48,4 +49,18 @@ func (n *Node) EstimateNetwork() NetEstimate {
 		est.EstimatedUsed = int64(est.EstimatedNodes * float64(sumUsed) / float64(samples))
 	}
 	return est
+}
+
+// HeldRoots reports which top-level identifiers this node holds shards
+// of, and how many — what a daemon can honestly say about its own
+// contents: opaque roots and counts, nothing more (there is nothing
+// more it CAN know).
+func (n *Node) HeldRoots() map[ports.Hash]int {
+	out := make(map[ports.Hash]int)
+	for id, p := range n.proofs {
+		if ok, _ := n.store.Has(bg(), id); ok {
+			out[p.Root]++
+		}
+	}
+	return out
 }

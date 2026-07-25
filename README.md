@@ -51,6 +51,12 @@ Beyond the original handoff:
   from validators with EARNED reputation (audits + serving), fresh
   identities can't write, every replica re-validates everything
   (`sim run consensus`, or three `daemon -validator` processes)
+- ✅ M13 — web UI: `daemon -ui 127.0.0.1:8081` serves an embedded
+  dashboard (pledge, chunks, network estimate, chain, held roots), a
+  drag-and-drop publish page (→ bitbit link + care link), a
+  paste-a-link fetch page, and a network observatory that aggregates
+  many daemons — capacity, serving bandwidth, per-file shard spread.
+  One Go binary, `go:embed`, zero extra runtime
 
 Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
 encrypted manifests, the reputation-quorum chain, web frontends, and

@@ -29,6 +29,18 @@ import (
 // away and the swarm alone carries the file.
 // done receives the number of chunk-replica placements that succeeded.
 func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int)) {
+	n.distributeFrom(n.store, entry, m, keepLocal, done)
+}
+
+// DistributeFrom scatters a file staged in an external scratch store —
+// how the daemon's UI publishes without the staging ever touching the
+// node's storage pledge (the M9 rule: pledges bound hosting, not
+// staging). The scratch copies are deleted as they ship.
+func (n *Node) DistributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, done func(placed int)) {
+	n.distributeFrom(src, entry, m, false, done)
+}
+
+func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int)) {
 	leaves := m.Leaves()
 	root := m.Root()
 	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
@@ -46,7 +58,7 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 			return
 		}
 		id := ids[i]
-		c, err := n.store.Get(bg(), id)
+		c, err := src.Get(bg(), id)
 		if err != nil { // convergent dedup can mean a chunk was already shipped and deleted
 			next(i + 1)
 			return
@@ -76,7 +88,7 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 				},
 				func(int) {
 					if !keepLocal {
-						n.store.Delete(bg(), id)
+						src.Delete(bg(), id)
 					}
 					next(i + 1)
 				})

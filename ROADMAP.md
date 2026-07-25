@@ -61,16 +61,21 @@ re-check history, chainstore persists across restarts, and chainhost
 fronts the chain as ports.Registry so swarm add/get work unchanged.
 Not PoW, and honest about it: see docs/math/08-quorum-chains.md.
 
-### M13 — Web frontends (embedded in the daemon)
-Go binary serves a localhost web UI (go:embed, zero extra runtime):
-- **Daemon dashboard**: capacity used/total, chunks held and served,
-  bandwidth, top-level IDs it holds shards of, audit record.
-- **Publish page**: drag a file → chunk, encrypt, scatter, chain
-  write → returns the bitbit link.
-- **Fetch page**: paste a link → download, verify, decrypt.
-- **Network observatory**: connects to many daemons; total capacity,
-  every hosted top-level ID, per-stripe distribution health,
-  aggregate serving bandwidth.
+### M13 — Web frontends (DONE)
+`daemon -ui ADDR` serves an embedded localhost web UI (cmd/bitbit/ui,
+go:embed, JSON API on the same port, zero extra runtime):
+- **Daemon dashboard**: pledge used/total, chunks, served bytes,
+  self-estimated network size/storage, chain height, and the opaque
+  top-level roots it holds shards of. Auto-refreshes.
+- **Publish page**: drag a file → scatter via an in-process ephemeral
+  client (staging never touches the pledge) → returns the bitbit link
+  AND the care link.
+- **Fetch page**: paste a link → fetch, verify, decrypt, download.
+- **Observatory**: aggregates any list of daemon UIs — observed
+  capacity, serving bandwidth (served-bytes delta), per-daemon roster,
+  and every registered file with its shard spread (health = daemons
+  hosting). No privileged view; it's knowledge any participant can
+  assemble.
 
 ### M14 — Desktop client (Mac/Windows/Linux)
 Recommendation: one Go binary with the embedded web UI (menu-bar /
