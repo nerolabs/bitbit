@@ -84,16 +84,18 @@ actively managed. Decisions and tasks, priority order:
   [docs/design/column-placement.md](docs/design/column-placement.md);
   proven by the `scatter`, `churn`, `capacity`, `audit`, and
   anti-affinity sims.
-- **Failure-domain-aware placement** — *highest-value durability item;
-  next.* Nodes advertise a domain hint (AS / rack / geo / operator);
-  placement spreads columns across distinct **domains**, not just node IDs.
-  Content addressing prevents random concentration but not *correlated*
-  failure (16 columns in one datacenter). Also bounds the **cross-column
-  co-residence** column placement leaves open: today one host can be
-  closest to several column keys (and capacity spill piles more on), so a
-  stripe can gather a few shards on one host — the caps/capacity sims now
-  assert only the red line (< k on any host). Spreading columns across
-  domains is the real fix.
+- **Failure-domain-aware placement** — *done (Phase 1).* Nodes carry a
+  domain label (`-domain`, e.g. AS / rack / geo / operator) and gossip its
+  hash on every message, like the capacity pledge. Publish steers each
+  column onto a domain no other column has used; repair re-seeds rebuilt
+  columns into domains the survivors aren't using — so a whole domain
+  failing costs a stripe as little as possible, and cross-column
+  co-residence is bounded instead of drifting as churn shrinks the network.
+  It's best-effort (a placer spreads only across the peer domains it has
+  learned) and never a veto. `TestFailureDomainPlacementSpreadsColumns`
+  shows it roughly halves worst-domain co-residence vs domain-blind
+  placement on an identical layout. Remaining polish: querying a candidate's
+  domain when gossip hasn't reached it yet, and domain-aware capacity spill.
 - **Demand-responsive dispersion** — *elastic replication for hot files.*
   A column of a popular file lives on only `Replication` hosts; at
   worldwide scale a file taking a large share of retrieval traffic would

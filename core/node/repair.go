@@ -336,7 +336,7 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 	// Fetch by column: a stripe's shards register under their column key,
 	// not their own id, so a plain fetchAll (which resolves by id) would
 	// find nothing and every repair would fail to reconstruct.
-	n.fetchStripeByColumn(root, stripeRefs, func(unfetched []ports.ChunkID) {
+	n.fetchStripeByColumn(root, stripeRefs, func(unfetched []ports.ChunkID, usedDomains map[uint64]int) {
 		// Build the stripe from whatever actually arrived.
 		shards := make([][]byte, p.N)
 		for _, r := range stripeRefs {
@@ -379,10 +379,12 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		}
 		// Re-seed each rebuilt shard onto its COLUMN — the nodes closest to
 		// colKey(root, pos) — so it rejoins the hosts its column-siblings
-		// already live on. Anti-affinity is then structural, not a heuristic:
-		// a column holder carries one shard of each stripe, so repair can't
-		// drift a stripe onto a doubled-up host the way per-chunk re-placement
-		// could. (r.pos is the shard's column: 0..k-1 data, k..n-1 parity.)
+		// already live on. Within-column anti-affinity is then structural.
+		// Steer the rebuilt columns into failure domains the surviving
+		// columns aren't already using (usedDomains, seeded from the
+		// survivors), so repair rebuilds spread rather than converging onto
+		// a few hosts as churn shrinks the network. (r.pos is the shard's
+		// column: 0..k-1 data, k..n-1 parity.)
 		var place func(i int)
 		place = func(i int) {
 			if i == len(toPlace) {
@@ -395,7 +397,13 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
 			}
 			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
-				n.placeAt(r.id, shards[r.pos], proof, closest, n.cfg.Replication, nil,
+				candidates := n.preferFreshDomain(closest, usedDomains)
+				n.placeAt(r.id, shards[r.pos], proof, candidates, n.cfg.Replication,
+					func(target ports.NodeID) {
+						if d := n.domainOf(target); d != 0 {
+							usedDomains[d]++
+						}
+					},
 					func(placed int) {
 						if placed > 0 {
 							n.Stats.ShardsRebuilt++
