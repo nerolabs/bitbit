@@ -107,26 +107,50 @@ design. Silt ships zero Aslan code, ever.
 - NAT traversal (daemons on home networks) — likely relay-assisted,
   post-M12.
 
-## Release engineering (TODO)
-- **Cut the v0.1 release + publish signed binaries.** Deliberately not
-  done yet (Andrew, 2026-07-25). The site's download section points at
-  build-from-source until then. When ready: move CHANGELOG "Unreleased"
-  into a dated version, `git tag v0.1.0 && git push origin v0.1.0` — the
-  release workflow builds the Mac/Windows/Linux binaries and publishes a
-  GitHub Release, at which point the download links resolve. Consider
-  code-signing/notarization (macOS) and a checksums file before a wide
-  public push.
+## Prioritized sequence (agreed 2026-07-25)
+
+Ordered by value = risk retired + capability unlocked, weighted by
+cost-of-delay, over effort. The governing decision: **the placement
+backbone lands *before* any public launch** — it changes placement/
+routing wire semantics, and migrating a live network of independent
+operators through that is far more expensive than doing it while the
+network is empty.
+
+**Phase 0 — cheap wins that de-risk everything after (days).**
+1. Repair preserves stripe anti-affinity (closes a verified gap).
+2. `-race` build + a coverage floor in CI.
+3. Dispersion *measurement* — surface distinct-hosts-per-stripe in the observatory.
+4. Docs-ship-with-code CI check + auto-rendered `website/roadmap.html`.
+
+**Phase 1 — the durability backbone, BEFORE launch (main engineering bet).**
+5. Column-based placement (`docs/design/column-placement.md`) — reads become ~k conversations, anti-affinity optimal and automatic.
+6. Failure-domain-aware placement — the top correlated-failure mitigation; composes with #5.
+7. Dispersion audit as an enforced invariant (built on the Phase 0 measurement).
+
+**Phase 2 — production trustworthiness (feeds the external security audit).**
+8. Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.
+9. Multi-process e2e integration tests over real TCP/daemons.
+10. Denylist distribution/subscription (completes the abuse-handling story).
+
+**Phase 3 — launch enablement (when the above are solid).**
+11. Cut v0.1 + signed/notarized binaries + checksums, then execute the launch plan.
+
+**Parallel throughout — non-coding, highest *overall* value, gates launch:**
+form the legal entity + DMCA agent + legal read (long lead time), and
+scope the independent security audit so Phase 2 feeds it. No wide launch
+precedes these (see `docs/risk-register.md`).
+
+## Release engineering (v0.1)
+- **Cut the v0.1 release + publish signed binaries** — Phase 3. Not done
+  yet (deliberately). The site's downloads point at build-from-source
+  until then. When ready: move CHANGELOG "Unreleased" into a dated
+  version, `git tag v0.1.0 && git push origin v0.1.0`; the release
+  workflow builds the binaries and publishes a GitHub Release. Add
+  code-signing/notarization (macOS) and a checksums file first.
 - Website publishing + DNS: see DEPLOYMENT.md (Netlify, apex at Namecheap).
 
-## Storage-layer hardening (post-launch track)
-Sequenced after the launch-gating work (security/legal review, v0.1).
-Captured 2026-07-25; see docs/design/column-placement.md and BACKLOG.md.
-1. **Column-based placement** — align the placement unit with the erasure
-   boundary so reads cost ~k conversations (not ~S×k) and anti-affinity
-   is automatic. The backbone of the storage layer's next phase.
-2. **Failure-domain-aware placement** — spread columns across distinct
-   AS/rack/geo/operator domains; the top durability item.
-3. **Repair anti-affinity + dispersion audit** — repair re-applies
-   spreading; caretakers enforce a distinct-hosts/domains-per-stripe
-   invariant, not just a shard count.
-
+## Storage-layer hardening (Phase 1 — before launch)
+Details in `docs/design/column-placement.md` and `BACKLOG.md`. Moved
+ahead of launch (was "post-launch") because the placement wire format
+must not ossify on a live network: column-based placement, then
+failure-domain-aware placement, then the dispersion audit.
