@@ -26,6 +26,11 @@ for t in "${targets[@]}"; do
   printf "  %-28s %s\n" "$os/$arch" "$(du -h "$name" | cut -f1)"
 done
 
+# Checksums so anyone can verify a download — the binaries aren't
+# code-signed yet, so SHA256SUMS is how you know you got what we built.
+( cd "$OUT" && { sha256sum silt-* 2>/dev/null || shasum -a 256 silt-*; } > SHA256SUMS )
+echo "  wrote SHA256SUMS ($(wc -l < "$OUT/SHA256SUMS" | tr -d ' ') files)"
+
 echo
 echo "Done. Each is a single self-contained binary; run:"
 echo "  ./$OUT/silt-$VERSION-<os>-<arch>  client   # desktop app (serves + consumes, opens UI)"
