@@ -128,20 +128,49 @@ network is empty.
 7. Dispersion audit — **done**: caretakers tally the domains that actually hold each stripe's columns and re-spread any stripe a single domain failure could break, until no domain loss drops it below k. Also surfaces the per-stripe domain spread the content-blind observatory can't compute.
 8. Demand-responsive dispersion — **done** (push half): a node whose chunk runs hot pushes leased cache copies to more hosts (across domains); reads refresh them, cooldown expires them, so hot files fan out and contract elastically. Pull-cache tier (fetchers cache near readers) is the noted follow-up.
 
-**Phase 1 is complete** — the durability + scale backbone is in. Next is the launch-gating track (independent security + legal review, then v0.1); see below.
+**Phase 1 is complete** — the durability + scale backbone is in.
 
-**Phase 2 — production trustworthiness (feeds the external security audit).**
-8. Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.
-9. Multi-process e2e integration tests over real TCP/daemons.
-10. Denylist distribution/subscription (completes the abuse-handling story).
+The launch track is deliberately **community-feedback-first** (Andrew,
+2026-07-25), a re-sequencing of the earlier "form an entity + pay for an
+audit before launch" plan. For an early, unproven infrastructure project,
+spending the scarcest resources (money, legal exposure) on formalities
+ahead of validation is backwards. Instead: ship something real and
+honestly labeled, let the community be the first review, and let what we
+learn decide whether the formal commitments are worth making.
 
-**Phase 3 — launch enablement (when the above are solid).**
-11. Cut v0.1 + signed/notarized binaries + checksums, then execute the launch plan.
+**Phase A — Ship & solicit (the feedback release).**
+8. Cut **v0.1**, labeled *experimental, unaudited, for evaluation and
+   feedback — not for data you can't afford to lose.* Not signed/notarized
+   (a wider-push concern); checksums + build-from-source suffice for a
+   technical audience. Andrew does a personal review + hardening pass
+   before any outreach.
+9. Publish the **threat model** (`docs/threat-model.md`) for community
+   review — honest disclosure *and* the invitation to break it. At this
+   stage the community is the security review.
+10. Market for exactly one thing: **feedback.** Narrow, technical
+    audiences ("help us break this," not "use this"); the launch plan is
+    re-pointed at that single goal.
 
-**Parallel throughout — non-coding, highest *overall* value, gates launch:**
-form the legal entity + DMCA agent + legal read (long lead time), and
-scope the independent security audit so Phase 2 feeds it. No wide launch
-precedes these (see `docs/risk-register.md`).
+**Phase B — Learn & decide (feedback-driven).**
+11. Triage what comes back: bugs, design critique, security findings, and
+    whether anyone cares.
+12. **Then** decide the legal posture — entity, jurisdiction, or stay a
+    pure code-publishing project — informed by what the early engagement
+    reveals, not made blind. No entity is formed on spec.
+
+**Phase C — Harden & formalize (only if B justifies it).**
+13. Security hardening — Sybil/eclipse resistance, ungameable reputation,
+    real (non-toy) proof-of-retrieval.
+14. Multi-process e2e integration tests over real TCP/daemons.
+15. Denylist distribution/subscription (completes the abuse-handling
+    story); pull-cache tier for demand dispersion.
+16. Formal commitments *if warranted by traction and feedback*: legal
+    entity + DMCA agent, an independent paid audit, signed/notarized
+    binaries, and a wider launch.
+
+The gate that used to be "entity + paid audit" is now **"publish the
+threat model for community review."** Everything expensive or irreversible
+waits for evidence. See `docs/launch-plan.md` and `docs/risk-register.md`.
 
 ## Release engineering (v0.1)
 - **Cut the v0.1 release + publish signed binaries** — Phase 3. Not done

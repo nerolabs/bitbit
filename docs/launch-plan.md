@@ -5,6 +5,19 @@ software — and only those people, on purpose. Positioning here is a
 safety control as much as a growth lever (see the
 [fresh-eyes council](fresh-eyes-council.md)).
 
+## The first launch has exactly one goal: feedback
+
+We are **community-feedback-first** (see [ROADMAP.md](../ROADMAP.md)). The
+0.1 release is not a product launch — it is a request for review. Market
+for one thing: getting technical people to **break it and tell us what's
+wrong**, especially the weaknesses named in the
+[threat model](threat-model.md). Every message should read "help us
+pressure-test this," never "store your data here." Legal posture and any
+entity are decided *later*, based on what this feedback reveals — nothing
+formal is committed on spec. Before any outreach, Andrew does a personal
+review + hardening pass. Everything below serves this feedback goal until
+the evidence says otherwise.
+
 ## Positioning
 
 **Silt is resilient, private-by-architecture, neutral storage
