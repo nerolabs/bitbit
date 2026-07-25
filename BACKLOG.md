@@ -24,9 +24,12 @@ Work captured for later, most-strategic first. The milestone history
 ### Review-gated contributions
 - **Nothing reaches mainline or a release without review by Andrew +
   Claude.** Branch protection requires a PR + green CI on `main`/`staging`
-  (done); `CONTRIBUTING.md`, `CODEOWNERS`, and a PR template are in (done);
-  required approvals raised to 1 so a maintainer review is enforced (done).
-  "Review by Claude" = a `/code-review` pass on each PR before merge.
+  (done); `CONTRIBUTING.md`, `CODEOWNERS`, and a PR template are in (done).
+  Required approvals is 0, not 1 — a solo account can't approve its own
+  PRs, so 1 would deadlock. Review is process-enforced: a `/code-review`
+  pass on each PR, and Claude merges only after asking Andrew and
+  offering him a chance to inspect. When external contributors arrive,
+  set approvals to 1 for their PRs (he can approve those) + admin bypass.
 
 ### Housekeeping
 - Cut the **v0.1 release** and publish signed binaries (see ROADMAP);
@@ -76,18 +79,13 @@ involved in building Silt**. What are the major cross-functional flaws,
 what are the risks and mitigations, and what's the launch/marketing plan
 to reach people who'd run nodes and improve the software?
 
-This deserves its own focused deliverable. Planned outputs:
-1. **`docs/fresh-eyes-council.md`** — a written council: each "hat"
-   (Legal, Trust & Safety / abuse, Security, PR, Marketing, Governance)
-   names its single biggest concern and its recommended mitigation.
-2. **`docs/risk-register.md`** — a ranked risk register (likelihood ×
-   impact) with an owner and mitigation per risk.
-3. **`docs/launch-plan.md`** — positioning, messaging pillars, the
-   audiences (node operators, contributors, researchers), the channels
-   to reach each, and a phased launch sequence.
+**Done** — the three documents are written and merged:
+`docs/fresh-eyes-council.md`, `docs/risk-register.md`, and
+`docs/launch-plan.md`, plus `docs/safety-denylist.md` and `GOVERNANCE.md`.
+The *actions* inside them (legal entity, security audit, denylist
+distribution) are tracked in the roadmap's prioritized sequence.
 
-An initial pass at the top findings was delivered alongside this
-backlog; these documents expand it. The single most important
+The single most important
 cross-cutting theme to resolve early: a content-neutral, "cannot-know-
 what-it-carries" network needs its **abuse-handling and legal posture
 designed in from the start** — both to protect operators and to keep the
