@@ -141,21 +141,13 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 	// what first-answer provider resolution misses).
 	window := ports.Duration(9) * o.NodeCfg.RepairInterval
 	report("start")
+	// Kill the nodes that actually hold columns (a column-placed file
+	// concentrates onto ~n hosts, so random kills mostly miss it), keeping
+	// a margin above k so repair always has enough to rebuild; between
+	// waves it restores redundancy before the next cull.
 	perWave := int(float64(o.Nodes) * o.KillFrac)
 	for w := 0; w < o.Waves; w++ {
-		killed := 0
-		for _, idx := range cl.rng.Perm(o.Nodes) {
-			nd := cl.Nodes[idx]
-			if protected[nd.ID()] || !cl.Net.Alive(nd.ID()) {
-				continue
-			}
-			cl.Net.Kill(nd.ID())
-			killed++
-			res.Killed++
-			if killed == perWave {
-				break
-			}
-		}
+		res.Killed += cl.KillColumns(m, protected, o.Erasure, o.NodeCfg.RepairSlack, perWave)
 		report(fmt.Sprintf("wave %d kill", w+1))
 		if mn, _ := minAvg(cl.StripeRedundancy(m)); res.MinAfterKill == 0 || mn < res.MinAfterKill {
 			res.MinAfterKill = mn
@@ -208,6 +200,60 @@ func (cl *Cluster) StripeRedundancy(m *manifest.Manifest) []int {
 		}
 	}
 	return counts
+}
+
+// AliveHoldersOf returns the alive nodes holding at least one shard of
+// the file, in deterministic (creation) order. Column placement
+// concentrates a low-replication file onto ~n hosts, so these are the
+// only nodes worth killing to actually stress it — uniform-random kills
+// mostly hit hosts that carry nothing.
+func (cl *Cluster) AliveHoldersOf(m *manifest.Manifest) []ports.NodeID {
+	ids := append(append([]ports.ChunkID{}, m.ChunkIDs()...), m.ParityIDs()...)
+	var holders []ports.NodeID
+	for _, nd := range cl.Nodes {
+		if !cl.Net.Alive(nd.ID()) {
+			continue
+		}
+		for _, id := range ids {
+			if ok, _ := nd.Store().Has(bgCtx, id); ok {
+				holders = append(holders, nd.ID())
+				break
+			}
+		}
+	}
+	return holders
+}
+
+// KillColumns kills alive column-holders (skipping protected) one at a
+// time to stress a column-placed file. A single host can carry more than
+// one column, so killing by a fixed count is unsafe; it gates on live
+// redundancy instead, stopping when EITHER the full stripes have dropped
+// enough that repair will trigger (redundancy < n-slack) OR the thinnest
+// stripe is one kill from dipping below k (so the file stays
+// recoverable). Gates on stripe 0, a genuinely-full stripe that all full
+// stripes track together — the short final stripe has fewer columns and
+// would mask the drop. Returns how many hosts it killed. With no
+// caretakers, redundancy never climbs back, so later waves find the full
+// stripes already below the trigger and kill nothing.
+func (cl *Cluster) KillColumns(m *manifest.Manifest, protected map[ports.NodeID]bool, p erasure.Params, slack, maxKill int) int {
+	killed := 0
+	for _, id := range cl.AliveHoldersOf(m) {
+		if protected[id] {
+			continue
+		}
+		counts := cl.StripeRedundancy(m)
+		if len(counts) == 0 || counts[0] < p.N-slack {
+			break
+		}
+		if mn, _ := minAvg(counts); mn <= p.K+1 {
+			break
+		}
+		cl.Net.Kill(id)
+		if killed++; killed == maxKill {
+			break
+		}
+	}
+	return killed
 }
 
 func (cl *Cluster) shardAlive(id ports.ChunkID) bool {

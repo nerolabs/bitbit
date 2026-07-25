@@ -77,6 +77,11 @@ type StorageProof struct {
 	Index int
 	Total int
 	Path  []Hash
+	// Column is the shard's position within its stripe (0..n-1) for an
+	// erasure-coded file — the placement/provider key is hash(root‖Column)
+	// so a whole column co-locates and is discovered together. -1 means
+	// "no column" (manifest chunks and uncoded files), keyed by chunk id.
+	Column int
 }
 
 // Message is the single wire envelope. RID correlates requests with

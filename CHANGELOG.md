@@ -28,6 +28,12 @@ download links resolve to real binaries.
 - **The swarm** — Kademlia routing, provider records, and multi-node
   fetch over a deterministic simulator or real mutual-TLS sockets;
   identity is a keypair and a node's ID is the hash of its public key.
+- **Column placement** — an erasure-coded file is placed by *column* (one
+  shard position across every stripe), keyed by `hash(root‖col)`, so a
+  whole column lands together: one host holds one shard of each stripe,
+  a reader finds a column in a single lookup, and losing a host costs a
+  stripe exactly one shard (up to n−k columns can go and the file still
+  rebuilds). Placement, retrieval, repair, and audits all speak columns.
 - **Capacity** — nodes pledge a fixed budget (`-capacity 2G`); placement
   spills over as nodes fill, and every node estimates the whole network's
   size from local gossip alone.

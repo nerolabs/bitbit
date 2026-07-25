@@ -38,10 +38,11 @@ type wireMsg struct {
 }
 
 type wireProof struct {
-	Root  []byte   `cbor:"1,keyasint"`
-	Index int      `cbor:"2,keyasint"`
-	Total int      `cbor:"3,keyasint"`
-	Path  [][]byte `cbor:"4,keyasint,omitempty"`
+	Root   []byte   `cbor:"1,keyasint"`
+	Index  int      `cbor:"2,keyasint"`
+	Total  int      `cbor:"3,keyasint"`
+	Path   [][]byte `cbor:"4,keyasint,omitempty"`
+	Column int      `cbor:"5,keyasint,omitempty"`
 }
 
 var encMode cbor.EncMode
@@ -80,10 +81,11 @@ func toWire(m ports.Message) wireMsg {
 	}
 	if m.Proof != nil {
 		w.Proof = &wireProof{
-			Root:  append([]byte(nil), m.Proof.Root[:]...),
-			Index: m.Proof.Index,
-			Total: m.Proof.Total,
-			Path:  idsToBytes(m.Proof.Path),
+			Root:   append([]byte(nil), m.Proof.Root[:]...),
+			Index:  m.Proof.Index,
+			Total:  m.Proof.Total,
+			Path:   idsToBytes(m.Proof.Path),
+			Column: m.Proof.Column,
 		}
 	}
 	return w
@@ -106,7 +108,7 @@ func fromWire(w wireMsg) ports.Message {
 	m.Height = w.Height
 	m.Tag = w.Tag
 	if w.Proof != nil {
-		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path)}
+		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column}
 		copy(p.Root[:], w.Proof.Root)
 		m.Proof = &p
 	}

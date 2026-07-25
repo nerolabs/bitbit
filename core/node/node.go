@@ -238,6 +238,13 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			return
 		}
 		c := ports.Chunk{ID: msg.ChunkID, Data: msg.Data}
+		// Providers register under the placement key — the column key for a
+		// coded shard, the chunk's own id otherwise — so a reader walking to
+		// that key finds the whole column here.
+		key := ports.Hash(msg.ChunkID)
+		if msg.Proof != nil {
+			key = placementKey(msg.Proof.Root, msg.ChunkID, msg.Proof.Column)
+		}
 		ok := c.Verify() // never store what doesn't hash right
 		if ok && msg.Proof != nil && !verifyStorageProof(*msg.Proof, msg.ChunkID) {
 			ok = false // refuse chunks with proofs we couldn't defend under audit
@@ -247,7 +254,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			if msg.Proof != nil {
 				n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
 			}
-			n.provs.Add(msg.ChunkID, n.id)
+			n.provs.Add(key, n.id)
 			n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: true})
 			return
 		}
@@ -256,7 +263,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 				ok = false
 			} else {
 				n.Stats.ChunksReceived++
-				n.provs.Add(msg.ChunkID, n.id) // we are now a provider
+				n.provs.Add(key, n.id) // we are now a provider
 				if msg.Proof != nil {
 					n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
 				}

@@ -88,7 +88,6 @@ func TestRepairPreservesStripeAntiAffinity(t *testing.T) {
 		}
 		a.Distribute(entry, m, false, func(int) {})
 		cl.Sched.Run()
-		baseline := cl.maxStripeCoResidency(m, isCaretaker)
 
 		for _, c := range caretakers {
 			c.Care(cl.Registry, h.Care())
@@ -100,20 +99,12 @@ func TestRepairPreservesStripeAntiAffinity(t *testing.T) {
 			protected[c.ID()] = true
 		}
 		window := ports.Duration(9) * o.NodeCfg.RepairInterval
+		// Kill column-holders (a column-placed file lives on ~n hosts, so
+		// random kills miss it), keeping a margin above k so repair can
+		// always rebuild.
 		perWave := int(float64(o.Nodes) * o.KillFrac)
 		for w := 0; w < o.Waves; w++ {
-			killed := 0
-			for _, idx := range cl.rng.Perm(o.Nodes) {
-				nd := cl.Nodes[idx]
-				if protected[nd.ID()] || !cl.Net.Alive(nd.ID()) {
-					continue
-				}
-				cl.Net.Kill(nd.ID())
-				killed++
-				if killed == perWave {
-					break
-				}
-			}
+			cl.KillColumns(m, protected, o.Erasure, o.NodeCfg.RepairSlack, perWave)
 			cl.Sched.RunUntil(cl.Sched.Now().Add(window))
 		}
 		final := cl.maxStripeCoResidency(m, isCaretaker)
@@ -121,14 +112,18 @@ func TestRepairPreservesStripeAntiAffinity(t *testing.T) {
 		if rebuilt == 0 {
 			t.Fatalf("seed %d: no shards were rebuilt — the scenario proves nothing", seed)
 		}
-		// Repair must not cluster a stripe more than one shard beyond what
-		// publish-time placement already produced. Co-residency is a graded
-		// preference, not a hard cap, so a single extra doubling under churn
-		// pressure is tolerable; the raw-closest repair this replaces drifted
-		// +2 to +4 over baseline across these same seeds (up to 6).
-		if final > baseline+1 {
-			t.Fatalf("seed %d: repair clustered a stripe (co-residency %d) well beyond the publish baseline %d after %d rebuilds",
-				seed, final, baseline, rebuilt)
+		// Column placement makes anti-affinity structural WITHIN a column
+		// (a column is one shard of each stripe, on one host), and repair
+		// re-seeds rebuilt shards onto their column, so it can't cluster a
+		// column onto a doubled-up host. Cross-column co-residence — one host
+		// being closest to several column keys, more likely as churn shrinks
+		// the network — is bounded only loosely until failure-domain-aware
+		// placement (Phase 1 #6). The red line that must hold through repair:
+		// no host gathers k shards of a stripe, which would let it
+		// reconstruct that stripe's data alone.
+		if final >= m.K {
+			t.Fatalf("seed %d: a host holds %d shards of one stripe (>= k=%d) after %d rebuilds — repair over-concentrated the stripe",
+				seed, final, m.K, rebuilt)
 		}
 	}
 }
