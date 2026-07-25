@@ -86,18 +86,27 @@
 <li>Dispersion audit — <b>done</b>: caretakers tally the domains that actually hold each stripe&#x27;s columns and re-spread any stripe a single domain failure could break, until no domain loss drops it below k. Also surfaces the per-stripe domain spread the content-blind observatory can&#x27;t compute.</li>
 <li>Demand-responsive dispersion — <b>done</b> (push half): a node whose chunk runs hot pushes leased cache copies to more hosts (across domains); reads refresh them, cooldown expires them, so hot files fan out and contract elastically. Pull-cache tier (fetchers cache near readers) is the noted follow-up.</li>
 </ol>
-<p><b>Phase 1 is complete</b> — the durability + scale backbone is in. Next is the launch-gating track (independent security + legal review, then v0.1); see below.</p>
-<p><b>Phase 2 — production trustworthiness (feeds the external security audit).</b></p>
+<p><b>Phase 1 is complete</b> — the durability + scale backbone is in.</p>
+<p>The launch track is deliberately <b>community-feedback-first</b> (Andrew, 2026-07-25), a re-sequencing of the earlier &quot;form an entity + pay for an audit before launch&quot; plan. For an early, unproven infrastructure project, spending the scarcest resources (money, legal exposure) on formalities ahead of validation is backwards. Instead: ship something real and honestly labeled, let the community be the first review, and let what we learn decide whether the formal commitments are worth making.</p>
+<p><b>Phase A — Ship &amp; solicit (the feedback release).</b></p>
 <ol>
-<li>Security hardening — Sybil/eclipse resistance, hardened reputation, real (non-toy) proof-of-retrieval.</li>
+<li>Cut <b>v0.1</b>, labeled <em>experimental, unaudited, for evaluation and feedback — not for data you can&#x27;t afford to lose.</em> Not signed/notarized (a wider-push concern); checksums + build-from-source suffice for a technical audience. Andrew does a personal review + hardening pass before any outreach.</li>
+<li>Publish the <b>threat model</b> (<span class="mono">docs/threat-model.md</span>) for community review — honest disclosure <em>and</em> the invitation to break it. At this stage the community is the security review.</li>
+<li>Market for exactly one thing: <b>feedback.</b> Narrow, technical audiences (&quot;help us break this,&quot; not &quot;use this&quot;); the launch plan is re-pointed at that single goal.</li>
+</ol>
+<p><b>Phase B — Learn &amp; decide (feedback-driven).</b></p>
+<ol>
+<li>Triage what comes back: bugs, design critique, security findings, and whether anyone cares.</li>
+<li><b>Then</b> decide the legal posture — entity, jurisdiction, or stay a pure code-publishing project — informed by what the early engagement reveals, not made blind. No entity is formed on spec.</li>
+</ol>
+<p><b>Phase C — Harden &amp; formalize (only if B justifies it).</b></p>
+<ol>
+<li>Security hardening — Sybil/eclipse resistance, ungameable reputation, real (non-toy) proof-of-retrieval.</li>
 <li>Multi-process e2e integration tests over real TCP/daemons.</li>
-<li>Denylist distribution/subscription (completes the abuse-handling story).</li>
+<li>Denylist distribution/subscription (completes the abuse-handling story); pull-cache tier for demand dispersion.</li>
+<li>Formal commitments <em>if warranted by traction and feedback</em>: legal entity + DMCA agent, an independent paid audit, signed/notarized binaries, and a wider launch.</li>
 </ol>
-<p><b>Phase 3 — launch enablement (when the above are solid).</b></p>
-<ol>
-<li>Cut v0.1 + signed/notarized binaries + checksums, then execute the launch plan.</li>
-</ol>
-<p><b>Parallel throughout — non-coding, highest <em>overall</em> value, gates launch:</b> form the legal entity + DMCA agent + legal read (long lead time), and scope the independent security audit so Phase 2 feeds it. No wide launch precedes these (see <span class="mono">docs/risk-register.md</span>).</p>
+<p>The gate that used to be &quot;entity + paid audit&quot; is now <b>&quot;publish the threat model for community review.&quot;</b> Everything expensive or irreversible waits for evidence. See <span class="mono">docs/launch-plan.md</span> and <span class="mono">docs/risk-register.md</span>.</p>
 <h2>Release engineering (v0.1)</h2>
 <ul>
 <li><b>Cut the v0.1 release + publish signed binaries</b> — Phase 3. Not done yet (deliberately). The site&#x27;s downloads point at build-from-source until then. When ready: move CHANGELOG &quot;Unreleased&quot; into a dated version, <span class="mono">git tag v0.1.0 &amp;&amp; git push origin v0.1.0</span>; the release workflow builds the binaries and publishes a GitHub Release. Add code-signing/notarization (macOS) and a checksums file first.</li>
