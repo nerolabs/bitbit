@@ -23,6 +23,7 @@ import (
 	"github.com/nerolabs/silt/adapters/walltime"
 	"github.com/nerolabs/silt/core/chain"
 	"github.com/nerolabs/silt/core/credit"
+	"github.com/nerolabs/silt/core/denylist"
 	"github.com/nerolabs/silt/core/genesis"
 	"github.com/nerolabs/silt/core/link"
 	"github.com/nerolabs/silt/core/node"
@@ -44,6 +45,7 @@ func cmdDaemon(args []string) error {
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
 	capacity := fs.String("capacity", "", "storage pledge, e.g. 2G, 500M (default: unlimited)")
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
+	denylistPath := fs.String("denylist", "", "operator takedown list: a file of denied root hashes to refuse to store/serve (you choose which lists to honor)")
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
 	uiAddr := fs.String("ui", "", "serve the web UI at this address (e.g. 127.0.0.1:8081)")
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
@@ -178,6 +180,25 @@ func cmdDaemon(args []string) error {
 			return err
 		}
 		fmt.Printf("registry: %s\n", *registryURL)
+	}
+
+	if *denylistPath != "" {
+		f, err := os.Open(*denylistPath)
+		if err != nil {
+			return err
+		}
+		dl := denylist.New()
+		if err := denylist.LoadInto(dl, f); err != nil {
+			f.Close()
+			return err
+		}
+		f.Close()
+		nd.SetDenylist(dl)
+		if purged := nd.EnforceDenylist(); purged > 0 {
+			fmt.Printf("denylist: %d root(s) denied; purged %d held chunk(s)\n", dl.Len(), purged)
+		} else {
+			fmt.Printf("denylist: honoring %d denied root(s)\n", dl.Len())
+		}
 	}
 
 	fmt.Printf("peer: %s@%s\n", id, tr.Addr())

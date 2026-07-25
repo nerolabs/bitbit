@@ -57,6 +57,11 @@ type Block struct {
 	Proposer    []byte        `cbor:"4,keyasint"` // Ed25519 public key
 	ProposerSig []byte        `cbor:"5,keyasint,omitempty"`
 	Atts        []Attestation `cbor:"6,keyasint,omitempty"`
+	// Revocations are append-only takedown records: opaque roots that
+	// compliant nodes must no-op on. Deletion is impossible on an
+	// immutable chain, so takedown is an ADDITION — a tombstone — that
+	// replicates and is tamper-evident like any other block.
+	Revocations []ports.Hash `cbor:"7,keyasint,omitempty"`
 }
 
 // Attestation is a validator's signature over the block hash. The
@@ -80,7 +85,7 @@ func init() {
 // proposer. Signing the hash therefore signs the block's entire
 // content and its place in history.
 func (b *Block) Hash() ports.Hash {
-	unsigned := Block{Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer}
+	unsigned := Block{Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations}
 	raw, err := encMode.Marshal(&unsigned)
 	if err != nil {
 		panic(err) // canonical encoding of our own struct cannot fail
@@ -152,10 +157,11 @@ var (
 
 // Chain is a validator's replica plus the rules for growing it.
 type Chain struct {
-	cfg    Config
-	rep    func(ports.NodeID) int64
-	blocks []Block
-	byRoot map[ports.Hash]ports.Entry
+	cfg     Config
+	rep     func(ports.NodeID) int64
+	blocks  []Block
+	byRoot  map[ports.Hash]ports.Entry
+	revoked map[ports.Hash]bool
 }
 
 // New starts an empty replica. rep is the local reputation view —
@@ -163,8 +169,14 @@ type Chain struct {
 // serves seen), which is the sense in which trust here is earned, not
 // declared.
 func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
-	return &Chain{cfg: cfg, rep: rep, byRoot: make(map[ports.Hash]ports.Entry)}
+	return &Chain{cfg: cfg, rep: rep,
+		byRoot:  make(map[ports.Hash]ports.Entry),
+		revoked: make(map[ports.Hash]bool)}
 }
+
+// Revoked reports whether root has been taken down by a committed
+// revocation record.
+func (c *Chain) Revoked(root ports.Hash) bool { return c.revoked[root] }
 
 // Head returns the current tip hash and the height the NEXT block must
 // carry. An empty chain expects height 0 with a zero Prev.
@@ -208,7 +220,7 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		return fmt.Errorf("%w: proposer %s has %d, needs %d",
 			ErrLowReputation, b.ProposerID(), got, c.cfg.MinProposerRep)
 	}
-	if len(b.Entries) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 {
 		return errors.New("chain: empty block")
 	}
 	seen := make(map[ports.Hash]bool)
@@ -296,6 +308,9 @@ func (c *Chain) apply(b Block) {
 	c.blocks = append(c.blocks, b)
 	for _, e := range b.Entries {
 		c.byRoot[e.Root] = e
+	}
+	for _, r := range b.Revocations {
+		c.revoked[r] = true
 	}
 }
 

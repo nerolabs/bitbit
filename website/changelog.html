@@ -35,8 +35,10 @@
 <h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
 <h3>Added</h3>
 <ul>
+<li><b>Takedown by revocation.</b> Illegal or unwanted content can be removed without breaking encryption or rewriting history: an append-only revocation record, committed by the same reputation quorum that commits publications, makes compliant nodes no-op on a denied opaque root — refusing to store, serve, prove, announce, or repair it, and purging what they hold. Operators may also load a local denylist they choose to honor (<span class="mono">silt daemon -denylist</span>). The project ships the mechanism and no list; it operates neither the network nor the policy. See <span class="mono">docs/safety-denylist.md</span> and <span class="mono">GOVERNANCE.md</span>. (<span class="mono">silt sim run takedown</span>.)</li>
 <li>Public website (silthq.com) with brand, docs, operator guide, and downloads.</li>
 <li>Continuous delivery: PR previews, a <span class="mono">staging</span> environment, and production deploys from <span class="mono">main</span>.</li>
+<li>Strategy docs: fresh-eyes council, risk register, and launch plan.</li>
 </ul>
 <h2 class="rel released"><span class="v">0.1.0</span><span class="d">2026-07-25</span></h2>
 <p>The first public cut. Silt is a distributed, encrypted, erasure-coded storage network whose nodes cannot know what they carry.</p>

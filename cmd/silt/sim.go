@@ -146,6 +146,18 @@ func cmdSim(args []string) error {
 		fmt.Println(res)
 		return err
 
+	case "takedown":
+		fmt.Printf("takedown: 40-node swarm, quorum-style denylist, seed %d\n\n", *seed)
+		res, err := sim.Takedown(*seed)
+		fmt.Println(res)
+		if err != nil {
+			return err
+		}
+		if !res.DeniedBlocked || !res.ControlSurvives {
+			return fmt.Errorf("takedown did not behave as expected (seed %d)", *seed)
+		}
+		return nil
+
 	case "audit":
 		o := sim.DefaultAuditOpts()
 		o.Net = netCfg
@@ -173,6 +185,6 @@ func cmdSim(args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown scenario %q (scenarios: scatter, churn, economy, audit, capacity, consensus)", scenario)
+		return fmt.Errorf("unknown scenario %q (scenarios: scatter, churn, economy, audit, capacity, consensus, takedown)", scenario)
 	}
 }

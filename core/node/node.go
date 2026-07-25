@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/denylist"
 	"github.com/nerolabs/silt/core/dht"
 	"github.com/nerolabs/silt/core/link"
 	"github.com/nerolabs/silt/ports"
@@ -114,6 +115,9 @@ type Node struct {
 	chain    *chain.Chain
 	signer   ed25519.PrivateKey
 	onCommit func(chain.Block)
+	// denylist is the operator's local takedown list (nil = none). The
+	// effective set also includes on-chain revocations; see isDenied.
+	denylist *denylist.Set
 }
 
 type capInfo struct{ used, total int64 }
@@ -229,7 +233,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.provs.Add(msg.Target, from)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgAddProviderAck, OK: true})
 	case ports.MsgStoreChunk:
-		if n.freeload {
+		if n.freeload || (msg.Proof != nil && n.isDenied(msg.Proof.Root)) {
 			n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: false})
 			return
 		}
@@ -260,7 +264,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: ok})
 	case ports.MsgFetchChunk:
-		if n.freeload {
+		if n.freeload || n.chunkDenied(msg.ChunkID) {
 			n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: false})
 			return
 		}
@@ -280,8 +284,15 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		if n.liar {
 			_, ok = n.proofs[msg.ChunkID] // "of course I have it"
 		}
+		if n.chunkDenied(msg.ChunkID) {
+			ok = false // taken down: no longer available here
+		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgHasChunkReply, Found: ok})
 	case ports.MsgChallenge:
+		if n.chunkDenied(msg.ChunkID) {
+			n.reply(from, msg, ports.Message{Kind: ports.MsgChallengeReply, Found: false})
+			return
+		}
 		n.reply(from, msg, n.answerChallenge(msg))
 	}
 }

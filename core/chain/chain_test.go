@@ -195,3 +195,52 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 		t.Fatalf("blocks roundtrip: %v", err)
 	}
 }
+
+// A committed revocation is append-only takedown: it commits only by
+// quorum (like any block), marks the root revoked, and makes the chain's
+// registry no-op on it — while the immutable record of the original
+// publication remains.
+func TestRevocationByQuorum(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b1 := w.block(entry(1), entry(2))
+	w.attestAll(b1)
+	if err := w.c.Append(*b1); err != nil {
+		t.Fatal(err)
+	}
+	if w.c.Revoked(entry(1).Root) {
+		t.Fatal("nothing revoked yet")
+	}
+
+	// A revocation-only block at the next height takes down entry(1).
+	prev, height := w.c.Head()
+	rev := &Block{Height: height, Prev: prev, Revocations: []ports.Hash{entry(1).Root}}
+	Sign(rev, w.prop)
+
+	// Too few attestations: a lone actor cannot take content down.
+	rev.Atts = []Attestation{Attest(rev, w.vals[0])}
+	if err := w.c.Append(*rev); err == nil {
+		t.Fatal("revocation must need quorum, not one signer")
+	}
+	// With quorum it commits.
+	w.attestAll(rev)
+	if err := w.c.Append(*rev); err != nil {
+		t.Fatal(err)
+	}
+	if !w.c.Revoked(entry(1).Root) {
+		t.Fatal("root should be revoked after quorum revocation")
+	}
+	// The original publication record still exists (append-only): the
+	// ledger remembers, the availability layer forgets.
+	if _, ok := w.c.LookupRoot(entry(1).Root); !ok {
+		t.Fatal("the immutable publication record must persist")
+	}
+	// But the registry view no-ops on it.
+	reg := ReplicaRegistry{C: w.c}
+	if _, ok, _ := reg.Lookup(nil, entry(1).Root); ok {
+		t.Fatal("revoked root must be unresolvable via the registry")
+	}
+	// A non-revoked entry is unaffected.
+	if _, ok, _ := reg.Lookup(nil, entry(2).Root); !ok {
+		t.Fatal("non-revoked entry must still resolve")
+	}
+}
