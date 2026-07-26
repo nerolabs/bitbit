@@ -18,6 +18,7 @@
 package link
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -56,11 +57,34 @@ func (h Handle) Care() CareHandle {
 }
 
 func (h Handle) String() string {
-	return fmt.Sprintf("%s%s:%x", fullPrefix, h.Root, h.Key)
+	return fullPrefix + encodePart(h.Root[:]) + ":" + encodePart(h.Key[:])
 }
 
 func (c CareHandle) String() string {
-	return fmt.Sprintf("%s%s:%x", carePrefix, c.Root, c.LayoutKey)
+	return carePrefix + encodePart(c.Root[:]) + ":" + encodePart(c.LayoutKey[:])
+}
+
+// Links encode their two 32-byte values as unpadded base64url — 43 chars
+// each, versus 64 for hex — so a share link is ~30% shorter and easier to
+// copy by hand. base64url has no ':' so it never collides with the
+// separators, and no '/' or '+' so it's URL- and shell-safe.
+func encodePart(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+
+// decodePart accepts the compact base64url form and, for links minted by
+// earlier builds, the 64-char hex form too.
+func decodePart(s string) ([32]byte, error) {
+	var out [32]byte
+	if len(s) == 64 {
+		if h, err := ports.ParseHash(s); err == nil {
+			return h, nil
+		}
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil || len(raw) != 32 {
+		return out, fmt.Errorf("expected a 32-byte base64url value, got %q", s)
+	}
+	copy(out[:], raw)
+	return out, nil
 }
 
 // Parse reads a full link.
@@ -99,19 +123,21 @@ func ParseAnyCare(s string) (CareHandle, error) {
 }
 
 func splitBody(body string) (ports.Hash, [32]byte, error) {
+	var root ports.Hash
 	var key [32]byte
 	parts := strings.Split(body, ":")
 	if len(parts) != 2 {
-		return ports.Hash{}, key, fmt.Errorf("link: want ROOT:KEY")
+		return root, key, fmt.Errorf("link: want ROOT:KEY")
 	}
-	root, err := ports.ParseHash(parts[0])
+	r, err := decodePart(parts[0])
 	if err != nil {
-		return ports.Hash{}, key, fmt.Errorf("link: root: %w", err)
+		return root, key, fmt.Errorf("link: root: %w", err)
 	}
-	k, err := ports.ParseHash(parts[1]) // same 32-byte hex shape
+	k, err := decodePart(parts[1])
 	if err != nil {
-		return ports.Hash{}, key, fmt.Errorf("link: key: %w", err)
+		return root, key, fmt.Errorf("link: key: %w", err)
 	}
+	copy(root[:], r[:])
 	copy(key[:], k[:])
 	return root, key, nil
 }

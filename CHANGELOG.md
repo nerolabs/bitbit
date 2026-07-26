@@ -26,9 +26,14 @@ First-production-user feedback from the 0.1.0 release, fixed:
   fresh daemon contributes measurable, countable storage instead of an
   unlimited pledge that read as 0 B of network storage. `-capacity ""` still
   means unlimited.
-- **Observatory** (#22) now explains it shows only the daemons you list that
-  run `-ui` (no swarm auto-discovery), and that "daemons observed" is not the
-  network's peer count.
+- **Shorter, easier-to-copy links** (#20) — a link now encodes its two
+  32-byte values in compact base64url (43 chars each) instead of 64-char
+  hex, so a share link is ~30% shorter (137 → 95 chars). Old hex links still
+  parse.
+- **Observatory** (#22) explains it shows only the daemons you list that run
+  `-ui` (no swarm auto-discovery), that "daemons observed" is not the peer
+  count, and now displays the swarm's self-estimate ("~N peers") right beside
+  it so the two numbers reconcile.
 
 ### Added
 - [**Build your own Silt test network**](https://github.com/nerolabs/silt/blob/main/docs/local-test-network.md) —
