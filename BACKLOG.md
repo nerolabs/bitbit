@@ -141,13 +141,23 @@ neutrality line, and open questions (relay incentives/abuse, IPv6, symmetric
 NAT) in [docs/design/cross-network.md](docs/design/cross-network.md).
 Build order:
 
-- **mDNS local discovery** — free two-nodes-in-a-house rendezvous, no infra.
-- **Reachability check** (our AutoNAT) — a node verifies whether it's
-  publicly dialable before advertising a direct address; the decision the
-  rest hangs on.
-- **Relay** (`-relay`, content-blind ciphertext forwarding, rate-capped) —
-  the universal fallback when both peers are NATed; a node capability, not
-  special infrastructure. The bulk of the work.
+- **mDNS local discovery** — *done* — free two-nodes-in-a-house rendezvous,
+  no infra (`adapters/lan`).
+- **Reachability check** (our AutoNAT) — *done* — a node verifies whether
+  it's publicly dialable before advertising a direct address; the decision
+  the rest hangs on.
+- **Relay** (`-relay`, content-blind ciphertext forwarding, capped) —
+  *done* — the universal fallback when both peers are NATed; a node
+  capability, not special infrastructure (`adapters/relay`). A NATed daemon
+  registers with `-relay-via RELAYID@HOST:PORT` when its reachability
+  verdict is NATed and advertises `relay:R@host:port`; senders dial the
+  relay and run their normal pinned end-to-end TLS handshake *through* the
+  splice, so the relay can't read or forge anything. CI proves the whole
+  path on localhost, including both-peers-NATed, by treating "NATed" as
+  "accepts no inbound conns". Remaining polish: reuse relayed conns instead
+  of dialing per message; prefer a direct/IPv6 address when one is also
+  known (today the book keeps one address per peer); relay-capability
+  gossip so `-relay-via` can be discovered instead of configured.
 - **Dev node** — a throwaway public `-relay` box (VPS or tunnel) in a
   separate `deploy/`, clearly *not* project-operated, to develop against.
 - **Prove it** — Andrew's Mac ↔ wife's Mac, different networks, meeting

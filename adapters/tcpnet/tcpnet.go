@@ -40,6 +40,7 @@ import (
 
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/adapters/relay"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -62,6 +63,10 @@ type Transport struct {
 
 	mu    sync.Mutex
 	peers map[ports.NodeID]string
+	// adv, when set, replaces listenAddr in outgoing envelope stamps — a
+	// NATed node advertising "reach me via relay R" instead of a
+	// LAN address nobody outside the house can dial.
+	adv string
 
 	// lg narrates transport failures (dials, handshakes, forgeries) —
 	// exactly the events that are invisible-but-fatal across real
@@ -101,6 +106,23 @@ func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Tr
 func (t *Transport) Addr() string       { return t.listenAddr }
 func (t *Transport) Self() ports.NodeID { return t.self }
 func (t *Transport) Close() error       { return t.ln.Close() }
+
+// SetAdvertise overrides the address stamped on outgoing envelopes
+// (default: the listen address). "" restores the default.
+func (t *Transport) SetAdvertise(addr string) {
+	t.mu.Lock()
+	t.adv = addr
+	t.mu.Unlock()
+}
+
+func (t *Transport) advertised() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.adv != "" {
+		return t.adv
+	}
+	return t.listenAddr
+}
 
 // AddPeer seeds the address book (bootstrap wiring).
 func (t *Transport) AddPeer(id ports.NodeID, addr string) {
@@ -148,9 +170,7 @@ func (t *Transport) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
 func (t *Transport) SetLogger(lg ports.Logger) { t.lg = lg }
 
 func (t *Transport) logf(lvl ports.LogLevel, event string, kv ...any) {
-	if t.lg != nil && t.lg.Enabled(lvl) {
-		t.lg.Log(lvl, event, kv...)
-	}
+	ports.LogIf(t.lg, lvl, event, kv...)
 }
 
 // Send resolves the address, builds the envelope, and hands the
@@ -161,7 +181,7 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 		t.logf(ports.LogDebug, "send with no known address", "to", to)
 		return fmt.Errorf("tcpnet: no known address for %s", to)
 	}
-	env := envelope{From: t.self[:], Addr: t.listenAddr, Msg: toWire(msg)}
+	env := envelope{From: t.self[:], Addr: t.advertised(), Msg: toWire(msg)}
 	contacts := make(map[string]string)
 	for _, list := range [][]ports.NodeID{msg.Nodes, msg.Providers} {
 		for _, id := range list {
@@ -183,24 +203,53 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 
 // writeFrame dials with the target's identity pinned: if the far end's
 // key doesn't hash to the NodeID we meant, the handshake fails and the
-// message is dropped — impostors get silence, not data.
+// message is dropped — impostors get silence, not data. A relay-form
+// address changes only how the socket is reached: the pinned TLS
+// session with the TARGET runs end-to-end through the relay's splice,
+// so a relay (or anyone) injecting frames still dies at the handshake.
 func (t *Transport) writeFrame(to ports.NodeID, addr string, frame []byte) {
-	cfg := &tls.Config{
-		Certificates:          []tls.Certificate{t.cert},
-		InsecureSkipVerify:    true, // replaced by pinning, not skipped
-		VerifyPeerCertificate: identity.VerifyExpected(to),
-		MinVersion:            tls.VersionTLS13,
-	}
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
-	if err != nil {
-		t.logf(ports.LogWarn, "dial failed", "to", to, "addr", addr, "err", err)
-		return // dropped; timeouts upstream handle it
+	cfg := identity.ClientConfig(t.cert, to)
+	var conn *tls.Conn
+	if relayID, relayAddr, ok := relay.SplitAddr(addr); ok {
+		raw, err := relay.DialThrough(t.cert, relayID, relayAddr, to)
+		if err != nil {
+			t.logf(ports.LogWarn, "relay dial failed", "to", to, "addr", addr, "err", err)
+			return
+		}
+		conn = tls.Client(raw, cfg)
+		conn.SetDeadline(time.Now().Add(5 * time.Second))
+		if err := conn.Handshake(); err != nil {
+			t.logf(ports.LogWarn, "relayed handshake failed", "to", to, "addr", addr, "err", err)
+			conn.Close()
+			return
+		}
+		conn.SetDeadline(time.Time{})
+	} else {
+		var err error
+		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
+		if err != nil {
+			t.logf(ports.LogWarn, "dial failed", "to", to, "addr", addr, "err", err)
+			return // dropped; timeouts upstream handle it
+		}
 	}
 	defer conn.Close()
 	var hdr [4]byte
 	binary.BigEndian.PutUint32(hdr[:], uint32(len(frame)))
 	conn.Write(hdr[:])
 	conn.Write(frame)
+}
+
+// RelayInbound serves one spliced conn handed over by a relay
+// registration (see adapters/relay.Client). The inner TLS server
+// handshake happens inside readLoop exactly as for a direct accept, so
+// a relayed sender is authenticated by the same pinning rule — the
+// relay contributed a pipe, not an identity.
+func (t *Transport) RelayInbound(raw net.Conn) {
+	t.readLoop(tls.Server(raw, &tls.Config{
+		Certificates: []tls.Certificate{t.cert},
+		ClientAuth:   tls.RequireAnyClientCert,
+		MinVersion:   tls.VersionTLS13,
+	}))
 }
 
 func (t *Transport) acceptLoop() {

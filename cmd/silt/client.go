@@ -23,7 +23,6 @@ import (
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/linkbook"
-	"github.com/nerolabs/silt/adapters/logfile"
 	"github.com/nerolabs/silt/adapters/tcpnet"
 	"github.com/nerolabs/silt/adapters/walltime"
 	"github.com/nerolabs/silt/core/node"
@@ -85,15 +84,11 @@ func cmdClient(args []string) error {
 	nd := node.New(id, node.DefaultConfig(), walltime.New(loop), tr, store)
 
 	if *debug {
-		logPath := filepath.Join(*storeDir, "debug.log")
-		lg, err := logfile.Open(logPath, ports.LogDebug)
+		lg, err := openDebugLog(*storeDir, tr, nd)
 		if err != nil {
 			return err
 		}
 		defer lg.Close()
-		tr.SetLogger(lg)
-		nd.SetLogger(lg)
-		fmt.Printf("debug: logging to %s\n", logPath)
 	}
 
 	var reg ports.Registry

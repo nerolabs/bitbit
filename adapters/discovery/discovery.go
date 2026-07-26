@@ -23,9 +23,12 @@ import (
 	"github.com/nerolabs/silt/ports"
 )
 
-// Parse reads one "ID@host:port" peer string.
+// Parse reads one "ID@addr" peer string. The split is on the FIRST "@":
+// an ID is fixed-form hex and can never contain one, but an addr can —
+// a relay-form address ("relay:RELAYID@host:port") carries its own "@",
+// and splitting on the last one would shear it in half.
 func Parse(s string) (tcpnet.Peer, error) {
-	at := strings.LastIndex(s, "@")
+	at := strings.Index(s, "@")
 	if at < 0 {
 		return tcpnet.Peer{}, fmt.Errorf("discovery: peer %q: want ID@HOST:PORT", s)
 	}

@@ -38,3 +38,11 @@ type Logger interface {
 	Enabled(LogLevel) bool
 	Log(lvl LogLevel, event string, kv ...any)
 }
+
+// LogIf is the canonical nil-safe emit: every component's logf helper
+// delegates here, so the "is logging on" contract lives in one place.
+func LogIf(lg Logger, lvl LogLevel, event string, kv ...any) {
+	if lg != nil && lg.Enabled(lvl) {
+		lg.Log(lvl, event, kv...)
+	}
+}
