@@ -130,6 +130,34 @@ actively managed. Decisions and tasks, priority order:
   full convergence. Also surfaces the per-stripe domain spread the
   content-blind observatory couldn't compute.
 
+## Networking — cross-network reachability (#27)
+
+Captured from design discussion (2026-07-26). Everything works on
+`127.0.0.1`; two nodes on separate home networks can neither **find** each
+other (rendezvous) nor **connect** (NAT). Design splits the two and keeps
+the relay *capability* in the binary while the public *deployment* stays
+throwaway dev scaffolding — never project-run. Full spec, tradeoffs, the
+neutrality line, and open questions (relay incentives/abuse, IPv6, symmetric
+NAT) in [docs/design/cross-network.md](docs/design/cross-network.md).
+Build order:
+
+- **mDNS local discovery** — free two-nodes-in-a-house rendezvous, no infra.
+- **Reachability check** (our AutoNAT) — a node verifies whether it's
+  publicly dialable before advertising a direct address; the decision the
+  rest hangs on.
+- **Relay** (`-relay`, content-blind ciphertext forwarding, rate-capped) —
+  the universal fallback when both peers are NATed; a node capability, not
+  special infrastructure. The bulk of the work.
+- **Dev node** — a throwaway public `-relay` box (VPS or tunnel) in a
+  separate `deploy/`, clearly *not* project-operated, to develop against.
+- **Prove it** — Andrew's Mac ↔ wife's Mac, different networks, meeting
+  through the dev relay; publish and retrieve.
+- **UPnP/NAT-PMP** and **hole-punching** (DCUtR-style relay→direct upgrade)
+  — later optimizations that reduce relay dependence.
+
+Guardrails: **no baked-in seed/relay** (`-dns-seed`/`-bootstrap` stay
+arguments, never defaults); threat model gains a relay-metadata note.
+
 ## Strategy — the "fresh-eyes council"
 
 Andrew's ask: convene experienced Legal, PR, and Marketing executives

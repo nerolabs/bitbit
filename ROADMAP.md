@@ -165,7 +165,12 @@ learn decide whether the formal commitments are worth making.
     to each other today. Needs a rendezvous (community DNS seeds / relays,
     never SiltHQ-run) plus NAT traversal (relay of ciphertext — content-
     blind by design — with hole-punching later). Arguably the highest-value
-    engineering item once feedback validates the direction.
+    engineering item once feedback validates the direction. **Design:**
+    [docs/design/cross-network.md](docs/design/cross-network.md) — splits
+    rendezvous from NAT traversal, keeps the relay *capability* in the
+    binary while the public *deployment* stays throwaway dev scaffolding
+    (never project-run), and sets the build order (mDNS → reachability
+    check → relay → dev node → prove two Macs → hole-punching).
 14. Security hardening — Sybil/eclipse resistance, ungameable reputation,
     real (non-toy) proof-of-retrieval.
 15. Multi-process e2e integration tests over real TCP/daemons.
