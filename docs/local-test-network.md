@@ -144,6 +144,13 @@ silt daemon -listen 127.0.0.1:7103 -store d3 -ui 127.0.0.1:8083 -capacity 2G \
 Each should print `discovery: 1 peer(s) via -bootstrap` and
 `bootstrapped (N table entries)` — they've found the swarm.
 
+> **On a real LAN, you can skip `-bootstrap` entirely.** These daemons use
+> loopback (`127.0.0.1`) so they can share one machine, but if you run nodes
+> on two computers on the same Wi-Fi, bind each to `0.0.0.0` instead and drop
+> the `-bootstrap` flag — they announce themselves on the local network and
+> discover each other automatically (look for `mdns: discovered …`). It's
+> LAN-only; reaching a node across the internet is a later feature.
+
 **Terminal 4 — publish and retrieve.** An ephemeral client joins, scatters
 the file across the daemons, and leaves, keeping nothing:
 
