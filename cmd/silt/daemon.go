@@ -18,6 +18,7 @@ import (
 	"github.com/nerolabs/silt/adapters/fileregistry"
 	"github.com/nerolabs/silt/adapters/httpregistry"
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/adapters/lan"
 	"github.com/nerolabs/silt/adapters/memstore"
 	"github.com/nerolabs/silt/adapters/tcpnet"
 	"github.com/nerolabs/silt/adapters/walltime"
@@ -45,6 +46,7 @@ func cmdDaemon(args []string) error {
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
 	capacity := fs.String("capacity", "5G", "storage pledge, e.g. 2G, 500M (matches the client's default so the node contributes measurable, countable storage; \"\" = unlimited but doesn't count toward network storage)")
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
+	mdns := fs.Bool("mdns", true, "announce and discover peers on the local network (LAN multicast); needs a non-loopback -listen")
 	denylistPath := fs.String("denylist", "", "operator takedown list: a file of denied root hashes to refuse to store/serve (you choose which lists to honor)")
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
 	uiAddr := fs.String("ui", "", "serve the web UI at this address (e.g. 127.0.0.1:8081)")
@@ -254,6 +256,28 @@ func cmdDaemon(args []string) error {
 	}
 	if ps, err := discovery.LoadFile(peersPath); err == nil {
 		addSeeds(ps, "peers.json (warm restart)")
+	}
+	// Local-network discovery: announce on the LAN and fold any peer we
+	// hear into the routing table. This is the zero-config rung — two nodes
+	// in one house find each other with no flags at all.
+	if *mdns {
+		if adv, err := lan.AdvertiseAddr(tr.Addr()); err != nil {
+			fmt.Fprintln(os.Stderr, "mdns: local discovery off —", err)
+		} else {
+			beacon := lan.New(tcpnet.Peer{ID: id, Addr: adv}, func(p tcpnet.Peer) {
+				loop.Post(func() {
+					tr.AddPeer(p.ID, p.Addr)
+					nd.Bootstrap([]ports.NodeID{p.ID}, func() {})
+					fmt.Printf("mdns: discovered %s@%s\n", p.ID, p.Addr)
+				})
+			})
+			if err := beacon.Start(); err != nil {
+				fmt.Fprintln(os.Stderr, "mdns:", err)
+			} else {
+				defer beacon.Close()
+				fmt.Printf("mdns: announcing %s on the local network\n", adv)
+			}
+		}
 	}
 	// Persist the living address book so the next start needs no flags.
 	go func() {

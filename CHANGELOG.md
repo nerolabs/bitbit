@@ -6,6 +6,22 @@ follow [Semantic Versioning](https://semver.org/).
 
 This log is published at [silthq.com/changelog](https://silthq.com/changelog.html).
 
+## [Unreleased]
+
+### Added
+- **Zero-config LAN discovery** (#27, first rung of cross-network
+  reachability) — `silt daemon` now announces itself on the local network
+  and folds any peer it hears into the routing table, so two nodes in the
+  same house find each other with no `-bootstrap`, no DNS seed, and no
+  infrastructure. It's link-local multicast (the same idea as mDNS, scoped
+  to the LAN by TTL), and self-authenticating: an announcement carries a
+  peer's `ID@host:port`, and the TLS handshake still must present a key
+  hashing to that ID, so a rogue beacon can misdirect a dial but never
+  impersonate a node. On by default; `-mdns=false` opts out, and a
+  loopback-only `-listen` disables it with a note (nothing on the LAN could
+  reach a loopback address anyway). See
+  [docs/design/cross-network.md](docs/design/cross-network.md).
+
 ## [0.1.1] — 2026-07-26
 
 Still early, experimental, and unaudited (see the

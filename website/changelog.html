@@ -33,6 +33,11 @@
   <h1>What's changed</h1>
 <p class="lead">All notable changes to Silt are recorded here. The format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>, and the project aims to follow <a href="https://semver.org/">Semantic Versioning</a>.</p>
 <p>This log is published at <a href="https://silthq.com/changelog.html">silthq.com/changelog</a>.</p>
+<h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
+<h3>Added</h3>
+<ul>
+<li><b>Zero-config LAN discovery</b> (#27, first rung of cross-network reachability) — <span class="mono">silt daemon</span> now announces itself on the local network and folds any peer it hears into the routing table, so two nodes in the same house find each other with no <span class="mono">-bootstrap</span>, no DNS seed, and no infrastructure. It&#x27;s link-local multicast (the same idea as mDNS, scoped to the LAN by TTL), and self-authenticating: an announcement carries a peer&#x27;s <span class="mono">ID@host:port</span>, and the TLS handshake still must present a key hashing to that ID, so a rogue beacon can misdirect a dial but never impersonate a node. On by default; <span class="mono">-mdns=false</span> opts out, and a loopback-only <span class="mono">-listen</span> disables it with a note (nothing on the LAN could reach a loopback address anyway). See [docs/design/cross-network.md](docs/design/cross-network.md).</li>
+</ul>
 <h2 class="rel released"><span class="v">0.1.1</span><span class="d">2026-07-26</span></h2>
 <p>Still early, experimental, and unaudited (see the <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">threat model</a>). This release is the first round of first-production-user feedback from 0.1.0, fixed:</p>
 <h3>Changed</h3>
