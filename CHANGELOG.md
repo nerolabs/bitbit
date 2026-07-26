@@ -9,6 +9,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Relay** (#27, step 3 — the universal NAT fallback) — a NATed daemon can
+  now be reached across networks through any reachable node running
+  `-relay ADDR`. The shape is libp2p Circuit-Relay-v2's, without the
+  dependency: the NATed node keeps one registered outbound connection to
+  the relay (`-relay-via RELAYID@HOST:PORT`, taken up automatically when
+  the reachability verdict says NATed) and advertises `relay:R@host:port`
+  as its address; a sender dials the relay, the target dials back, and the
+  relay splices the two streams. Crucially, the sender then runs its
+  normal pinned **end-to-end TLS handshake with the target through the
+  splice** — the relay moves opaque bytes it cannot read, alter, or forge,
+  so "a frame's sender is whoever the handshake authenticated" holds
+  unchanged across a relay. Relaying is a capability, not infrastructure:
+  opt-in, capped (concurrent sessions, per-peer sessions, per-session
+  bytes), no relay baked into the binary, and the relay-operator metadata
+  exposure is documented in the threat model. CI proves the full path on
+  localhost — including both-peers-NATed, every byte relayed — because
+  "NATed" is modeled honestly as "accepts no inbound connections".
 - **`-debug` flag → `debug.log`** on both `silt daemon` and `silt client` —
   a leveled logger behind a new `ports.Logger` interface (core stays pure;
   the file sink is `adapters/logfile`). One grep-able line per event:

@@ -21,6 +21,7 @@ import (
 	"github.com/nerolabs/silt/adapters/lan"
 	"github.com/nerolabs/silt/adapters/logfile"
 	"github.com/nerolabs/silt/adapters/memstore"
+	"github.com/nerolabs/silt/adapters/relay"
 	"github.com/nerolabs/silt/adapters/tcpnet"
 	"github.com/nerolabs/silt/adapters/walltime"
 	"github.com/nerolabs/silt/core/chain"
@@ -55,6 +56,8 @@ func cmdDaemon(args []string) error {
 	quorum := fs.Int("quorum", 1, "attestations required to commit a block")
 	minRep := fs.Int64("min-rep", 0, "reputation threshold for proposers/attesters (0 = trusted deployment)")
 	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
+	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
+	relayVia := fs.String("relay-via", "", "RELAYID@HOST:PORT of a relay to lean on if this node turns out to be NATed — peers then reach us through it")
 	fs.Parse(args)
 
 	// Identity is a keypair: NodeID = SHA-256(public key), persisted so
@@ -126,6 +129,58 @@ func cmdDaemon(args []string) error {
 		if lg != nil {
 			lg.Log(ports.LogInfo, event, kv...)
 		}
+	}
+	// obs is lg as a nullable interface (a typed-nil *Sink would pass
+	// the adapters' nil checks and then explode).
+	var obs ports.Logger
+	if lg != nil {
+		obs = lg
+	}
+
+	// -relay: this daemon offers to forward ciphertext between NATed
+	// peers. A capability, not infrastructure: any reachable node can do
+	// this, none is special, and no relay is baked into the binary.
+	if *relayServe != "" {
+		rs, err := relay.Serve(*relayServe, ident, relay.Config{}, obs)
+		if err != nil {
+			return err
+		}
+		defer rs.Close()
+		fmt.Printf("relay: serving at %s@%s (content-blind forwarding, capped)\n", id, rs.Addr())
+	}
+	// -relay-via: parsed up front so a typo fails at start, not at the
+	// moment we discover we're NATed and need it.
+	var viaID ports.NodeID
+	var viaAddr string
+	if *relayVia != "" {
+		ps, err := discovery.ParseList(*relayVia)
+		if err != nil || len(ps) != 1 {
+			return fmt.Errorf("-relay-via wants one RELAYID@HOST:PORT: %w", err)
+		}
+		viaID, viaAddr = ps[0].ID, ps[0].Addr
+	}
+	// leanOnRelay registers with the -relay-via relay and switches our
+	// advertised address to the relay form, then re-announces held
+	// chunks so the swarm hears the new address. Runs on the reachability
+	// verdict (or immediately when there is no peer to ask).
+	leanOnRelay := func() {
+		rc, err := relay.NewClient(ident, viaID, viaAddr, tr.RelayInbound, obs)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "relay-via:", err)
+			return
+		}
+		go rc.Run(func(err error) {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "relay-via: registration failed:", err)
+				return
+			}
+			loop.Post(func() {
+				tr.SetAdvertise(rc.Addr())
+				fmt.Printf("relay-via: registered — peers reach us at %s\n", rc.Addr())
+				dlog("relay-via registered", "addr", rc.Addr())
+				nd.AnnounceHeld(func(int) {})
+			})
+		})
 	}
 
 	// Validator role: local chain replica, persisted and re-validated on
@@ -317,16 +372,25 @@ func cmdDaemon(args []string) error {
 			fmt.Printf("bootstrapped (%d table entries)\n", nd.Table().Size())
 			dlog("bootstrapped", "table", nd.Table().Size())
 			// Reachability (AutoNAT): ask a couple of known peers to dial us
-			// back. A public node can be reached directly; a NATed one will
-			// need a relay (next step of cross-network reachability).
+			// back. A public node advertises its direct address; a NATed one
+			// leans on the -relay-via relay, if given.
 			if helpers := nd.Table().Closest(nd.ID(), 3); len(helpers) > 0 {
 				nd.CheckReachability(helpers, func(reachable bool) {
-					if reachable {
+					switch {
+					case reachable:
 						fmt.Println("reachability: public — peers can dial this node directly")
-					} else {
-						fmt.Println("reachability: no peer could dial back — this node looks NATed (a relay will be needed to be reachable across networks)")
+					case *relayVia != "":
+						fmt.Println("reachability: no peer could dial back — NATed; leaning on the -relay-via relay")
+						leanOnRelay()
+					default:
+						fmt.Println("reachability: no peer could dial back — this node looks NATed (give it -relay-via RELAYID@HOST:PORT to be reachable across networks)")
 					}
 				})
+			} else if *relayVia != "" {
+				// Nobody to ask (a lone node bootstrapping into an empty
+				// swarm): assume the conservative answer and take the relay.
+				fmt.Println("reachability: no peers to check with — assuming NATed; leaning on the -relay-via relay")
+				leanOnRelay()
 			}
 			if *validator && len(attesterIDs) > 0 {
 				nd.SyncChain(attesterIDs, func(added int, _ error) {

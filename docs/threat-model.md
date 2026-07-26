@@ -98,6 +98,20 @@ Sees encrypted transport. Cannot read content. **Can** perform traffic
 analysis (who talks to whom, which hashes, sizes, timing). Silt does not
 defend against traffic analysis and does not claim to.
 
+### Relay operator (cross-network reachability)
+A NATed node can register with a community-run relay (`-relay-via`); a
+relay forwards opaque bytes between two peers that cannot accept each
+other's inbound connections. The relayed connection is an **end-to-end
+TLS session between the two peers** — the relay carries it, cannot read
+or alter it, and cannot forge frames (a frame's sender is whoever the
+end-to-end handshake authenticated, exactly as on a direct connection).
+What a relay **does** learn is metadata: the IPs and NodeIDs of the
+peers it serves, when they talk, and roughly how much — a superset of
+the on-path eavesdropper above, self-selected by running the relay.
+Consistent with Silt's "not anonymous" stance; choose relays the way
+you choose any peer you reveal your IP to. No relay is baked into the
+binary or operated by the project.
+
 ### Someone who knows a candidate plaintext (convergent mode)
 Convergent encryption keys a file by its own content, which enables
 cross-user dedup but permits a **confirmation-of-file attack**: an
