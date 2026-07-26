@@ -26,9 +26,15 @@ IP `$IP`.
 ```sh
 # on the VPS — deploy/dev-relay.sh does this, plus -serve-registry for the test:
 ./silt daemon -listen 0.0.0.0:4001 -relay 0.0.0.0:4002 \
+  -advertise "$IP:4001" \
   -serve-registry 0.0.0.0:4003 \
   -store ~/.silt-dev-relay -capacity 2G -mdns=false -debug
 ```
+
+`-advertise` matters: a wildcard bind (`0.0.0.0`) is not a dialable
+address, so the daemon never stamps it on outgoing messages — without
+the flag, peers could bootstrap *to* the box but gossip would never
+carry a usable address *for* it.
 
 Note the `registry:` line it prints (`$DEV@https://$IP:4003`) — both
 Macs will use it. Open TCP 4001–4003 in the provider firewall.

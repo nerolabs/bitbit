@@ -58,6 +58,7 @@ func cmdDaemon(args []string) error {
 	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
 	relayVia := fs.String("relay-via", "", "RELAYID@HOST:PORT of a relay to lean on if this node turns out to be NATed — peers then reach us through it")
+	advertise := fs.String("advertise", "", "publicly dialable HOST:PORT to stamp on outgoing messages — set this on a public box that listens on a wildcard address (a wildcard bind is never advertised on its own)")
 	fs.Parse(args)
 
 	// Identity is a keypair: NodeID = SHA-256(public key), persisted so
@@ -81,6 +82,9 @@ func cmdDaemon(args []string) error {
 	tr, err := tcpnet.New(loop, ident, *listen)
 	if err != nil {
 		return err
+	}
+	if *advertise != "" {
+		tr.SetAdvertise(*advertise)
 	}
 	var store ports.ChunkStore
 	disk, err := diskstore.Open(*storeDir)
@@ -152,29 +156,6 @@ func cmdDaemon(args []string) error {
 			return fmt.Errorf("-relay-via wants one RELAYID@HOST:PORT: %w", err)
 		}
 		viaID, viaAddr = ps[0].ID, ps[0].Addr
-	}
-	// leanOnRelay registers with the -relay-via relay and switches our
-	// advertised address to the relay form, then re-announces held
-	// chunks so the swarm hears the new address. Runs on the reachability
-	// verdict (or immediately when there is no peer to ask).
-	leanOnRelay := func() {
-		rc, err := relay.NewClient(ident, viaID, viaAddr, tr.RelayInbound, obs)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "relay-via:", err)
-			return
-		}
-		go rc.Run(func(err error) {
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "relay-via: registration failed:", err)
-				return
-			}
-			loop.Post(func() {
-				tr.SetAdvertise(rc.Addr())
-				fmt.Printf("relay-via: registered — peers reach us at %s\n", rc.Addr())
-				dlog("relay-via registered", "addr", rc.Addr())
-				nd.AnnounceHeld(func(int) {})
-			})
-		})
 	}
 
 	// Validator role: local chain replica, persisted and re-validated on
@@ -360,6 +341,35 @@ func cmdDaemon(args []string) error {
 			discovery.SaveFile(peersPath, tr.Peers())
 		}
 	}()
+	// leanOnRelay registers with the -relay-via relay, switches our
+	// advertised address to the relay form, and — the important part —
+	// RE-bootstraps: the first bootstrap of a NATed node may have come
+	// up empty (peers had no way to answer someone with no dialable
+	// address), so the join is retried now that every envelope carries
+	// an address the swarm can actually reach us at.
+	leanOnRelay := func() {
+		rc, err := relay.NewClient(ident, viaID, viaAddr, tr.RelayInbound, obs)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "relay-via:", err)
+			return
+		}
+		go rc.Run(func(err error) {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "relay-via: registration failed:", err)
+				return
+			}
+			loop.Post(func() {
+				tr.SetAdvertise(rc.Addr())
+				fmt.Printf("relay-via: registered — peers reach us at %s\n", rc.Addr())
+				dlog("relay-via registered", "addr", rc.Addr())
+				nd.Bootstrap(seeds, func() {
+					fmt.Printf("re-bootstrapped through the relay (%d table entries)\n", nd.Table().Size())
+					dlog("re-bootstrapped via relay", "table", nd.Table().Size())
+					nd.AnnounceHeld(func(int) {})
+				})
+			})
+		})
+	}
 	nd.SetLedger(nd0ledger)
 	loop.Post(func() {
 		nd.Bootstrap(seeds, func() {
