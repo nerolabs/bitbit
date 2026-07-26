@@ -41,7 +41,8 @@
 <li><b><span class="mono">silt info</span> summarizes by default</b> (#18) — root, mode, size, chunk and stripe counts, erasure params; the full per-shard dump moved behind <span class="mono">-shards</span>. It was a wall of hashes on any real-sized file.</li>
 <li><b><span class="mono">silt add</span> leads with the share link</b> (#19), labelled, and prints the care link after with a &quot;repair only, cannot decrypt&quot; caveat. The bare link stays on stdout so <span class="mono">silt add file</span> remains pipeable.</li>
 <li><b><span class="mono">silt daemon</span> pledges 5G by default</b> (#21), matching <span class="mono">silt client</span>, so a fresh daemon contributes measurable, countable storage instead of an unlimited pledge that read as 0 B of network storage. <span class="mono">-capacity &quot;&quot;</span> still means unlimited.</li>
-<li><b>Observatory</b> (#22) now explains it shows only the daemons you list that run <span class="mono">-ui</span> (no swarm auto-discovery), and that &quot;daemons observed&quot; is not the network&#x27;s peer count.</li>
+<li><b>Shorter, easier-to-copy links</b> (#20) — a link now encodes its two 32-byte values in compact base64url (43 chars each) instead of 64-char hex, so a share link is ~30% shorter (137 → 95 chars). Old hex links still parse.</li>
+<li><b>Observatory</b> (#22) explains it shows only the daemons you list that run <span class="mono">-ui</span> (no swarm auto-discovery), that &quot;daemons observed&quot; is not the peer count, and now displays the swarm&#x27;s self-estimate (&quot;~N peers&quot;) right beside it so the two numbers reconcile.</li>
 </ul>
 <h3>Added</h3>
 <ul>

@@ -70,10 +70,13 @@
   <p>A file's public name is its Merkle root — thirty-two bytes that reveal
   nothing. To open the file you also need its key. Together they are the link:</p>
   <pre class="code"><span class="c"># full link — retrieve AND decrypt</span>
-silt:v1:<span class="o">&lt;root-hex&gt;</span>:<span class="g">&lt;key-hex&gt;</span>
+silt:v1:<span class="o">&lt;root&gt;</span>:<span class="g">&lt;key&gt;</span>
 
 <span class="c"># care link — repair and audit rights, but CANNOT decrypt</span>
-siltcare:v1:<span class="o">&lt;root-hex&gt;</span>:<span class="g">&lt;layout-key-hex&gt;</span></pre>
+siltcare:v1:<span class="o">&lt;root&gt;</span>:<span class="g">&lt;layout-key&gt;</span></pre>
+  <p class="dim" style="font-size:0.85rem;margin-top:-0.6rem">Each of the two
+  values is a 32-byte hash in compact base64url (43 characters); older
+  64-character hex links still parse.</p>
   <p>The key is content-derived, so identical files produce identical links —
   deduplication reaches all the way up to the handle you share. From the link key
   the software derives, one-way, a <b>layout key</b> (stripe structure — enough to

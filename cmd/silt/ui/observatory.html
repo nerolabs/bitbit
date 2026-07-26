@@ -90,7 +90,7 @@ async function observe() {
   const est = live.length ? live[0].status.network : {EstimatedNodes:0,EstimatedTotal:0};
   document.getElementById("totals").innerHTML = `
     <div class="card"><h2>Daemons observed</h2><div class="big">${live.length}</div>
-      <div class="sub">${results.length - live.length} unreachable</div></div>
+      <div class="sub">${results.length - live.length} unreachable · swarm self-estimates ~${est.EstimatedNodes} peers</div></div>
     <div class="card"><h2>Pledged storage (observed)</h2><div class="big">${fmtB(capUsed)}</div>
       <div class="sub">of ${fmtB(capTotal)} · network self-estimate ${fmtB(est.EstimatedTotal)}</div></div>
     <div class="card"><h2>Chunks hosted</h2><div class="big">${chunks}</div>
