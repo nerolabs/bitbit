@@ -21,6 +21,15 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   loopback-only `-listen` disables it with a note (nothing on the LAN could
   reach a loopback address anyway). See
   [docs/design/cross-network.md](docs/design/cross-network.md).
+- **Reachability check** (#27, our AutoNAT) — after bootstrap, a daemon asks
+  a couple of known peers to dial it back at its advertised address. A
+  landed dial-back both proves and delivers the verdict "public"; silence
+  within a timeout is read, conservatively, as "behind NAT" (which only ever
+  costs a relay we might not have needed, never a false claim of being
+  reachable). The daemon logs the result and the dashboard shows it; the
+  relay step will key its advertise-direct-vs-via-relay decision off it. No
+  new message plumbing beyond two wire kinds; the pure core stays
+  NodeID-only — reachability is simply whether the transport can deliver.
 
 ## [0.1.1] — 2026-07-26
 
