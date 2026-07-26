@@ -147,8 +147,12 @@ func cmdAdd(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "care link (repair rights, no decryption): %s\n", h.Care())
+	// The share link leads (labelled, on stderr) with the bare link on
+	// stdout so `silt add file` stays pipeable; the specialist care link
+	// comes after, clearly caveated.
+	fmt.Fprintln(os.Stderr, "link to share (lets anyone fetch the file):")
 	fmt.Println(h)
+	fmt.Fprintf(os.Stderr, "care link (repair only, cannot decrypt): %s\n", h.Care())
 	return nil
 }
 
@@ -187,9 +191,10 @@ func cmdGet(args []string) error {
 func cmdInfo(args []string) error {
 	fs := flag.NewFlagSet("info", flag.ExitOnError)
 	storeDir := fs.String("store", ".silt", "store directory")
+	shards := fs.Bool("shards", false, "list every shard hash per stripe (verbose)")
 	pos := parseFlexible(fs, args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: silt info <link-or-care-link> [flags]")
+		return fmt.Errorf("usage: silt info <link-or-care-link> [-shards] [flags]")
 	}
 	ch, err := link.ParseAnyCare(pos[0])
 	if err != nil {
@@ -228,16 +233,22 @@ func cmdInfo(args []string) error {
 		return nil
 	}
 	p := erasure.Params{K: m.K, N: m.N}
+	dataIDs, parityIDs := m.ChunkIDs(), m.ParityIDs()
+	stripes := p.Stripes(len(dataIDs))
 	fmt.Printf("erasure:    (k=%d, n=%d) — any %d of each stripe's shards recover it; up to %d losses per stripe are survivable\n",
 		m.K, m.N, m.K, p.ParityShards())
-	dataIDs, parityIDs := m.ChunkIDs(), m.ParityIDs()
+	fmt.Printf("stripes:    %d (%d data + %d parity shards)\n", stripes, len(dataIDs), len(parityIDs))
+	if !*shards {
+		fmt.Println("\nrun with -shards to list every shard hash.")
+		return nil
+	}
 	present := func(id ports.ChunkID) string {
 		if ok, _ := store.Has(ctx, id); ok {
 			return " "
 		}
 		return "✗"
 	}
-	for j := 0; j < p.Stripes(len(dataIDs)); j++ {
+	for j := 0; j < stripes; j++ {
 		lo := j * p.K
 		hi := min(lo+p.K, len(dataIDs))
 		fmt.Printf("stripe %d:\n", j)

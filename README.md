@@ -120,27 +120,36 @@ go build -o silt ./cmd/silt
 
 ## Run a real swarm (separate processes)
 
+The full, tested, step-by-step walkthrough — several daemons, a published
+file, and a node death it survives — lives in
+[**docs/local-test-network.md**](docs/local-test-network.md). The short
+version:
+
 ```sh
-# terminal 1: seed daemon, also hosts the swarm registry
-./silt daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store d1
-# it prints:  peer: <ID>@127.0.0.1:7101   ← this is your bootstrap string
+# terminal 1: seed daemon — hosts the registry and a web UI
+./silt daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 \
+              -store d1 -ui 127.0.0.1:8081 -capacity 2G
+# it prints two lines to COPY VERBATIM:
+#   registry: serving <ID>@https://127.0.0.1:7100   ← the registry ref
+#   peer:     <ID>@127.0.0.1:7101                    ← the bootstrap string
 
 # terminals 2..n: more daemons
-./silt daemon -listen 127.0.0.1:7102 -store d2 \
-  -bootstrap <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+./silt daemon -listen 127.0.0.1:7102 -store d2 -ui 127.0.0.1:8082 -capacity 2G \
+  -bootstrap <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
 
 # publish from anywhere: an ephemeral client joins, scatters, leaves
-./silt swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
-# → prints the root hash; the client keeps nothing
+./silt swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
 
 # retrieve from anywhere (kill a daemon first, for sport)
-./silt swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry http://127.0.0.1:7100
+./silt swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
 ```
 
-Daemons use real disk stores and survive restarts (they re-announce
-what they hold). `-serve-registry` is the v1 "single honest instance"
-made reachable over HTTP — the seam a chain replaces someday. No TLS,
-no auth: trusted networks only, and the code says so out loud.
+The registry is served over **key-pinned HTTPS**, so its reference is
+`<ID>@https://host:port` — copy the exact `registry:` line the daemon
+prints; plain `http://` or bare `https://` will fail. Daemons use real
+disk stores and survive restarts (they re-announce what they hold). The
+`-serve-registry` "single honest instance" is the seam a chain replaces
+someday.
 
 Chunks land in `.silt/objects/` named by SHA-256. Add the same file
 twice in (default) convergent mode and you get the same root with zero

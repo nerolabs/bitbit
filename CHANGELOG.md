@@ -6,6 +6,35 @@ follow [Semantic Versioning](https://semver.org/).
 
 This log is published at [silthq.com/changelog](https://silthq.com/changelog.html).
 
+## [Unreleased]
+
+First-production-user feedback from the 0.1.0 release, fixed:
+
+### Changed
+- **Swarm registry docs & error messages** (#17) — the registry is
+  *key-pinned HTTPS*, and now everything says so. The README swarm recipe
+  and `silt daemon -registry` help use the `<ID>@https://host:port` form the
+  daemon prints; passing a bare `https://` or an `http://` URL to a pinned
+  registry returns a message that names the fix instead of a raw TLS error.
+- **`silt info` summarizes by default** (#18) — root, mode, size, chunk and
+  stripe counts, erasure params; the full per-shard dump moved behind
+  `-shards`. It was a wall of hashes on any real-sized file.
+- **`silt add` leads with the share link** (#19), labelled, and prints the
+  care link after with a "repair only, cannot decrypt" caveat. The bare
+  link stays on stdout so `silt add file` remains pipeable.
+- **`silt daemon` pledges 5G by default** (#21), matching `silt client`, so a
+  fresh daemon contributes measurable, countable storage instead of an
+  unlimited pledge that read as 0 B of network storage. `-capacity ""` still
+  means unlimited.
+- **Observatory** (#22) now explains it shows only the daemons you list that
+  run `-ui` (no swarm auto-discovery), and that "daemons observed" is not the
+  network's peer count.
+
+### Added
+- [**Build your own Silt test network**](https://github.com/nerolabs/silt/blob/main/docs/local-test-network.md) —
+  a public, end-to-end local walkthrough (sims → a real multi-node swarm that
+  survives a node death), with all of the above fixes baked in.
+
 ## [0.1.0] — 2026-07-25
 
 **The first release — early, experimental, and unaudited.** Silt 0.1.0 is
@@ -85,4 +114,5 @@ Binaries are **not** code-signed; verify them against the attached
 - **Governance & strategy docs** — the fresh-eyes council, risk register,
   launch plan, safety/takedown model, and `GOVERNANCE.md`.
 
+[Unreleased]: https://github.com/nerolabs/silt/compare/v0.1.0...main
 [0.1.0]: https://github.com/nerolabs/silt/releases/tag/v0.1.0

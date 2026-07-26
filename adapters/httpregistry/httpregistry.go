@@ -205,9 +205,19 @@ func (c *Client) Publish(ctx context.Context, e ports.Entry) error {
 	case http.StatusPaymentRequired:
 		return ports.ErrInsufficientCredit
 	default:
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("httpregistry publish: %s: %s", resp.Status, bytes.TrimSpace(msg))
+		msg := bytes.TrimSpace(mustRead(resp.Body))
+		// The classic first-run mistake: http:// against a pinned HTTPS
+		// registry. The server says so; translate it into the fix.
+		if bytes.Contains(msg, []byte("HTTP request to an HTTPS server")) {
+			return fmt.Errorf("httpregistry publish: this registry is key-pinned HTTPS — use the ID@https://host:port ref the daemon prints, not http://")
+		}
+		return fmt.Errorf("httpregistry publish: %s: %s", resp.Status, msg)
 	}
+}
+
+func mustRead(r io.Reader) []byte {
+	b, _ := io.ReadAll(io.LimitReader(r, 4096))
+	return b
 }
 
 func (c *Client) Lookup(ctx context.Context, root ports.Hash) (ports.Entry, bool, error) {
