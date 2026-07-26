@@ -101,6 +101,7 @@
 </ol>
 <p><b>Phase C — Harden &amp; formalize (only if B justifies it).</b></p>
 <ol>
+<li><b>Cross-network reachability — bootstrap rendezvous + NAT traversal</b> (issue #27). The thing between an impressive demo and person-to-person use: two home nodes on separate networks can neither find nor connect to each other today. Needs a rendezvous (community DNS seeds / relays, never SiltHQ-run) plus NAT traversal (relay of ciphertext — content- blind by design — with hole-punching later). Arguably the highest-value engineering item once feedback validates the direction.</li>
 <li>Security hardening — Sybil/eclipse resistance, ungameable reputation, real (non-toy) proof-of-retrieval.</li>
 <li>Multi-process e2e integration tests over real TCP/daemons.</li>
 <li>Denylist distribution/subscription (completes the abuse-handling story); pull-cache tier for demand dispersion.</li>

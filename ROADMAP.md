@@ -159,12 +159,19 @@ learn decide whether the formal commitments are worth making.
     reveals, not made blind. No entity is formed on spec.
 
 **Phase C — Harden & formalize (only if B justifies it).**
-13. Security hardening — Sybil/eclipse resistance, ungameable reputation,
+13. **Cross-network reachability — bootstrap rendezvous + NAT traversal**
+    (issue #27). The thing between an impressive demo and person-to-person
+    use: two home nodes on separate networks can neither find nor connect
+    to each other today. Needs a rendezvous (community DNS seeds / relays,
+    never SiltHQ-run) plus NAT traversal (relay of ciphertext — content-
+    blind by design — with hole-punching later). Arguably the highest-value
+    engineering item once feedback validates the direction.
+14. Security hardening — Sybil/eclipse resistance, ungameable reputation,
     real (non-toy) proof-of-retrieval.
-14. Multi-process e2e integration tests over real TCP/daemons.
-15. Denylist distribution/subscription (completes the abuse-handling
+15. Multi-process e2e integration tests over real TCP/daemons.
+16. Denylist distribution/subscription (completes the abuse-handling
     story); pull-cache tier for demand dispersion.
-16. Formal commitments *if warranted by traction and feedback*: legal
+17. Formal commitments *if warranted by traction and feedback*: legal
     entity + DMCA agent, an independent paid audit, signed/notarized
     binaries, and a wider launch.
 
