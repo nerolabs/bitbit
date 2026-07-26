@@ -19,6 +19,7 @@ import (
 	"github.com/nerolabs/silt/adapters/httpregistry"
 	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/lan"
+	"github.com/nerolabs/silt/adapters/logfile"
 	"github.com/nerolabs/silt/adapters/memstore"
 	"github.com/nerolabs/silt/adapters/tcpnet"
 	"github.com/nerolabs/silt/adapters/walltime"
@@ -53,6 +54,7 @@ func cmdDaemon(args []string) error {
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
 	quorum := fs.Int("quorum", 1, "attestations required to commit a block")
 	minRep := fs.Int64("min-rep", 0, "reputation threshold for proposers/attesters (0 = trusted deployment)")
+	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
 	fs.Parse(args)
 
 	// Identity is a keypair: NodeID = SHA-256(public key), persisted so
@@ -104,6 +106,27 @@ func cmdDaemon(args []string) error {
 		RepairSlack:         2,
 		ReachabilityTimeout: ports.Duration(3 * time.Second),
 	}, walltime.New(loop), tr, store)
+
+	// -debug: everything the node and transport narrate lands in a
+	// grep-able debug.log next to the store. dlog adds the daemon's own
+	// milestones (discovery, bootstrap) to the same artifact.
+	var lg *logfile.Sink
+	if *debug {
+		logPath := filepath.Join(*storeDir, "debug.log")
+		lg, err = logfile.Open(logPath, ports.LogDebug)
+		if err != nil {
+			return err
+		}
+		defer lg.Close()
+		tr.SetLogger(lg)
+		nd.SetLogger(lg)
+		fmt.Printf("debug: logging to %s\n", logPath)
+	}
+	dlog := func(event string, kv ...any) {
+		if lg != nil {
+			lg.Log(ports.LogInfo, event, kv...)
+		}
+	}
 
 	// Validator role: local chain replica, persisted and re-validated on
 	// load; reputation judged from this daemon's own ledger observations.
@@ -239,6 +262,7 @@ func cmdDaemon(args []string) error {
 		}
 		if len(peers) > 0 {
 			fmt.Printf("discovery: %d peer(s) via %s\n", len(peers), source)
+			dlog("discovery", "peers", len(peers), "source", source)
 		}
 	}
 	if *bootstrap != "" {
@@ -270,6 +294,7 @@ func cmdDaemon(args []string) error {
 					tr.AddPeer(p.ID, p.Addr)
 					nd.Bootstrap([]ports.NodeID{p.ID}, func() {})
 					fmt.Printf("mdns: discovered %s@%s\n", p.ID, p.Addr)
+					dlog("mdns discovered", "peer", p.ID, "addr", p.Addr)
 				})
 			})
 			if err := beacon.Start(); err != nil {
@@ -290,6 +315,7 @@ func cmdDaemon(args []string) error {
 	loop.Post(func() {
 		nd.Bootstrap(seeds, func() {
 			fmt.Printf("bootstrapped (%d table entries)\n", nd.Table().Size())
+			dlog("bootstrapped", "table", nd.Table().Size())
 			// Reachability (AutoNAT): ask a couple of known peers to dial us
 			// back. A public node can be reached directly; a NATed one will
 			// need a relay (next step of cross-network reachability).

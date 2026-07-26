@@ -10,6 +10,8 @@
 // queue, which is what makes same-seed runs byte-identical.
 package ports
 
+import "fmt"
+
 // NodeID identifies a node. Same 256-bit space as chunk hashes, which
 // is exactly what Kademlia wants: nodes and content live in one metric
 // space, and a chunk is stored/announced "near" the nodes whose IDs are
@@ -120,6 +122,26 @@ type Message struct {
 	Lease bool
 	// Height is the chain-sync cursor (MsgGetChain).
 	Height uint64
+}
+
+func (k MsgKind) String() string {
+	names := [...]string{
+		MsgFindNode: "FindNode", MsgFindNodeReply: "FindNodeReply",
+		MsgGetProviders: "GetProviders", MsgGetProvidersReply: "GetProvidersReply",
+		MsgAddProvider: "AddProvider", MsgAddProviderAck: "AddProviderAck",
+		MsgStoreChunk: "StoreChunk", MsgStoreChunkAck: "StoreChunkAck",
+		MsgFetchChunk: "FetchChunk", MsgFetchChunkReply: "FetchChunkReply",
+		MsgHasChunk: "HasChunk", MsgHasChunkReply: "HasChunkReply",
+		MsgChallenge: "Challenge", MsgChallengeReply: "ChallengeReply",
+		MsgProposeBlock: "ProposeBlock", MsgAttestReply: "AttestReply",
+		MsgCommitBlock: "CommitBlock", MsgCommitAck: "CommitAck",
+		MsgGetChain: "GetChain", MsgChainReply: "ChainReply",
+		MsgCheckReachability: "CheckReachability", MsgReachabilityReply: "ReachabilityReply",
+	}
+	if int(k) < len(names) && names[k] != "" {
+		return names[k]
+	}
+	return fmt.Sprintf("MsgKind(%d)", k)
 }
 
 // IsReply reports whether this kind terminates a pending request.

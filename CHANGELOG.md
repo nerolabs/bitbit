@@ -9,6 +9,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **`-debug` flag → `debug.log`** on both `silt daemon` and `silt client` —
+  a leveled logger behind a new `ports.Logger` interface (core stays pure;
+  the file sink is `adapters/logfile`). One grep-able line per event:
+  transport failures (dials, handshakes, forged frames), node events
+  (request timeouts, repairs, dispersion re-spreads, the reachability
+  verdict), and daemon milestones (discovery, bootstrap). Quiet by default
+  and free when disabled; with `-debug`, a failure in the field leaves an
+  artifact that can be attached to a bug report. Groundwork for testing
+  cross-network reachability (#27) on real networks, where failures are
+  one-shot and remote instead of deterministic and replayable.
 - **Zero-config LAN discovery** (#27, first rung of cross-network
   reachability) — `silt daemon` now announces itself on the local network
   and folds any peer it hears into the routing table, so two nodes in the

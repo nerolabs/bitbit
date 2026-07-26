@@ -62,6 +62,11 @@ type Transport struct {
 
 	mu    sync.Mutex
 	peers map[ports.NodeID]string
+
+	// lg narrates transport failures (dials, handshakes, forgeries) —
+	// exactly the events that are invisible-but-fatal across real
+	// networks. nil = off.
+	lg ports.Logger
 }
 
 var _ ports.Transport = (*Transport)(nil)
@@ -139,11 +144,21 @@ func (t *Transport) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
 	t.handler = h
 }
 
+// SetLogger wires the observability port; nil disables it.
+func (t *Transport) SetLogger(lg ports.Logger) { t.lg = lg }
+
+func (t *Transport) logf(lvl ports.LogLevel, event string, kv ...any) {
+	if t.lg != nil && t.lg.Enabled(lvl) {
+		t.lg.Log(lvl, event, kv...)
+	}
+}
+
 // Send resolves the address, builds the envelope, and hands the
 // dial+handshake+write to a goroutine so the loop never blocks.
 func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	addr, ok := t.lookupAddr(to)
 	if !ok {
+		t.logf(ports.LogDebug, "send with no known address", "to", to)
 		return fmt.Errorf("tcpnet: no known address for %s", to)
 	}
 	env := envelope{From: t.self[:], Addr: t.listenAddr, Msg: toWire(msg)}
@@ -178,6 +193,7 @@ func (t *Transport) writeFrame(to ports.NodeID, addr string, frame []byte) {
 	}
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
 	if err != nil {
+		t.logf(ports.LogWarn, "dial failed", "to", to, "addr", addr, "err", err)
 		return // dropped; timeouts upstream handle it
 	}
 	defer conn.Close()
@@ -200,12 +216,14 @@ func (t *Transport) acceptLoop() {
 func (t *Transport) readLoop(conn *tls.Conn) {
 	defer conn.Close()
 	if err := conn.Handshake(); err != nil {
+		t.logf(ports.LogDebug, "inbound handshake failed", "remote", conn.RemoteAddr(), "err", err)
 		return
 	}
 	// The sender's identity comes from the TLS handshake, not from
 	// anything it writes in a frame.
 	from, err := identity.PeerID(conn.ConnectionState())
 	if err != nil {
+		t.logf(ports.LogDebug, "inbound peer id rejected", "remote", conn.RemoteAddr(), "err", err)
 		return
 	}
 	for {
@@ -230,6 +248,7 @@ func (t *Transport) readLoop(conn *tls.Conn) {
 		var claimed ports.NodeID
 		copy(claimed[:], env.From)
 		if claimed != from {
+			t.logf(ports.LogWarn, "forged frame dropped", "authenticated", from, "claimed", claimed)
 			return
 		}
 		t.learn(from, env.Addr, true)

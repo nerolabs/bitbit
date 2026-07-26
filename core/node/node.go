@@ -165,12 +165,28 @@ type Node struct {
 	// denylist is the operator's local takedown list (nil = none). The
 	// effective set also includes on-chain revocations; see isDenied.
 	denylist *denylist.Set
+
+	// lg narrates through the observability port; nil = off. The sim
+	// leaves it nil, so determinism and benchmarks are untouched.
+	lg ports.Logger
 }
 
 type capInfo struct{ used, total int64 }
 
 // SetLedger wires credit accounting; nil disables it.
 func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
+
+// SetLogger wires the observability port; nil disables it.
+func (n *Node) SetLogger(lg ports.Logger) { n.lg = lg }
+
+// logf is the nil-safe narration helper. Only rare events go through it
+// (timeouts, repairs, verdicts) — nothing per-byte, so the varargs cost
+// is irrelevant and a disabled logger stays effectively free.
+func (n *Node) logf(lvl ports.LogLevel, event string, kv ...any) {
+	if n.lg != nil && n.lg.Enabled(lvl) {
+		n.lg.Log(lvl, event, kv...)
+	}
+}
 
 // SetFreeload toggles leech behavior.
 func (n *Node) SetFreeload(v bool) { n.freeload = v }
@@ -237,6 +253,7 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 		delete(n.pending, rid)
 		n.Stats.Timeouts++
 		n.table.Remove(to)
+		n.logf(ports.LogDebug, "request timeout", "to", to, "kind", msg.Kind)
 		cb(ports.Message{}, fmt.Errorf("%w (to %s)", ErrTimeout, to))
 	})
 	n.pending[rid] = p
@@ -318,6 +335,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		if ok {
 			if err := n.store.Put(bg(), c); err != nil {
+				n.logf(ports.LogWarn, "store put failed", "chunk", msg.ChunkID, "err", err)
 				ok = false
 			} else {
 				n.Stats.ChunksReceived++
