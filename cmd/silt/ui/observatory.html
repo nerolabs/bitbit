@@ -17,9 +17,12 @@
 <main>
   <h1>Network observatory</h1>
   <p class="dim" style="margin-bottom:0.8rem">
-    Aggregates live state from every daemon UI you list (this one is
-    included automatically). All of it is knowledge any participant can
-    assemble — the observatory holds no privileged view.</p>
+    Aggregates live state from the daemon UIs you list below (this one is
+    included automatically). It does <b>not</b> auto-discover the swarm, and
+    it only sees daemons started with <span class="mono">-ui</span> — so
+    "daemons observed" is how many UIs you're watching, <b>not</b> the
+    network's peer count (that's the self-estimate on the Daemon page). All
+    of it is knowledge any participant can assemble; no privileged view.</p>
   <div class="row">
     <input type="text" id="peers" placeholder="other daemon UIs, comma-separated: http://127.0.0.1:8082, http://127.0.0.1:8083">
     <button id="go">observe</button>

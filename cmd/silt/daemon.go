@@ -43,7 +43,7 @@ func cmdDaemon(args []string) error {
 	serveRegistry := fs.String("serve-registry", "", "host the registry at this address (persisted in the store dir)")
 	idSeed := fs.Int64("id-seed", 0, "derive the identity from a seed (default: persistent keyfile) — for scripted demos")
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
-	capacity := fs.String("capacity", "", "storage pledge, e.g. 2G, 500M (default: unlimited)")
+	capacity := fs.String("capacity", "5G", "storage pledge, e.g. 2G, 500M (matches the client's default so the node contributes measurable, countable storage; \"\" = unlimited but doesn't count toward network storage)")
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
 	denylistPath := fs.String("denylist", "", "operator takedown list: a file of denied root hashes to refuse to store/serve (you choose which lists to honor)")
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
@@ -307,6 +307,11 @@ func openRegistry(ref string) (ports.Registry, error) {
 			return nil, fmt.Errorf("registry ref %q: %w", ref, err)
 		}
 		return httpregistry.NewPinnedClient(ref[at+1:], hostID), nil
+	}
+	// A bare https:// URL can't be verified without the host's identity to
+	// pin. This is the common first-run mistake, so name the fix.
+	if strings.HasPrefix(ref, "https://") {
+		return nil, fmt.Errorf("registry %q is HTTPS but has no pinned identity; a key-pinned registry needs the ID@https://host:port form the daemon prints on start — copy its 'registry:' line verbatim", ref)
 	}
 	return httpregistry.NewClient(ref), nil
 }
