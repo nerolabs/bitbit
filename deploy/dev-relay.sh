@@ -30,9 +30,18 @@ echo "  bootstrap: <ID>@$PUBLIC_IP:$SWARM_PORT"
 echo "  relay-via: <ID>@$PUBLIC_IP:$RELAY_PORT"
 echo
 
+# A wildcard bind is never advertised on its own (nobody can dial
+# "0.0.0.0"), so a public box must say what address peers should learn.
+ADVERTISE=""
+case "$PUBLIC_IP" in
+    *'<'*) echo "warning: could not determine public IP; gossip will not carry this box's address" ;;
+    *) ADVERTISE="-advertise $PUBLIC_IP:$SWARM_PORT" ;;
+esac
+
 exec "$STORE/silt" daemon \
     -listen "0.0.0.0:$SWARM_PORT" \
     -relay "0.0.0.0:$RELAY_PORT" \
+    $ADVERTISE \
     -store "$STORE" \
     -capacity "$CAPACITY" \
     -mdns=false \

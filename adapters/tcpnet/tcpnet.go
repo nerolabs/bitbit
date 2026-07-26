@@ -17,13 +17,21 @@
 //     the sender's own listen address, and attaches known addresses for
 //     any NodeIDs mentioned in the message. Receivers learn as they
 //     listen — address gossip as an envelope concern.
+//
 //   - Concurrency. Sockets mean goroutines; core code is lock-free and
 //     single-threaded by contract. Every delivery is posted onto the
 //     node's event loop, never invoked from a reader goroutine.
 //
-// Loss semantics are UDP-ish on purpose: Send never blocks and dial,
-// handshake, or write failures just drop the message — the core's
-// timeout machinery already knows how to live in that world.
+//   - Conversations. A message rides the live connection with its peer
+//     when one exists, and otherwise dials fresh and KEEPS the conn.
+//     The crucial case is a reply riding the very conn the request
+//     arrived on — the only road back to a NATed caller, who can dial
+//     out but can never be dialed. Loss semantics stay UDP-ish: a
+//     failed write or dial just drops the message and the core's
+//     timeout machinery owns recovery; there is no retransmit here.
+//     One deliberate exception: a reachability dial-back never reuses
+//     a conn, because its entire meaning is "a fresh inbound dial to
+//     your advertised address landed".
 package tcpnet
 
 import (
@@ -63,6 +71,10 @@ type Transport struct {
 
 	mu    sync.Mutex
 	peers map[ports.NodeID]string
+	// conns holds the live conversation per peer, either direction.
+	// The newest conn wins the slot; a displaced one keeps serving its
+	// own readLoop until it dies naturally.
+	conns map[ports.NodeID]*peerConn
 	// adv, when set, replaces listenAddr in outgoing envelope stamps — a
 	// NATed node advertising "reach me via relay R" instead of a
 	// LAN address nobody outside the house can dial.
@@ -75,6 +87,25 @@ type Transport struct {
 }
 
 var _ ports.Transport = (*Transport)(nil)
+
+// peerConn is one live connection. Frames from concurrent senders are
+// serialized by wmu so the length-prefixed framing can never interleave.
+type peerConn struct {
+	conn *tls.Conn
+	wmu  sync.Mutex
+}
+
+func (p *peerConn) write(frame []byte) error {
+	p.wmu.Lock()
+	defer p.wmu.Unlock()
+	var hdr [4]byte
+	binary.BigEndian.PutUint32(hdr[:], uint32(len(frame)))
+	if _, err := p.conn.Write(hdr[:]); err != nil {
+		return err
+	}
+	_, err := p.conn.Write(frame)
+	return err
+}
 
 // New starts listening on listenAddr with ident's TLS certificate.
 func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Transport, error) {
@@ -98,6 +129,7 @@ func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Tr
 		listenAddr: ln.Addr().String(),
 		ln:         ln,
 		peers:      make(map[ports.NodeID]string),
+		conns:      make(map[ports.NodeID]*peerConn),
 	}
 	go t.acceptLoop()
 	return t, nil
@@ -105,7 +137,21 @@ func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Tr
 
 func (t *Transport) Addr() string       { return t.listenAddr }
 func (t *Transport) Self() ports.NodeID { return t.self }
-func (t *Transport) Close() error       { return t.ln.Close() }
+
+func (t *Transport) Close() error {
+	err := t.ln.Close()
+	t.mu.Lock()
+	open := make([]*peerConn, 0, len(t.conns))
+	for _, pc := range t.conns {
+		open = append(open, pc)
+	}
+	t.conns = make(map[ports.NodeID]*peerConn)
+	t.mu.Unlock()
+	for _, pc := range open {
+		pc.conn.Close()
+	}
+	return err
+}
 
 // SetAdvertise overrides the address stamped on outgoing envelopes
 // (default: the listen address). "" restores the default.
@@ -121,7 +167,26 @@ func (t *Transport) advertised() string {
 	if t.adv != "" {
 		return t.adv
 	}
+	if isWildcard(t.listenAddr) {
+		// A wildcard bind ("0.0.0.0" / "[::]") is not a dialable
+		// address; stamping it would poison peers' address books — a
+		// receiver "learns" to dial its own loopback. Stamp nothing:
+		// peers that know a real address for us keep it, and everyone
+		// else answers us over the conns we opened, or reaches us via
+		// the relay we advertise once registered. Public daemons set
+		// -advertise (or a concrete -listen) to be gossipable.
+		return ""
+	}
 	return t.listenAddr
+}
+
+func isWildcard(hostport string) bool {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
 }
 
 // AddPeer seeds the address book (bootstrap wiring).
@@ -173,11 +238,20 @@ func (t *Transport) logf(lvl ports.LogLevel, event string, kv ...any) {
 	ports.LogIf(t.lg, lvl, event, kv...)
 }
 
-// Send resolves the address, builds the envelope, and hands the
-// dial+handshake+write to a goroutine so the loop never blocks.
+// Send builds the envelope and hands delivery to a goroutine so the
+// loop never blocks. Delivery prefers the live conversation with the
+// peer; an address is only required when there isn't one (or when the
+// message semantics demand a fresh dial).
 func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
-	addr, ok := t.lookupAddr(to)
-	if !ok {
+	// A reachability dial-back must NOT ride an existing conversation:
+	// its entire meaning is "a fresh inbound dial to your advertised
+	// address landed". Reusing the checker's own outbound conn would
+	// report every NATed node as public. This is the one place the
+	// transport looks at a message kind; the alternative is a second
+	// port method, which buys nothing.
+	freshDial := msg.Kind == ports.MsgReachabilityReply
+	addr, hasAddr := t.lookupAddr(to)
+	if !hasAddr && (freshDial || t.liveConn(to) == nil) {
 		t.logf(ports.LogDebug, "send with no known address", "to", to)
 		return fmt.Errorf("tcpnet: no known address for %s", to)
 	}
@@ -197,46 +271,101 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	if err != nil {
 		return fmt.Errorf("tcpnet: encode: %w", err)
 	}
-	go t.writeFrame(to, addr, frame)
+	go t.deliver(to, addr, frame, freshDial)
 	return nil
 }
 
-// writeFrame dials with the target's identity pinned: if the far end's
+// deliver rides the live conversation with to when one exists — this is
+// what lets a NATed peer be answered: it dialed us, that socket is
+// open, and the reply belongs on it. Otherwise it dials (direct or via
+// relay) and keeps the conn: its readLoop serves the peer's frames and
+// future sends skip the dial+handshake toll.
+func (t *Transport) deliver(to ports.NodeID, addr string, frame []byte, freshDial bool) {
+	if !freshDial {
+		if pc := t.liveConn(to); pc != nil {
+			if pc.write(frame) == nil {
+				return
+			}
+			t.dropConn(to, pc) // conversation died; try a fresh dial
+		}
+	}
+	if addr == "" {
+		t.logf(ports.LogDebug, "no path to peer", "to", to)
+		return
+	}
+	conn, err := t.dialPeer(to, addr)
+	if err != nil {
+		return // logged in dialPeer; timeouts upstream handle the loss
+	}
+	pc := t.adopt(to, conn)
+	if err := pc.write(frame); err != nil {
+		t.dropConn(to, pc)
+		return
+	}
+	go t.readLoop(conn)
+}
+
+// dialPeer dials with the target's identity pinned: if the far end's
 // key doesn't hash to the NodeID we meant, the handshake fails and the
 // message is dropped — impostors get silence, not data. A relay-form
 // address changes only how the socket is reached: the pinned TLS
 // session with the TARGET runs end-to-end through the relay's splice,
 // so a relay (or anyone) injecting frames still dies at the handshake.
-func (t *Transport) writeFrame(to ports.NodeID, addr string, frame []byte) {
+func (t *Transport) dialPeer(to ports.NodeID, addr string) (*tls.Conn, error) {
 	cfg := identity.ClientConfig(t.cert, to)
-	var conn *tls.Conn
 	if relayID, relayAddr, ok := relay.SplitAddr(addr); ok {
 		raw, err := relay.DialThrough(t.cert, relayID, relayAddr, to)
 		if err != nil {
 			t.logf(ports.LogWarn, "relay dial failed", "to", to, "addr", addr, "err", err)
-			return
+			return nil, err
 		}
-		conn = tls.Client(raw, cfg)
+		conn := tls.Client(raw, cfg)
 		conn.SetDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.Handshake(); err != nil {
 			t.logf(ports.LogWarn, "relayed handshake failed", "to", to, "addr", addr, "err", err)
 			conn.Close()
-			return
+			return nil, err
 		}
 		conn.SetDeadline(time.Time{})
-	} else {
-		var err error
-		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
-		if err != nil {
-			t.logf(ports.LogWarn, "dial failed", "to", to, "addr", addr, "err", err)
-			return // dropped; timeouts upstream handle it
-		}
+		return conn, nil
 	}
-	defer conn.Close()
-	var hdr [4]byte
-	binary.BigEndian.PutUint32(hdr[:], uint32(len(frame)))
-	conn.Write(hdr[:])
-	conn.Write(frame)
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, cfg)
+	if err != nil {
+		t.logf(ports.LogWarn, "dial failed", "to", to, "addr", addr, "err", err)
+		return nil, err
+	}
+	return conn, nil
+}
+
+// adopt records conn as the live conversation with id. The newest conn
+// wins the slot; a displaced conn is not closed — its readLoop keeps
+// serving whatever the peer still says on it until it dies naturally.
+func (t *Transport) adopt(id ports.NodeID, conn *tls.Conn) *peerConn {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if pc, ok := t.conns[id]; ok && pc.conn == conn {
+		return pc
+	}
+	pc := &peerConn{conn: conn}
+	t.conns[id] = pc
+	return pc
+}
+
+func (t *Transport) liveConn(id ports.NodeID) *peerConn {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.conns[id]
+}
+
+// dropConn forgets pc (if it is still the live conversation) and
+// closes it.
+func (t *Transport) dropConn(id ports.NodeID, pc *peerConn) {
+	t.mu.Lock()
+	if t.conns[id] == pc {
+		delete(t.conns, id)
+	}
+	t.mu.Unlock()
+	pc.conn.Close()
 }
 
 // RelayInbound serves one spliced conn handed over by a relay
@@ -263,18 +392,25 @@ func (t *Transport) acceptLoop() {
 }
 
 func (t *Transport) readLoop(conn *tls.Conn) {
-	defer conn.Close()
 	if err := conn.Handshake(); err != nil {
 		t.logf(ports.LogDebug, "inbound handshake failed", "remote", conn.RemoteAddr(), "err", err)
+		conn.Close()
 		return
 	}
 	// The sender's identity comes from the TLS handshake, not from
-	// anything it writes in a frame.
+	// anything it writes in a frame. (Handshake is a no-op on a conn we
+	// dialed ourselves; PeerID works on either end's certificate.)
 	from, err := identity.PeerID(conn.ConnectionState())
 	if err != nil {
 		t.logf(ports.LogDebug, "inbound peer id rejected", "remote", conn.RemoteAddr(), "err", err)
+		conn.Close()
 		return
 	}
+	// This conn is now the live conversation with from — in particular,
+	// our replies to a NATed peer ride it, because no dial can ever go
+	// the other way.
+	pc := t.adopt(from, conn)
+	defer t.dropConn(from, pc)
 	for {
 		var hdr [4]byte
 		if _, err := io.ReadFull(conn, hdr[:]); err != nil {

@@ -69,8 +69,8 @@ func TestRelayedTransportRoundTrip(t *testing.T) {
 	rc := register(t, identB, identR.NodeID(), srv.Addr(), trB)
 
 	trB.SetHandler(func(from ports.NodeID, msg ports.Message) {
-		// B learned A's direct address from the relayed envelope; the
-		// reply goes straight back, no relay needed for this leg.
+		// B answers over the live conversation A opened through the
+		// relay — the reply needs no address for A at all.
 		trB.Send(from, ports.Message{Kind: ports.MsgFindNodeReply, RID: msg.RID})
 	})
 	reply := make(chan ports.Message, 1)

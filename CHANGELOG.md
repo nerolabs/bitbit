@@ -8,6 +8,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **NATed peers can actually converse** (found in the first real
+  cross-network test, #27): the transport dialed a fresh connection per
+  message, so a reply required dialing *into* the requester — impossible
+  behind NAT, and bootstrap came back with zero table entries. Replies
+  (and all traffic) now ride the live connection the peer opened, and
+  dialed connections are kept and reused. Two corollaries: a wildcard
+  bind (`0.0.0.0`/`[::]`) is never stamped on outgoing messages (it used
+  to poison peers' address books with an undialable address — a new
+  `-advertise HOST:PORT` flag lets a public box say what to gossip), and
+  a daemon that registers with a relay now **re-bootstraps** through it,
+  since its first join attempt may have been unanswerable. The
+  reachability dial-back deliberately never reuses a connection — its
+  meaning is "a fresh inbound dial landed" — so AutoNAT stays honest.
+- **Relay-form addresses survive `-bootstrap`, DNS seeds, and
+  peers.json** — peer strings split on the first `@`, not the last, so
+  `ID@relay:RID@host:port` parses instead of being silently dropped.
+
 ### Added
 - **Relay** (#27, step 3 — the universal NAT fallback) — a NATed daemon can
   now be reached across networks through any reachable node running
