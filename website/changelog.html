@@ -33,8 +33,8 @@
   <h1>What's changed</h1>
 <p class="lead">All notable changes to Silt are recorded here. The format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>, and the project aims to follow <a href="https://semver.org/">Semantic Versioning</a>.</p>
 <p>This log is published at <a href="https://silthq.com/changelog.html">silthq.com/changelog</a>.</p>
-<h2 class="rel unreleased"><span class="v">Unreleased</span></h2>
-<p>First-production-user feedback from the 0.1.0 release, fixed:</p>
+<h2 class="rel released"><span class="v">0.1.1</span><span class="d">2026-07-26</span></h2>
+<p>Still early, experimental, and unaudited (see the <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">threat model</a>). This release is the first round of first-production-user feedback from 0.1.0, fixed:</p>
 <h3>Changed</h3>
 <ul>
 <li><b>Swarm registry docs &amp; error messages</b> (#17) — the registry is <em>key-pinned HTTPS</em>, and now everything says so. The README swarm recipe and <span class="mono">silt daemon -registry</span> help use the <span class="mono">&lt;ID&gt;@https://host:port</span> form the daemon prints; passing a bare <span class="mono">https://</span> or an <span class="mono">http://</span> URL to a pinned registry returns a message that names the fix instead of a raw TLS error.</li>
