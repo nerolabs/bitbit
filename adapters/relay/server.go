@@ -19,7 +19,7 @@ import (
 type Config struct {
 	MaxSessions     int   // concurrent splices across all peers (default 64)
 	PerPeerSessions int   // concurrent splices per registered target (default 8)
-	MaxSessionBytes int64 // per-direction byte cap per splice (default 1 GiB; 0 = unlimited)
+	MaxSessionBytes int64 // per-direction byte cap per splice (default 1 GiB)
 }
 
 func (c Config) withDefaults() Config {
@@ -111,9 +111,7 @@ func (s *Server) Registered() int {
 }
 
 func (s *Server) logf(lvl ports.LogLevel, event string, kv ...any) {
-	if s.lg != nil && s.lg.Enabled(lvl) {
-		s.lg.Log(lvl, event, kv...)
-	}
+	ports.LogIf(s.lg, lvl, event, kv...)
 }
 
 func (s *Server) acceptLoop() {
@@ -303,13 +301,9 @@ func (s *Server) splice(target ports.NodeID, a, b net.Conn) {
 	var wg sync.WaitGroup
 	pump := func(dst, src net.Conn) {
 		defer wg.Done()
-		if s.cfg.MaxSessionBytes > 0 {
-			io.Copy(dst, io.LimitReader(src, s.cfg.MaxSessionBytes))
-		} else {
-			io.Copy(dst, src)
-		}
-		a.Close()
-		b.Close()
+		io.Copy(dst, io.LimitReader(src, s.cfg.MaxSessionBytes))
+		a.Close() // both closed on the first EOF or the byte cap;
+		b.Close() // Close is idempotent on a net.Conn
 	}
 	wg.Add(2)
 	go pump(a, b)

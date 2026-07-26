@@ -30,6 +30,21 @@ func TestParseFormatRoundtrip(t *testing.T) {
 	}
 }
 
+// A relay-form address carries its own "@"; the peer string must still
+// split on the FIRST one, or every relay-addressed peer is silently
+// dropped from -bootstrap, DNS seeds, and peers.json warm restarts.
+func TestParseRelayFormAddress(t *testing.T) {
+	relayID := ports.HashBytes([]byte{9})
+	p := peer(1, "relay:"+relayID.String()+"@203.0.113.7:4002")
+	got, err := discovery.Parse(discovery.Format(p))
+	if err != nil {
+		t.Fatalf("relay-form peer must parse: %v", err)
+	}
+	if got != p {
+		t.Fatalf("roundtrip mangled relay-form peer: %+v", got)
+	}
+}
+
 func TestFilePersistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "peers.json")
 	if loaded, err := discovery.LoadFile(path); err != nil || len(loaded) != 0 {

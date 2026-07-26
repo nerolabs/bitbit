@@ -179,13 +179,11 @@ func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
 // SetLogger wires the observability port; nil disables it.
 func (n *Node) SetLogger(lg ports.Logger) { n.lg = lg }
 
-// logf is the nil-safe narration helper. Only rare events go through it
-// (timeouts, repairs, verdicts) — nothing per-byte, so the varargs cost
-// is irrelevant and a disabled logger stays effectively free.
+// logf narrates. Only rare events go through it (timeouts, repairs,
+// verdicts) — nothing per-byte, so the varargs cost is irrelevant and a
+// disabled logger stays effectively free.
 func (n *Node) logf(lvl ports.LogLevel, event string, kv ...any) {
-	if n.lg != nil && n.lg.Enabled(lvl) {
-		n.lg.Log(lvl, event, kv...)
-	}
+	ports.LogIf(n.lg, lvl, event, kv...)
 }
 
 // SetFreeload toggles leech behavior.

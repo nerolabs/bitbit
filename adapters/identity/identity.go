@@ -165,3 +165,16 @@ func VerifyExpected(expect ports.NodeID) func([][]byte, [][]*x509.Certificate) e
 		return nil
 	}
 }
+
+// ClientConfig is the pinned dialer config every Silt client-side TLS
+// connection uses — swarm frames and relay control conns alike: present
+// our certificate, replace PKI verification with pinning to expect, TLS
+// 1.3 only. One place, so a hardening change lands everywhere at once.
+func ClientConfig(cert tls.Certificate, expect ports.NodeID) *tls.Config {
+	return &tls.Config{
+		Certificates:          []tls.Certificate{cert},
+		InsecureSkipVerify:    true, // replaced by pinning, not skipped
+		VerifyPeerCertificate: VerifyExpected(expect),
+		MinVersion:            tls.VersionTLS13,
+	}
+}

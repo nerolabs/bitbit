@@ -110,20 +110,14 @@ func cmdDaemon(args []string) error {
 		ReachabilityTimeout: ports.Duration(3 * time.Second),
 	}, walltime.New(loop), tr, store)
 
-	// -debug: everything the node and transport narrate lands in a
-	// grep-able debug.log next to the store. dlog adds the daemon's own
-	// milestones (discovery, bootstrap) to the same artifact.
+	// -debug: dlog adds the daemon's own milestones (discovery,
+	// bootstrap) to the same artifact the node and transport narrate to.
 	var lg *logfile.Sink
 	if *debug {
-		logPath := filepath.Join(*storeDir, "debug.log")
-		lg, err = logfile.Open(logPath, ports.LogDebug)
-		if err != nil {
+		if lg, err = openDebugLog(*storeDir, tr, nd); err != nil {
 			return err
 		}
 		defer lg.Close()
-		tr.SetLogger(lg)
-		nd.SetLogger(lg)
-		fmt.Printf("debug: logging to %s\n", logPath)
 	}
 	dlog := func(event string, kv ...any) {
 		if lg != nil {
@@ -422,6 +416,21 @@ func cmdDaemon(args []string) error {
 	fmt.Println("serving; Ctrl-C to stop")
 	loop.Run() // forever
 	return nil
+}
+
+// openDebugLog wires -debug: everything the node and transport narrate
+// lands in a grep-able debug.log next to the store, so a failure in the
+// field leaves an artifact. The caller closes the sink.
+func openDebugLog(storeDir string, tr *tcpnet.Transport, nd *node.Node) (*logfile.Sink, error) {
+	logPath := filepath.Join(storeDir, "debug.log")
+	lg, err := logfile.Open(logPath, ports.LogDebug)
+	if err != nil {
+		return nil, err
+	}
+	tr.SetLogger(lg)
+	nd.SetLogger(lg)
+	fmt.Printf("debug: logging to %s\n", logPath)
+	return lg, nil
 }
 
 // openRegistry accepts either "http://host:port" (plain, trusted

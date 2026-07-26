@@ -170,9 +170,7 @@ func (t *Transport) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
 func (t *Transport) SetLogger(lg ports.Logger) { t.lg = lg }
 
 func (t *Transport) logf(lvl ports.LogLevel, event string, kv ...any) {
-	if t.lg != nil && t.lg.Enabled(lvl) {
-		t.lg.Log(lvl, event, kv...)
-	}
+	ports.LogIf(t.lg, lvl, event, kv...)
 }
 
 // Send resolves the address, builds the envelope, and hands the
@@ -210,12 +208,7 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 // session with the TARGET runs end-to-end through the relay's splice,
 // so a relay (or anyone) injecting frames still dies at the handshake.
 func (t *Transport) writeFrame(to ports.NodeID, addr string, frame []byte) {
-	cfg := &tls.Config{
-		Certificates:          []tls.Certificate{t.cert},
-		InsecureSkipVerify:    true, // replaced by pinning, not skipped
-		VerifyPeerCertificate: identity.VerifyExpected(to),
-		MinVersion:            tls.VersionTLS13,
-	}
+	cfg := identity.ClientConfig(t.cert, to)
 	var conn *tls.Conn
 	if relayID, relayAddr, ok := relay.SplitAddr(addr); ok {
 		raw, err := relay.DialThrough(t.cert, relayID, relayAddr, to)

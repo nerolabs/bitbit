@@ -40,12 +40,7 @@ func DialThrough(cert tls.Certificate, relayID ports.NodeID, relayAddr string, t
 }
 
 func dialRelay(cert tls.Certificate, relayID ports.NodeID, relayAddr string) (*tls.Conn, error) {
-	cfg := &tls.Config{
-		Certificates:          []tls.Certificate{cert},
-		InsecureSkipVerify:    true, // replaced by pinning, not skipped
-		VerifyPeerCertificate: identity.VerifyExpected(relayID),
-		MinVersion:            tls.VersionTLS13,
-	}
+	cfg := identity.ClientConfig(cert, relayID)
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", relayAddr, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("relay dial %s: %w", relayAddr, err)
@@ -90,9 +85,7 @@ func NewClient(ident *identity.Identity, relayID ports.NodeID, relayAddr string,
 func (c *Client) Addr() string { return Addr(c.relayID, c.relayAddr) }
 
 func (c *Client) logf(lvl ports.LogLevel, event string, kv ...any) {
-	if c.lg != nil && c.lg.Enabled(lvl) {
-		c.lg.Log(lvl, event, kv...)
-	}
+	ports.LogIf(c.lg, lvl, event, kv...)
 }
 
 // Run registers and serves until Close, reconnecting with backoff. The
