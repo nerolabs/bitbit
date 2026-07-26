@@ -53,18 +53,20 @@ const (
 	MsgAddProviderAck
 	MsgStoreChunk // ChunkID + Data: push a chunk to a peer
 	MsgStoreChunkAck
-	MsgFetchChunk      // ChunkID
-	MsgFetchChunkReply // Found + Data
-	MsgHasChunk        // ChunkID: cheap availability probe (repair loop)
-	MsgHasChunkReply   // Found
-	MsgChallenge       // ChunkID + Nonce: prove you hold this shard of Proof.Root
-	MsgChallengeReply  // Found + Proof + Tag
-	MsgProposeBlock    // Data: CBOR block awaiting attestation
-	MsgAttestReply     // OK + Data: CBOR attestation (or OK=false refusal)
-	MsgCommitBlock     // Data: CBOR block with quorum attached
-	MsgCommitAck       // OK
-	MsgGetChain        // Height: send me blocks from here up
-	MsgChainReply      // Data: CBOR []Block
+	MsgFetchChunk        // ChunkID
+	MsgFetchChunkReply   // Found + Data
+	MsgHasChunk          // ChunkID: cheap availability probe (repair loop)
+	MsgHasChunkReply     // Found
+	MsgChallenge         // ChunkID + Nonce: prove you hold this shard of Proof.Root
+	MsgChallengeReply    // Found + Proof + Tag
+	MsgProposeBlock      // Data: CBOR block awaiting attestation
+	MsgAttestReply       // OK + Data: CBOR attestation (or OK=false refusal)
+	MsgCommitBlock       // Data: CBOR block with quorum attached
+	MsgCommitAck         // OK
+	MsgGetChain          // Height: send me blocks from here up
+	MsgChainReply        // Data: CBOR []Block
+	MsgCheckReachability // Nonce: "dial me back at my advertised address"
+	MsgReachabilityReply // Nonce: the dial-back landed (its arrival is the proof)
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:

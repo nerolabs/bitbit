@@ -50,6 +50,11 @@ type Config struct {
 	DemandInterval ports.Duration
 	LeaseTTL       ports.Duration
 	FanoutReplicas int
+	// ReachabilityTimeout bounds a reachability check: how long to wait for
+	// a helper's dial-back before concluding this node is behind NAT. It
+	// spans a fresh outbound dial + handshake on the helper's side, so it is
+	// deliberately looser than RequestTimeout.
+	ReachabilityTimeout ports.Duration
 }
 
 func DefaultConfig() Config {
@@ -63,6 +68,8 @@ func DefaultConfig() Config {
 		DemandInterval: 60 * ports.Second,
 		LeaseTTL:       180 * ports.Second,
 		FanoutReplicas: 2,
+
+		ReachabilityTimeout: 3 * ports.Second,
 	}
 }
 
@@ -101,6 +108,13 @@ type Node struct {
 	rid     uint64
 	pending map[uint64]*pending
 	Stats   Stats
+
+	// reachability probes (our AutoNAT): a check sends helpers a nonce and
+	// waits for one to dial us back. reachProbes maps an outstanding nonce
+	// to its callback; reachSeq mints nonces; reach is the last verdict.
+	reachSeq    uint64
+	reachProbes map[uint64]*reachProbe
+	reach       Reachability
 
 	// caretaker state (repair loop)
 	reg           ports.Registry
@@ -174,6 +188,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		table:       dht.NewTable(id, cfg.K),
 		provs:       dht.NewProviders(),
 		pending:     make(map[uint64]*pending),
+		reachProbes: make(map[uint64]*reachProbe),
 		proofs:      make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains: make(map[ports.NodeID]uint64),
 		serveLoad:   make(map[ports.ChunkID]int),
@@ -348,6 +363,20 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			return
 		}
 		n.reply(from, msg, n.answerChallenge(msg))
+	case ports.MsgCheckReachability:
+		// A peer wants to know if it is publicly reachable. Answering means
+		// dialing it back at its advertised address: if the reply lands, the
+		// dial succeeded, which is itself the proof. We echo the nonce so the
+		// asker can match the answer to its outstanding check.
+		n.send(from, ports.Message{Kind: ports.MsgReachabilityReply, Nonce: msg.Nonce})
+	case ports.MsgReachabilityReply:
+		// A helper reached us back — we are reachable. Resolve the probe;
+		// the timeout handles the silent (NATed) case.
+		if p, ok := n.reachProbes[msg.Nonce]; ok {
+			delete(n.reachProbes, msg.Nonce)
+			p.cancel()
+			p.done(true)
+		}
 	}
 }
 

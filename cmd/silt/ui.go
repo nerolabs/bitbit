@@ -100,17 +100,18 @@ func (s *uiServer) apiStatus(w http.ResponseWriter, _ *http.Request) {
 		Entries int `json:"entries"`
 	}
 	var out struct {
-		ID        string           `json:"id"`
-		Peer      string           `json:"peer"`
-		UptimeSec int64            `json:"uptimeSec"`
-		CapUsed   int64            `json:"capUsed"`
-		CapTotal  int64            `json:"capTotal"`
-		Chunks    int              `json:"chunks"`
-		Peers     int              `json:"peers"`
-		Stats     node.Stats       `json:"stats"`
-		Network   node.NetEstimate `json:"network"`
-		Validator bool             `json:"validator"`
-		Chain     *chainInfo       `json:"chain,omitempty"`
+		ID           string           `json:"id"`
+		Peer         string           `json:"peer"`
+		UptimeSec    int64            `json:"uptimeSec"`
+		CapUsed      int64            `json:"capUsed"`
+		CapTotal     int64            `json:"capTotal"`
+		Chunks       int              `json:"chunks"`
+		Peers        int              `json:"peers"`
+		Stats        node.Stats       `json:"stats"`
+		Network      node.NetEstimate `json:"network"`
+		Validator    bool             `json:"validator"`
+		Reachability string           `json:"reachability"`
+		Chain        *chainInfo       `json:"chain,omitempty"`
 	}
 	out.ID = s.nd.ID().String()
 	out.Peer = s.selfPeer
@@ -118,6 +119,7 @@ func (s *uiServer) apiStatus(w http.ResponseWriter, _ *http.Request) {
 	out.Validator = s.validator
 	out.Peers = s.peerCount()
 	s.onLoop(func() {
+		out.Reachability = s.nd.Reachability().String()
 		if s.capRep != nil {
 			out.CapUsed, out.CapTotal = s.capRep.Capacity()
 		}

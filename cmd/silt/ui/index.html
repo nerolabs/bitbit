@@ -69,7 +69,9 @@ async function refresh() {
     document.getElementById("chainsub").textContent =
       s.chain ? s.chain.entries+" registered identifiers" : "not a validator";
     document.getElementById("peers").textContent = s.peers;
-    document.getElementById("uptime").textContent = "up "+Math.floor(s.uptimeSec/60)+"m "+(s.uptimeSec%60)+"s";
+    const reach = { public: "reachable directly", natted: "behind NAT (needs a relay)", unknown: "reachability unknown" }[s.reachability] || "";
+    document.getElementById("uptime").textContent =
+      "up "+Math.floor(s.uptimeSec/60)+"m "+(s.uptimeSec%60)+"s" + (reach ? " · "+reach : "");
 
     const roots = await (await fetch("/api/roots")).json();
     document.querySelector("#roots tbody").innerHTML = (roots||[]).map(r =>

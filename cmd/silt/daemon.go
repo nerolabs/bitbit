@@ -98,10 +98,11 @@ func cmdDaemon(args []string) error {
 	}
 	nd := node.New(id, node.Config{
 		K: 8, Alpha: 3,
-		RequestTimeout: ports.Duration(2 * time.Second),
-		Replication:    3,
-		RepairInterval: ports.Duration(60 * time.Second),
-		RepairSlack:    2,
+		RequestTimeout:      ports.Duration(2 * time.Second),
+		Replication:         3,
+		RepairInterval:      ports.Duration(60 * time.Second),
+		RepairSlack:         2,
+		ReachabilityTimeout: ports.Duration(3 * time.Second),
 	}, walltime.New(loop), tr, store)
 
 	// Validator role: local chain replica, persisted and re-validated on
@@ -289,6 +290,18 @@ func cmdDaemon(args []string) error {
 	loop.Post(func() {
 		nd.Bootstrap(seeds, func() {
 			fmt.Printf("bootstrapped (%d table entries)\n", nd.Table().Size())
+			// Reachability (AutoNAT): ask a couple of known peers to dial us
+			// back. A public node can be reached directly; a NATed one will
+			// need a relay (next step of cross-network reachability).
+			if helpers := nd.Table().Closest(nd.ID(), 3); len(helpers) > 0 {
+				nd.CheckReachability(helpers, func(reachable bool) {
+					if reachable {
+						fmt.Println("reachability: public — peers can dial this node directly")
+					} else {
+						fmt.Println("reachability: no peer could dial back — this node looks NATed (a relay will be needed to be reachable across networks)")
+					}
+				})
+			}
 			if *validator && len(attesterIDs) > 0 {
 				nd.SyncChain(attesterIDs, func(added int, _ error) {
 					if added > 0 {
