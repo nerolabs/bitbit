@@ -350,6 +350,7 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 	if missing > n.cfg.RepairSlack || len(disperseShards) > 0 {
 		if len(disperseShards) > 0 && missing <= n.cfg.RepairSlack {
 			n.Stats.Dispersals++
+			n.logf(ports.LogInfo, "dispersion re-spread", "root", m.Root(), "overexposed", len(disperseShards))
 		}
 		n.repairStripe(m, p, stripeRefs, disperseShards, dominant, next)
 		return
@@ -405,6 +406,7 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		}
 		if err := erasure.ReconstructStripe(p, shards, realData); err != nil {
 			n.Stats.RepairFailures++ // below k fetchable right now; retry next sweep
+			n.logf(ports.LogWarn, "repair below k", "root", root, "err", err)
 			cleanup()
 			return
 		}
@@ -413,11 +415,13 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		for _, r := range stripeRefs {
 			if ports.HashBytes(shards[r.pos]) != r.id {
 				n.Stats.RepairFailures++
+				n.logf(ports.LogWarn, "rebuilt shard hash mismatch", "root", root, "shard", r.id)
 				cleanup()
 				return
 			}
 		}
 		n.Stats.Repairs++
+		n.logf(ports.LogInfo, "stripe repaired", "root", root, "missing", len(unfetched))
 		missing := make(map[ports.ChunkID]bool, len(unfetched))
 		for _, id := range unfetched {
 			missing[id] = true

@@ -23,6 +23,7 @@ import (
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/linkbook"
+	"github.com/nerolabs/silt/adapters/logfile"
 	"github.com/nerolabs/silt/adapters/tcpnet"
 	"github.com/nerolabs/silt/adapters/walltime"
 	"github.com/nerolabs/silt/core/node"
@@ -41,6 +42,7 @@ func cmdClient(args []string) error {
 	registryURL := fs.String("registry", "", "registry ref for browsing/publishing (ID@https://host:port)")
 	uiAddr := fs.String("ui", "127.0.0.1:8090", "local web UI address")
 	open := fs.Bool("open", true, "open the library in your browser on start")
+	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
 	fs.Parse(args)
 
 	if err := os.MkdirAll(*storeDir, 0o755); err != nil {
@@ -81,6 +83,18 @@ func cmdClient(args []string) error {
 	}
 
 	nd := node.New(id, node.DefaultConfig(), walltime.New(loop), tr, store)
+
+	if *debug {
+		logPath := filepath.Join(*storeDir, "debug.log")
+		lg, err := logfile.Open(logPath, ports.LogDebug)
+		if err != nil {
+			return err
+		}
+		defer lg.Close()
+		tr.SetLogger(lg)
+		nd.SetLogger(lg)
+		fmt.Printf("debug: logging to %s\n", logPath)
+	}
 
 	var reg ports.Registry
 	if *registryURL != "" {

@@ -54,6 +54,7 @@ func (n *Node) CheckReachability(helpers []ports.NodeID, done func(reachable boo
 		} else {
 			n.reach = ReachNATed
 		}
+		n.logf(ports.LogInfo, "reachability verdict", "reach", n.reach, "helpers", len(helpers))
 		done(reachable)
 	}
 	if len(helpers) == 0 {
