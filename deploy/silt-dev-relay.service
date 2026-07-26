@@ -1,0 +1,22 @@
+# Optional systemd unit for the throwaway dev relay (see README.md —
+# development/test infrastructure, not operated by the Silt project).
+#
+#   sudo cp silt-dev-relay.service /etc/systemd/system/
+#   sudo systemctl enable --now silt-dev-relay
+#
+# Edit User/WorkingDirectory to match the box.
+[Unit]
+Description=Silt dev relay (throwaway development infrastructure)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=silt
+WorkingDirectory=/home/silt/silt
+ExecStart=/home/silt/silt/deploy/dev-relay.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -160,8 +160,12 @@ Build order:
   gossip so `-relay-via` can be discovered instead of configured.
 - **Dev node** — a throwaway public `-relay` box (VPS or tunnel) in a
   separate `deploy/`, clearly *not* project-operated, to develop against.
+  *Scaffolding done* (`deploy/dev-relay.sh` + systemd unit + neutrality
+  README); the box itself gets stood up at test time.
 - **Prove it** — Andrew's Mac ↔ wife's Mac, different networks, meeting
-  through the dev relay; publish and retrieve.
+  through the dev relay; publish and retrieve. Runbook written:
+  [docs/cross-network-runbook.md](docs/cross-network-runbook.md) —
+  needs the two Macs and a $5 VPS.
 - **UPnP/NAT-PMP** and **hole-punching** (DCUtR-style relay→direct upgrade)
   — later optimizations that reduce relay dependence.
 
