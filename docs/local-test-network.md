@@ -42,15 +42,25 @@ swarm, deterministically, in one process. Same core code as the real
 thing — only the network and clock are swapped for in-memory ones.
 
 ```sh
-silt sim run churn                 # THE demo: kill a third of the swarm, the file returns bit-perfect
-silt sim run scatter -nodes 50     # publish on node A, fetch on node Z; A keeps nothing
-silt sim run economy               # hosts earn per byte; freeloaders go broke (watch the Gini climb)
-silt sim run audit -seed 31        # liars keep the proof, ditch the data — caught and slashed
-silt sim run takedown              # revoke a root → compliant nodes purge it; an unrelated file survives
-silt sim run capacity              # bounded stores fill, placement spills over, nodes estimate network size
-silt sim run consensus             # the reputation-quorum chain commits a block; fresh identities can't write
-silt net demo -nodes 8             # the same core, but over real TCP sockets on localhost
+silt sim run churn
+silt sim run scatter -nodes 50
+silt sim run economy
+silt sim run audit -seed 31
+silt sim run takedown
+silt sim run capacity
+silt sim run consensus
+silt net demo -nodes 8
 ```
+
+What each shows:
+- **churn** — kill a third of the swarm; the file returns bit-perfect.
+- **scatter** — publish on node A, fetch on node Z; A keeps nothing.
+- **economy** — hosts earn per byte served; freeloaders go broke (watch the Gini climb).
+- **audit** — liars keep the proof but ditch the data, and get caught and slashed.
+- **takedown** — revoke a root; compliant nodes purge it while an unrelated file survives.
+- **capacity** — bounded stores fill, placement spills over, nodes estimate the network size.
+- **consensus** — the reputation-quorum chain commits a block; fresh identities cannot write.
+- **net demo** — the same core, over real TCP sockets on localhost.
 
 `churn` is the one to watch: the live view shows redundancy draining as
 nodes die and pumping back up as caretaker repair loops rebuild lost
@@ -68,7 +78,7 @@ dd if=/dev/urandom of=movie.bin bs=1m count=20
 
 silt add movie.bin
 #  → prints a care link (repair-only) and the silt link (root:key) you share
-silt ls                                     # what's in your local store
+silt ls                                     # roots in your local store
 silt info silt:v1:<root>:<key>              # inspect without fetching
 #   (heads-up: on a big file this prints every shard hash — a lot of output)
 silt get silt:v1:<root>:<key> -o out.bin
