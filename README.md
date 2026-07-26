@@ -10,6 +10,11 @@ sockets. See `HANDOFF.md` for the full design brief and
 > lose. Please read the **[threat model](docs/threat-model.md)** — it
 > names the weak parts on purpose — and help us break it.
 
+**▶ [Build your own Silt test network on your own computer](docs/local-test-network.md)** —
+a hands-on, end-to-end walkthrough: run the whole swarm in one command, then
+stand up a real multi-node network on your laptop, publish a file, and watch it
+survive a node death.
+
 ## Status: feature-complete core; durability + scale backbone done
 
 The milestones below (M1–M14) are done, plus the Phase 1 durability
