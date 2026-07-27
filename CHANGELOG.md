@@ -27,6 +27,30 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
+- **Relay discovery by gossip** (#27 polish) — a daemon offering `-relay`
+  now stamps the service's dialable `host:port` on every outgoing
+  envelope (borrowing the `-advertise` host when the relay listener is
+  bound to a wildcard). Peers record these first-hand — a node only ever
+  announces its *own* relay, and dialing pins the relay's identity, so
+  gossip can direct but never impersonate. A daemon whose reachability
+  verdict is NATed and that has no `-relay-via` adopts the first
+  discovered relay automatically (and keeps watching until one appears):
+  the two-Macs runbook now works with nothing but `-bootstrap`.
+- **Two-slot address book: direct preferred, relay fallback** (#27
+  polish) — the transport now remembers up to two addresses per peer,
+  one direct `host:port` and one `relay:R@host:port`, instead of one
+  slot the two forms fought over (an mDNS-learned LAN address used to be
+  clobbered by the peer's relay stamp, sending house-mates through a
+  relay on another continent). Dials try direct first — no third hop —
+  and fall back to the relay within the same delivery; a direct address
+  is dropped only when the relay fallback *reaches* the peer, which
+  proves the address stale rather than the peer down. Contact gossip
+  passes on the relay form when one is known (a relay-advertising peer
+  is NATed, so its direct address is LAN-scoped hearsay); `peers.json`
+  persists both slots. The reachability dial-back ignores relay
+  addresses outright: reachable-through-a-relay is exactly what "public"
+  must not mean.
+
 - **Relay** (#27, step 3 — the universal NAT fallback) — a NATed daemon can
   now be reached across networks through any reachable node running
   `-relay ADDR`. The shape is libp2p Circuit-Relay-v2's, without the

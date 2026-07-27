@@ -41,6 +41,7 @@ import (
 	"io"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,8 +70,20 @@ type Transport struct {
 	ln         net.Listener
 	handler    func(from ports.NodeID, msg ports.Message)
 
-	mu    sync.Mutex
-	peers map[ports.NodeID]string
+	mu sync.Mutex
+	// peers is the address book: up to two addresses per peer, one per
+	// form. A NATed peer advertises a relay form to the world, but a
+	// LAN-mate that heard its mDNS beacon holds a direct address too —
+	// keeping both lets the dialer prefer the cheap path and fall back,
+	// instead of one form clobbering the other (the old one-slot book).
+	peers map[ports.NodeID]addrPair
+	// relays records peers that gossip a relay *service* (they run
+	// -relay at that host:port) — the pool a NATed node can lean on
+	// without being handed -relay-via. First-hand only: a node stamps
+	// its own service, never someone else's, so an entry is exactly as
+	// trustworthy as the pinned conn it arrived on (and dialing pins the
+	// relay's identity anyway).
+	relays map[ports.NodeID]string
 	// conns holds the live conversation per peer, either direction.
 	// The newest conn wins the slot; a displaced one keeps serving its
 	// own readLoop until it dies naturally.
@@ -79,6 +92,10 @@ type Transport struct {
 	// NATed node advertising "reach me via relay R" instead of a
 	// LAN address nobody outside the house can dial.
 	adv string
+	// relaySvc, when set, is the relay service this node offers
+	// (-relay), stamped on outgoing envelopes so peers can discover
+	// relays instead of being configured with one.
+	relaySvc string
 
 	// lg narrates transport failures (dials, handshakes, forgeries) —
 	// exactly the events that are invisible-but-fatal across real
@@ -87,6 +104,29 @@ type Transport struct {
 }
 
 var _ ports.Transport = (*Transport)(nil)
+
+// addrPair is one peer's two possible addresses: a directly dialable
+// host:port and a relay:R@host:port form. Either may be empty.
+type addrPair struct {
+	direct string
+	relay  string
+}
+
+func (p addrPair) empty() bool { return p.direct == "" && p.relay == "" }
+
+// gossip picks the form worth telling a third party about. A relay
+// form exists only because the peer itself advertised it — meaning it
+// believes it is NATed, and any direct address we hold is LAN-scoped
+// (mDNS) or stale. The relay form is the one that dials from anywhere.
+func (p addrPair) gossip() string {
+	if p.relay != "" {
+		return p.relay
+	}
+	return p.direct
+}
+
+// isRelayForm reports whether addr is a relay:R@host:port address.
+func isRelayForm(addr string) bool { return strings.HasPrefix(addr, "relay:") }
 
 // peerConn is one live connection. Frames from concurrent senders are
 // serialized by wmu so the length-prefixed framing can never interleave.
@@ -128,7 +168,8 @@ func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Tr
 		self:       ident.NodeID(),
 		listenAddr: ln.Addr().String(),
 		ln:         ln,
-		peers:      make(map[ports.NodeID]string),
+		peers:      make(map[ports.NodeID]addrPair),
+		relays:     make(map[ports.NodeID]string),
 		conns:      make(map[ports.NodeID]*peerConn),
 	}
 	go t.acceptLoop()
@@ -180,6 +221,12 @@ func (t *Transport) advertised() string {
 	return t.listenAddr
 }
 
+func (t *Transport) relayService() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.relaySvc
+}
+
 func isWildcard(hostport string) bool {
 	host, _, err := net.SplitHostPort(hostport)
 	if err != nil {
@@ -189,31 +236,50 @@ func isWildcard(hostport string) bool {
 	return ip != nil && ip.IsUnspecified()
 }
 
-// AddPeer seeds the address book (bootstrap wiring).
+// AddPeer seeds the address book (bootstrap wiring). The address lands
+// in the slot matching its form; the other slot survives.
 func (t *Transport) AddPeer(id ports.NodeID, addr string) {
-	t.mu.Lock()
-	t.peers[id] = addr
-	t.mu.Unlock()
+	t.learn(id, addr, true)
 }
 
 // Peers snapshots the address book, sorted for deterministic output —
-// this is what gets persisted for warm restarts (discovery).
+// this is what gets persisted for warm restarts (discovery). A peer
+// with both a direct and a relay address yields two entries; loading
+// them back through AddPeer refills both slots.
 func (t *Transport) Peers() []Peer {
 	t.mu.Lock()
 	out := make([]Peer, 0, len(t.peers))
-	for id, addr := range t.peers {
-		out = append(out, Peer{ID: id, Addr: addr})
+	for id, pair := range t.peers {
+		if pair.direct != "" {
+			out = append(out, Peer{ID: id, Addr: pair.direct})
+		}
+		if pair.relay != "" {
+			out = append(out, Peer{ID: id, Addr: pair.relay})
+		}
 	}
 	t.mu.Unlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ID != out[j].ID {
+			return out[i].ID.String() < out[j].ID.String()
+		}
+		return out[i].Addr < out[j].Addr
+	})
 	return out
 }
 
-func (t *Transport) lookupAddr(id ports.NodeID) (string, bool) {
+// PeerCount is the number of DISTINCT peers in the address book. Use
+// this, not len(Peers()): Peers() emits one entry per address form, so
+// a peer known by both a direct and a relay address counts twice there.
+func (t *Transport) PeerCount() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	addr, ok := t.peers[id]
-	return addr, ok
+	return len(t.peers)
+}
+
+func (t *Transport) lookupAddrs(id ports.NodeID) addrPair {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.peers[id]
 }
 
 func (t *Transport) learn(id ports.NodeID, addr string, overwrite bool) {
@@ -221,10 +287,51 @@ func (t *Transport) learn(id ports.NodeID, addr string, overwrite bool) {
 		return
 	}
 	t.mu.Lock()
-	if _, known := t.peers[id]; overwrite || !known {
-		t.peers[id] = addr
+	pair := t.peers[id]
+	if isRelayForm(addr) {
+		if overwrite || pair.relay == "" {
+			pair.relay = addr
+		}
+	} else if overwrite || pair.direct == "" {
+		pair.direct = addr
+	}
+	t.peers[id] = pair
+	t.mu.Unlock()
+}
+
+// forgetDirect drops a direct address proven stale — called only when a
+// direct dial failed AND the relay fallback reached the peer, so "the
+// peer moved behind a NAT" is distinguished from "the peer is down".
+func (t *Transport) forgetDirect(id ports.NodeID, addr string) {
+	t.mu.Lock()
+	if pair := t.peers[id]; pair.direct == addr {
+		pair.direct = ""
+		t.peers[id] = pair
 	}
 	t.mu.Unlock()
+}
+
+// SetRelayService announces on every outgoing envelope that this node
+// offers relay service at hostport (the -relay listener, in a publicly
+// dialable form). "" stops the announcement.
+func (t *Transport) SetRelayService(hostport string) {
+	t.mu.Lock()
+	t.relaySvc = hostport
+	t.mu.Unlock()
+}
+
+// KnownRelays lists peers heard first-hand offering relay service, as
+// ID + service host:port — each usable exactly where a -relay-via
+// RELAYID@HOST:PORT value would be. Sorted for determinism.
+func (t *Transport) KnownRelays() []Peer {
+	t.mu.Lock()
+	out := make([]Peer, 0, len(t.relays))
+	for id, addr := range t.relays {
+		out = append(out, Peer{ID: id, Addr: addr})
+	}
+	t.mu.Unlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	return out
 }
 
 func (t *Transport) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
@@ -250,16 +357,22 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	// transport looks at a message kind; the alternative is a second
 	// port method, which buys nothing.
 	freshDial := msg.Kind == ports.MsgReachabilityReply
-	addr, hasAddr := t.lookupAddr(to)
-	if !hasAddr && (freshDial || t.liveConn(to) == nil) {
+	pair := t.lookupAddrs(to)
+	if freshDial {
+		// The dial-back verdict is about DIRECT dialability: reaching
+		// the checker through a relay is precisely not being public, so
+		// only its direct address counts here.
+		pair.relay = ""
+	}
+	if pair.empty() && (freshDial || t.liveConn(to) == nil) {
 		t.logf(ports.LogDebug, "send with no known address", "to", to)
 		return fmt.Errorf("tcpnet: no known address for %s", to)
 	}
-	env := envelope{From: t.self[:], Addr: t.advertised(), Msg: toWire(msg)}
+	env := envelope{From: t.self[:], Addr: t.advertised(), Relay: t.relayService(), Msg: toWire(msg)}
 	contacts := make(map[string]string)
 	for _, list := range [][]ports.NodeID{msg.Nodes, msg.Providers} {
 		for _, id := range list {
-			if a, known := t.lookupAddr(id); known {
+			if a := t.lookupAddrs(id).gossip(); a != "" {
 				contacts[id.String()] = a
 			}
 		}
@@ -271,16 +384,20 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	if err != nil {
 		return fmt.Errorf("tcpnet: encode: %w", err)
 	}
-	go t.deliver(to, addr, frame, freshDial)
+	go t.deliver(to, pair, frame, freshDial)
 	return nil
 }
 
 // deliver rides the live conversation with to when one exists — this is
 // what lets a NATed peer be answered: it dialed us, that socket is
-// open, and the reply belongs on it. Otherwise it dials (direct or via
-// relay) and keeps the conn: its readLoop serves the peer's frames and
-// future sends skip the dial+handshake toll.
-func (t *Transport) deliver(to ports.NodeID, addr string, frame []byte, freshDial bool) {
+// open, and the reply belongs on it. Otherwise it dials and keeps the
+// conn: its readLoop serves the peer's frames and future sends skip the
+// dial+handshake toll. The direct address is tried before the relay
+// form — direct is the cheap path (no third hop) and usually right on a
+// LAN — and a direct failure falls back to the relay in the same
+// delivery; if the relay then reaches the peer, the direct address was
+// stale (the peer moved behind a NAT) and is dropped from the book.
+func (t *Transport) deliver(to ports.NodeID, pair addrPair, frame []byte, freshDial bool) {
 	if !freshDial {
 		if pc := t.liveConn(to); pc != nil {
 			if pc.write(frame) == nil {
@@ -289,20 +406,31 @@ func (t *Transport) deliver(to ports.NodeID, addr string, frame []byte, freshDia
 			t.dropConn(to, pc) // conversation died; try a fresh dial
 		}
 	}
-	if addr == "" {
+	if pair.empty() {
 		t.logf(ports.LogDebug, "no path to peer", "to", to)
 		return
 	}
-	conn, err := t.dialPeer(to, addr)
-	if err != nil {
-		return // logged in dialPeer; timeouts upstream handle the loss
-	}
-	pc := t.adopt(to, conn)
-	if err := pc.write(frame); err != nil {
-		t.dropConn(to, pc)
+	directFailed := false
+	for _, addr := range []string{pair.direct, pair.relay} {
+		if addr == "" {
+			continue
+		}
+		conn, err := t.dialPeer(to, addr)
+		if err != nil {
+			directFailed = directFailed || addr == pair.direct
+			continue
+		}
+		if directFailed && addr == pair.relay {
+			t.forgetDirect(to, pair.direct)
+		}
+		pc := t.adopt(to, conn)
+		if err := pc.write(frame); err != nil {
+			t.dropConn(to, pc)
+			return
+		}
+		go t.readLoop(conn)
 		return
 	}
-	go t.readLoop(conn)
 }
 
 // dialPeer dials with the target's identity pinned: if the far end's
@@ -437,6 +565,14 @@ func (t *Transport) readLoop(conn *tls.Conn) {
 			return
 		}
 		t.learn(from, env.Addr, true)
+		if env.Relay != "" {
+			// First-hand relay-capability gossip: from itself offers
+			// relay service there. Recorded for the moment this node
+			// finds itself NATed with no -relay-via configured.
+			t.mu.Lock()
+			t.relays[from] = env.Relay
+			t.mu.Unlock()
+		}
 		for idHex, addr := range env.Contacts {
 			if id, err := ports.ParseHash(idHex); err == nil {
 				t.learn(id, addr, false)

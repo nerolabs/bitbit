@@ -151,7 +151,7 @@ func cmdClient(args []string) error {
 		loop: loop, nd: nd, reg: reg, capRep: capRep,
 		selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 		validator: false, started: time.Now(),
-		peerCount: func() int { return len(tr.Peers()) },
+		peerCount: func() int { return tr.PeerCount() },
 		links:     links,
 	}
 	bound, err := ui.serve(*uiAddr)
