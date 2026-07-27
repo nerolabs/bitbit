@@ -51,6 +51,7 @@ func (n *Node) handleChain(from ports.NodeID, msg ports.Message) bool {
 		ok := err == nil && n.chain.Append(*b) == nil
 		if ok {
 			n.Stats.BlocksCommitted++
+			n.logf(ports.LogInfo, "block committed", "height", b.Height, "entries", len(b.Entries), "attestations", len(b.Atts), "via", "broadcast")
 			if n.onCommit != nil {
 				n.onCommit(*b)
 			}
@@ -133,6 +134,7 @@ func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID,
 				return
 			}
 			n.Stats.BlocksCommitted++
+			n.logf(ports.LogInfo, "block committed", "height", b.Height, "entries", len(b.Entries), "attestations", len(atts), "via", "proposal")
 			if n.onCommit != nil {
 				n.onCommit(*b)
 			}

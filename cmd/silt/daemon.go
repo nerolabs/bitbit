@@ -56,7 +56,8 @@ func cmdDaemon(args []string) error {
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
 	quorum := fs.Int("quorum", 1, "attestations required to commit a block")
 	minRep := fs.Int64("min-rep", 0, "reputation threshold for proposers/attesters (0 = trusted deployment)")
-	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
+	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
+	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
 	relayVia := fs.String("relay-via", "", "RELAYID@HOST:PORT of a relay to lean on if this node turns out to be NATed — peers then reach us through it")
 	advertise := fs.String("advertise", "", "publicly dialable HOST:PORT to stamp on outgoing messages — set this on a public box that listens on a wildcard address (a wildcard bind is never advertised on its own)")
@@ -115,11 +116,15 @@ func cmdDaemon(args []string) error {
 		ReachabilityTimeout: ports.Duration(3 * time.Second),
 	}, walltime.New(loop), tr, store)
 
-	// -debug: dlog adds the daemon's own milestones (discovery,
+	// -log/-debug: dlog adds the daemon's own milestones (discovery,
 	// bootstrap) to the same artifact the node and transport narrate to.
+	level, logOn, err := resolveLogLevel(*logLevel, *debug)
+	if err != nil {
+		return err
+	}
 	var lg *logfile.Sink
-	if *debug {
-		if lg, err = openDebugLog(*storeDir, tr, nd); err != nil {
+	if logOn {
+		if lg, err = openLog(*storeDir, level, tr, nd); err != nil {
 			return err
 		}
 		defer lg.Close()
@@ -468,18 +473,36 @@ func cmdDaemon(args []string) error {
 	return nil
 }
 
-// openDebugLog wires -debug: everything the node and transport narrate
-// lands in a grep-able debug.log next to the store, so a failure in the
-// field leaves an artifact. The caller closes the sink.
-func openDebugLog(storeDir string, tr *tcpnet.Transport, nd *node.Node) (*logfile.Sink, error) {
+// resolveLogLevel turns the -log/-debug flags into (level, on): -log
+// wins when set, -debug is shorthand for the debug firehose, and
+// neither means logging stays off (LogError is a harmless placeholder
+// the caller ignores when on is false).
+func resolveLogLevel(name string, debug bool) (ports.LogLevel, bool, error) {
+	if name != "" {
+		lvl, err := ports.ParseLevel(name)
+		if err != nil {
+			return 0, false, err
+		}
+		return lvl, true, nil
+	}
+	if debug {
+		return ports.LogDebug, true, nil
+	}
+	return ports.LogError, false, nil
+}
+
+// openLog wires the file sink: everything the node and transport narrate
+// at or above level lands in a grep-able debug.log next to the store, so
+// a failure in the field leaves an artifact. The caller closes the sink.
+func openLog(storeDir string, level ports.LogLevel, tr *tcpnet.Transport, nd *node.Node) (*logfile.Sink, error) {
 	logPath := filepath.Join(storeDir, "debug.log")
-	lg, err := logfile.Open(logPath, ports.LogDebug)
+	lg, err := logfile.Open(logPath, level)
 	if err != nil {
 		return nil, err
 	}
 	tr.SetLogger(lg)
 	nd.SetLogger(lg)
-	fmt.Printf("debug: logging to %s\n", logPath)
+	fmt.Printf("log: %s and above → %s\n", level, logPath)
 	return lg, nil
 }
 
