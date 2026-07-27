@@ -96,6 +96,15 @@ jobs:
             git --no-pager diff -- website/roadmap.html
             exit 1
           fi
+      - name: Generate build-log page
+        run: python3 scripts/gen_buildlog.py
+      - name: Fail if build-log page is stale
+        run: |
+          if ! git diff --quiet -- website/buildlog.html; then
+            echo "website/buildlog.html is out of date; run scripts/gen_buildlog.py and commit."
+            git --no-pager diff -- website/buildlog.html
+            exit 1
+          fi
       - name: Check internal links resolve
         run: python3 scripts/check_links.py
 

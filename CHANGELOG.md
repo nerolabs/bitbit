@@ -27,6 +27,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
+- **A public build log** — a chronological "how it was built and why"
+  narrative under `docs/buildlog/` (dated Markdown entries), rendered to
+  `website/buildlog.html` by `scripts/gen_buildlog.py` on the same
+  source-of-truth pipeline as the changelog and roadmap (CI fails if the
+  page drifts). It's the *reasoning* behind the design — the forks, the
+  dead ends, the decisions — distinct from the changelog (what shipped)
+  and the roadmap (what's next), and strictly about building the
+  infrastructure. Seeded with three entries: the one-process/ports-and-
+  adapters prime directive, the placement spectrum, and cross-network
+  reachability. Linked from the site's docs and footer.
 - **`-log LEVEL` — narrate the normal path, not just failures** — both
   `silt daemon` and `silt client` take `-log error|warn|info|debug`,
   opening the `debug.log` sink at that threshold; `-debug` is now
