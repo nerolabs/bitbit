@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt build log</title>
+<meta name="description" content="How Silt was built and why — the design forks, the reasoning, the dead ends.">
+<link rel="canonical" href="https://silthq.com/buildlog.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .doc article.entry { margin:0 0 2.6rem; padding:0 0 2.2rem; border-bottom:1px solid var(--line); }
+  .doc article.entry:last-of-type { border-bottom:none; }
+  .doc h2.rel { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  .doc h2.rel .v { font-family:var(--display); }
+  .doc h2.rel .d { font-family:var(--mono); font-size:0.8rem; color:var(--drab); letter-spacing:0.04em; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="wordmark" style="text-decoration:none">Sil<b>t</b></a>
+  <span class="spacer"></span>
+  <a href="/#how" class="hide-sm">How it works</a>
+  <a href="node.html" class="hide-sm">Run a node</a>
+  <a href="roadmap.html" class="hide-sm">Roadmap</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/nerolabs/silt" class="ghost">GitHub</a>
+</nav>
+<div class="doc">
+  <p class="eyebrow">Build log</p>
+  <h1>How it was built</h1>
+  <p class="lead">The story and reasoning behind Silt — the design forks, the
+  decisions, and the dead ends. Distinct from the <a href="changelog.html">changelog</a>
+  (what shipped) and the <a href="roadmap.html">roadmap</a> (what's next):
+  this is the <em>why</em>.</p>
+<article class="entry">
+<h2 class="rel"><span class="v">Meeting across networks without becoming the network</span><span class="d">2026-07-26</span></h2>
+<p>Everything worked on <span class="mono">127.0.0.1</span>. Two nodes in the same house found each other and talked. But two nodes on <em>separate</em> home networks could do neither of the two things they need to: they couldn&#x27;t <b>find</b> each other (rendezvous), and they couldn&#x27;t <b>connect</b> (NAT — a home router lets you dial out but never accepts an unsolicited dial in).</p>
+<p>The first design decision was to split those two problems apart, because they have different answers and conflating them produces mush. Rendezvous is &quot;how do I learn a peer exists and where to aim.&quot; NAT traversal is &quot;the socket won&#x27;t open even though I know where to aim.&quot; We built them as separate rungs: mDNS for the same-house case (free, no infrastructure), a reachability check (our AutoNAT — a node asks a couple of peers to dial it back, and believes it&#x27;s publicly reachable only if one actually lands), and then, for the hard case where <em>both</em> peers are NATed, a <b>relay</b>.</p>
+<p>The second decision was the one with teeth, and it&#x27;s a values decision as much as a technical one. A relay is the natural place for a project to plant infrastructure — &quot;connect through our relay.&quot; We refused that. In Silt a relay is a <b>node capability, not special infrastructure</b>: any publicly reachable node can offer <span class="mono">-relay</span>, none is privileged, and <em>no relay address is baked into the binary</em>. The public dev box we test against lives in a separate <span class="mono">deploy/</span> directory, clearly labeled as throwaway scaffolding the project does not operate. The network must not depend on us to exist.</p>
+<p>What makes that stance safe is that the relay is <b>content-blind by construction</b>, not by promise. A relay splices two raw byte pipes; the sender then runs its <em>normal</em> pinned end-to-end TLS handshake with the target <em>through</em> the splice. So Silt&#x27;s core security invariant — &quot;a frame&#x27;s sender is whoever the TLS handshake authenticated&quot; — holds unchanged across a relay, because the relay only ever moves opaque bytes it cannot read, alter, or forge. It learns metadata (which two node IDs talked, when, how much), the same an on-path router already sees, and the threat model says so plainly.</p>
+<p>Then reality taught the lesson it always teaches. The first real cross-network run — one Mac, one relay box, one field test — failed, and the failure was invisible in every in-process simulation we&#x27;d ever run: the transport dialed a <em>fresh connection per message</em>, so a reply to a NATed peer required dialing <em>into</em> it, which is exactly the thing NAT forbids. Bootstrap came back with zero peers and no error. The fix was to make replies ride the connection the peer itself opened, and to stop stamping undialable wildcard addresses into peers&#x27; address books. It was a transport bug, in transport code — precisely the class the sim can&#x27;t see because the sim never opens a socket. That single field test is why there is now a multi-process end-to-end suite that runs real daemons over real TCP in CI: so the next bug of that shape dies in a pull request instead of on a kitchen table across town.</p>
+</article>
+<article class="entry">
+<h2 class="rel"><span class="v">The placement spectrum, and why we moved off one end of it</span><span class="d">2026-07-25</span></h2>
+<p>For a long time Silt placed every chunk independently, by its own hash. That&#x27;s the <b>maximum-fanout</b> extreme of a spectrum, and it has real virtues: perfect spread, dead-simple logic, no coordination. But it has two costs that only show up at scale, and both are the kind of thing you must fix <em>before</em> a live network of independent operators ossifies the wire format — migrating them through a placement change later is far more expensive than doing it while the network is empty.</p>
+<p><b>Cost one: reads got expensive.</b> A file of <span class="mono">S</span> stripes cost roughly <span class="mono">S × k</span> separate lookups-and-fetches, because every shard was found on its own. <b>Cost two: concentration risk wasn&#x27;t actively managed.</b> Nothing stopped two shards of the same stripe from drifting onto the same node, or the same failure domain, as churn reshaped the network — and if that happens, one machine&#x27;s death can cost you <em>two</em> shards of a stripe instead of one.</p>
+<p>The fix was to stop thinking in chunks and start thinking in <b>columns</b>. A column is one shard position across all stripes of a file. Place, find, repair, and audit by column — keyed by <span class="mono">hash(root‖j)</span> — and three things fall out at once:</p>
+<ul>
+<li>A column&#x27;s providers are found in <b>one</b> lookup, not <span class="mono">S</span> of them.</li>
+<li>Losing one unit costs exactly <b>one shard per stripe</b> — you can lose up to <span class="mono">n−k</span> whole columns and still rebuild every stripe.</li>
+<li>Within-column anti-affinity becomes <b>structural</b>, not a heuristic you hope holds.</li>
+</ul>
+<p>Then we pushed further, because &quot;don&#x27;t put two shards on one <em>node</em>&quot; isn&#x27;t enough — you want &quot;don&#x27;t put two shards in one <em>failure domain</em>&quot; (an autonomous system, a rack, a datacenter, an operator). Nodes now carry a <span class="mono">-domain</span> label and gossip its hash on every message, the same way they gossip their capacity pledge. Publish steers each column onto a domain no other column has used; repair re-seeds rebuilt columns into domains the survivors aren&#x27;t using. It&#x27;s best-effort and never a veto — a node spreads across the domains it has actually learned about — but on an identical layout it roughly <em>halves</em> worst-domain co-residence versus domain-blind placement.</p>
+<p>The through-line: the earliest, simplest thing (place-by-hash) wasn&#x27;t wrong, it was one end of a spectrum. Naming the spectrum let us choose a point on it deliberately, and — crucially — choose it while the cost of choosing was still just a code change, not a network migration.</p>
+</article>
+<article class="entry">
+<h2 class="rel"><span class="v">One process, but a real product from day one</span><span class="d">2026-07-23</span></h2>
+<p>The temptation, building a distributed storage network, is to reach for a fleet of servers immediately — spin up VMs, wire real sockets, watch nodes gossip. We did the opposite, and it&#x27;s the single decision the whole codebase still rests on: <b>the entire network runs in one process</b>, and will keep doing so until it genuinely needs real sockets.</p>
+<p>The catch that makes this honest rather than a shortcut: the code is structured so that swapping the in-process simulation for real TCP/QUIC/libp2p transport later touches <em>only adapter code, zero core logic</em>. That&#x27;s hexagonal architecture — ports and adapters — taken as a hard rule, not an aspiration:</p>
+<ul>
+<li>The <b>core domain</b> — chunking, crypto, erasure coding, manifests, DHT routing, the repair policy — is pure logic. It imports no networking, no filesystem, no wall clock, no global RNG. Every effect leaves through an interface defined in a shared <span class="mono">ports</span> package.</li>
+<li><b>Adapters</b> implement those interfaces: in-memory ones for the sim, real ones (<span class="mono">tcpnet</span>, <span class="mono">diskstore</span>) for production. The core can&#x27;t tell which it&#x27;s talking to.</li>
+<li>The <b>simulator</b> isn&#x27;t a mode threaded through the code — it&#x27;s just a harness that wires nodes together with in-process adapters and drives a simulated clock.</li>
+</ul>
+<p>Two rules keep it from rotting. First, a dependency-lint test fails CI if a core package ever imports an adapter — the boundary is enforced, not trusted. Second, <b>determinism</b>: every source of nondeterminism (time, randomness, message ordering and latency) is injected, so a sim run with a given seed produces byte-identical results. That last property is worth more than it sounds. When a churn bug shows up 40 nodes and 10,000 messages deep, &quot;re-run with seed 0x5117 and watch it happen again&quot; is the difference between a fix and a shrug.</p>
+<p>The payoff came later, and it was pointed: when we finally <em>did</em> leave the sim for real machines on real home networks, the swap touched adapters and left the core alone — exactly as promised. The bugs we found there (see the cross-network entry) were transport bugs, in transport code, where they belonged.</p>
+</article>
+  <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
+</div>
+<footer><div class="wrap"><div class="meta">
+  <span>silthq.com</span><span>·</span><span class="dim">the infrastructure is not the content</span>
+</div></div></footer>
+</body>
+</html>
