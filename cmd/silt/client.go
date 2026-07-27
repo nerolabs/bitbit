@@ -41,7 +41,8 @@ func cmdClient(args []string) error {
 	registryURL := fs.String("registry", "", "registry ref for browsing/publishing (ID@https://host:port)")
 	uiAddr := fs.String("ui", "127.0.0.1:8090", "local web UI address")
 	open := fs.Bool("open", true, "open the library in your browser on start")
-	debug := fs.Bool("debug", false, "write warn/error and normal-path narration to <store>/debug.log — a failure in the field leaves an artifact")
+	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
+	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path without the debug firehose")
 	fs.Parse(args)
 
 	if err := os.MkdirAll(*storeDir, 0o755); err != nil {
@@ -83,8 +84,12 @@ func cmdClient(args []string) error {
 
 	nd := node.New(id, node.DefaultConfig(), walltime.New(loop), tr, store)
 
-	if *debug {
-		lg, err := openDebugLog(*storeDir, tr, nd)
+	level, logOn, err := resolveLogLevel(*logLevel, *debug)
+	if err != nil {
+		return err
+	}
+	if logOn {
+		lg, err := openLog(*storeDir, level, tr, nd)
 		if err != nil {
 			return err
 		}

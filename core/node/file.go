@@ -93,6 +93,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	var nextGroup func(g int)
 	nextGroup = func(g int) {
 		if g == len(groups) {
+			n.logf(ports.LogInfo, "file distributed", "root", root, "chunks", len(ids), "placements", placed)
 			done(placed)
 			return
 		}
@@ -380,7 +381,13 @@ func (n *Node) NetGet(reg ports.Registry, h link.Handle, w io.Writer, done func(
 		// Whatever ends up in the local store, the pipeline is the judge:
 		// it verifies every hash against the root and repairs from parity
 		// where it can.
-		finish := func() { done(pipeline.Get(bg(), n.store, reg, h, w)) }
+		finish := func() {
+			err := pipeline.Get(bg(), n.store, reg, h, w)
+			if err == nil {
+				n.logf(ports.LogInfo, "file retrieved", "root", h.Root)
+			}
+			done(err)
+		}
 
 		if m.K == 0 { // uncoded: per-chunk, data then parity-on-demand
 			n.fetchAll(m.ChunkIDs(), func(missingData []ports.ChunkID) {

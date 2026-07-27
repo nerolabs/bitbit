@@ -27,6 +27,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
+- **`-log LEVEL` — narrate the normal path, not just failures** — both
+  `silt daemon` and `silt client` take `-log error|warn|info|debug`,
+  opening the `debug.log` sink at that threshold; `-debug` is now
+  shorthand for `-log debug`. At `info` the happy path narrates —
+  `file distributed` (chunks placed), `block committed` (quorum reached,
+  by proposal or broadcast), `file retrieved`, alongside the existing
+  `stripe repaired`, `dispersion re-spread`, and `reachability verdict`
+  — so a real-world run can be checked against how the system is
+  *supposed* to behave, not only when something breaks, and without the
+  debug firehose. Free when off and off the hot path (per-chunk store
+  events stay at debug); core still logs through the `ports.Logger` port
+  and imports nothing new.
 - **Multi-process end-to-end tests over real TCP** (CI hardening,
   BACKLOG Phase 2) — a new `e2e/` suite builds the `silt` binary and
   runs three daemons as separate OS processes, publishes a 1 MiB file

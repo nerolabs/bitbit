@@ -1,5 +1,7 @@
 package ports
 
+import "fmt"
+
 // LogLevel orders severities. Error is always the smallest so a sink's
 // threshold check is a single comparison: a level is emitted when
 // lvl <= min.
@@ -24,6 +26,23 @@ func (l LogLevel) String() string {
 		return "debug"
 	}
 	return "unknown"
+}
+
+// ParseLevel is the inverse of String: it maps a level name to a
+// LogLevel, so an operator can dial the log threshold from a flag
+// (error → quietest, debug → firehose).
+func ParseLevel(s string) (LogLevel, error) {
+	switch s {
+	case "error":
+		return LogError, nil
+	case "warn":
+		return LogWarn, nil
+	case "info":
+		return LogInfo, nil
+	case "debug":
+		return LogDebug, nil
+	}
+	return 0, fmt.Errorf("ports: unknown log level %q (want error|warn|info|debug)", s)
 }
 
 // Logger is the observability port. Core code narrates through it and

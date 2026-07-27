@@ -33,12 +33,17 @@ Work captured for later, most-strategic first. The milestone history
   diagnose — turning one-off crashes into fixes and durability over time.
   Needs a small leveled logger behind a `ports` interface (core stays pure;
   the file sink is an adapter), structured enough to grep, quiet by default.
-- **An `info` level to validate assumptions.** Above the error tiers, an
-  `info` setting that narrates the normal path (chunks placed, stripes
-  repaired, quorum reached, providers resolved) so we can confirm the
-  system behaves as designed under real-world conditions, not just in the
-  deterministic sim. Same logger; `--debug` implies a verbose threshold,
-  `info` a normal one. Keep it off the hot path when disabled.
+- **An `info` level to validate assumptions.** *Done.* A `-log LEVEL`
+  flag (`error|warn|info|debug`) on both `silt daemon` and `silt client`
+  opens the file sink at that threshold; `-debug` is now shorthand for
+  `-log debug` (the firehose). At `info` the normal path narrates —
+  `file distributed` (chunks placed), `block committed` (quorum reached,
+  proposer or broadcast), `file retrieved`, plus the pre-existing
+  `stripe repaired`, `dispersion re-spread`, and `reachability verdict`
+  — so real-world behavior can be confirmed without the debug detail.
+  Off the hot path when disabled (the sink's `Enabled` check gates every
+  emit; per-chunk store events stay at debug). `ports.ParseLevel` maps
+  the flag; core still logs through the port and stays pure.
 
 ### Build log / narrative
 - **A public "how it was built" log.** A chronological, human-readable
