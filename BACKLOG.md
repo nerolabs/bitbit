@@ -154,10 +154,14 @@ Build order:
   relay and run their normal pinned end-to-end TLS handshake *through* the
   splice, so the relay can't read or forge anything. CI proves the whole
   path on localhost, including both-peers-NATed, by treating "NATed" as
-  "accepts no inbound conns". Remaining polish: reuse relayed conns instead
-  of dialing per message; prefer a direct/IPv6 address when one is also
-  known (today the book keeps one address per peer); relay-capability
-  gossip so `-relay-via` can be discovered instead of configured.
+  "accepts no inbound conns". The polish list is closed: relayed conns
+  are kept and reused like any conversation (#36); the address book
+  holds a direct and a relay slot per peer, prefers direct, falls back
+  to the relay in the same delivery, and drops a direct address only
+  when the fallback proves it stale; and nodes gossip their `-relay`
+  service on envelopes so a NATed daemon adopts a discovered relay
+  without `-relay-via`. Still open (cheap latent win): try a direct
+  IPv6 dial before assuming a relay is needed.
 - **Dev node** — a throwaway public `-relay` box (VPS or tunnel) in a
   separate `deploy/`, clearly *not* project-operated, to develop against.
   *Scaffolding done* (`deploy/dev-relay.sh` + systemd unit + neutrality

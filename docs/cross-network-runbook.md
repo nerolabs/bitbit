@@ -58,6 +58,13 @@ Watch for, in order:
    needed, which is also a pass (just a less interesting one).
 3. `relay-via: registered — peers reach us at relay:$DEV@$IP:4002`
 
+> **Flagless variant:** `-relay-via` is now optional. The dev box
+> gossips its relay service on every envelope, so a NATed daemon that
+> bootstraps to it discovers the relay on its own — watch for
+> `relay: discovered $DEV@$IP:4002 via gossip — leaning on it`. Run the
+> first pass with the explicit flag (deterministic), then repeat Mac A's
+> start without it to prove discovery.
+
 ## 3. Publish on Mac A
 
 Use the UI (`http://127.0.0.1:8081`, drag a file onto Publish) or the CLI:

@@ -7,12 +7,17 @@ import (
 )
 
 // envelope is the on-the-wire frame: who sent it, where to reach them,
-// any addresses they can vouch for, and the message itself.
+// any addresses they can vouch for, the relay service they offer (if
+// any), and the message itself.
 type envelope struct {
 	From     []byte            `cbor:"1,keyasint"`
 	Addr     string            `cbor:"2,keyasint"`
 	Contacts map[string]string `cbor:"3,keyasint,omitempty"`
 	Msg      wireMsg           `cbor:"4,keyasint"`
+	// Relay is the sender's own -relay service address (host:port),
+	// present only while it offers one — relay discovery is first-hand
+	// gossip, a node never vouches for another's relay.
+	Relay string `cbor:"5,keyasint,omitempty"`
 }
 
 // wireMsg mirrors ports.Message with CBOR-friendly []byte fields. An

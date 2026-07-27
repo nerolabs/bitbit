@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,6 +146,16 @@ func cmdDaemon(args []string) error {
 		}
 		defer rs.Close()
 		fmt.Printf("relay: serving at %s@%s (content-blind forwarding, capped)\n", id, rs.Addr())
+		// Gossip the capability on every envelope — but only in a form
+		// peers can actually dial: a wildcard-bound relay borrows the
+		// -advertise host, and with neither there is nothing worth
+		// spreading (the swarm can't be sent "0.0.0.0:4002").
+		if svc := dialableRelayAddr(rs.Addr(), *advertise); svc != "" {
+			tr.SetRelayService(svc)
+			fmt.Printf("relay: gossiping the service — NATed peers can discover %s@%s without -relay-via\n", id, svc)
+		} else {
+			fmt.Println("relay: wildcard bind and no -advertise — service not gossiped (peers must be told -relay-via by hand)")
+		}
 	}
 	// -relay-via: parsed up front so a typo fails at start, not at the
 	// moment we discover we're NATed and need it.
@@ -282,13 +293,19 @@ func cmdDaemon(args []string) error {
 	// address book from last run.
 	peersPath := filepath.Join(*storeDir, "peers.json")
 	var seeds []ports.NodeID
+	seeded := make(map[ports.NodeID]bool)
 	addSeeds := func(peers []tcpnet.Peer, source string) {
 		for _, p := range peers {
 			if p.ID == id {
 				continue
 			}
+			// A peer can appear once per address form (direct + relay);
+			// both feed the book, the ID seeds the bootstrap once.
 			tr.AddPeer(p.ID, p.Addr)
-			seeds = append(seeds, p.ID)
+			if !seeded[p.ID] {
+				seeded[p.ID] = true
+				seeds = append(seeds, p.ID)
+			}
 		}
 		if len(peers) > 0 {
 			fmt.Printf("discovery: %d peer(s) via %s\n", len(peers), source)
@@ -341,13 +358,14 @@ func cmdDaemon(args []string) error {
 			discovery.SaveFile(peersPath, tr.Peers())
 		}
 	}()
-	// leanOnRelay registers with the -relay-via relay, switches our
-	// advertised address to the relay form, and — the important part —
-	// RE-bootstraps: the first bootstrap of a NATed node may have come
-	// up empty (peers had no way to answer someone with no dialable
-	// address), so the join is retried now that every envelope carries
-	// an address the swarm can actually reach us at.
-	leanOnRelay := func() {
+	// leanOnRelay registers with a relay (configured via -relay-via or
+	// discovered through gossip), switches our advertised address to the
+	// relay form, and — the important part — RE-bootstraps: the first
+	// bootstrap of a NATed node may have come up empty (peers had no way
+	// to answer someone with no dialable address), so the join is
+	// retried now that every envelope carries an address the swarm can
+	// actually reach us at.
+	leanOnRelay := func(viaID ports.NodeID, viaAddr string) {
 		rc, err := relay.NewClient(ident, viaID, viaAddr, tr.RelayInbound, obs)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "relay-via:", err)
@@ -385,16 +403,32 @@ func cmdDaemon(args []string) error {
 						fmt.Println("reachability: public — peers can dial this node directly")
 					case *relayVia != "":
 						fmt.Println("reachability: no peer could dial back — NATed; leaning on the -relay-via relay")
-						leanOnRelay()
+						leanOnRelay(viaID, viaAddr)
 					default:
-						fmt.Println("reachability: no peer could dial back — this node looks NATed (give it -relay-via RELAYID@HOST:PORT to be reachable across networks)")
+						// No relay configured — but the swarm gossips
+						// relay capability, so one may already be (or soon
+						// become) known. Adopt the first that shows up.
+						fmt.Println("reachability: no peer could dial back — this node looks NATed; watching the swarm for a gossiped relay (-relay-via RELAYID@HOST:PORT skips the wait)")
+						dlog("natted, watching for gossiped relay")
+						go func() {
+							for {
+								if rs := tr.KnownRelays(); len(rs) > 0 {
+									r := rs[0]
+									fmt.Printf("relay: discovered %s@%s via gossip — leaning on it\n", r.ID, r.Addr)
+									dlog("gossiped relay adopted", "relay", r.ID, "addr", r.Addr)
+									leanOnRelay(r.ID, r.Addr)
+									return
+								}
+								time.Sleep(5 * time.Second)
+							}
+						}()
 					}
 				})
 			} else if *relayVia != "" {
 				// Nobody to ask (a lone node bootstrapping into an empty
 				// swarm): assume the conservative answer and take the relay.
 				fmt.Println("reachability: no peers to check with — assuming NATed; leaning on the -relay-via relay")
-				leanOnRelay()
+				leanOnRelay(viaID, viaAddr)
 			}
 			if *validator && len(attesterIDs) > 0 {
 				nd.SyncChain(attesterIDs, func(added int, _ error) {
@@ -441,6 +475,29 @@ func openDebugLog(storeDir string, tr *tcpnet.Transport, nd *node.Node) (*logfil
 	nd.SetLogger(lg)
 	fmt.Printf("debug: logging to %s\n", logPath)
 	return lg, nil
+}
+
+// dialableRelayAddr turns the relay listener's bound address into one
+// worth gossiping. A concrete bind speaks for itself; a wildcard bind
+// ("0.0.0.0:4002") borrows the host the daemon already advertises for
+// swarm traffic (-advertise), keeping the relay's own port. Neither →
+// "" (nothing gossiped).
+func dialableRelayAddr(bound, advertise string) string {
+	host, port, err := net.SplitHostPort(bound)
+	if err != nil {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsUnspecified() {
+		return bound
+	}
+	if advertise == "" {
+		return ""
+	}
+	advHost, _, err := net.SplitHostPort(advertise)
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(advHost, port)
 }
 
 // openRegistry accepts either "http://host:port" (plain, trusted
