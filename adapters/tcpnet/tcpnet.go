@@ -267,6 +267,15 @@ func (t *Transport) Peers() []Peer {
 	return out
 }
 
+// PeerCount is the number of DISTINCT peers in the address book. Use
+// this, not len(Peers()): Peers() emits one entry per address form, so
+// a peer known by both a direct and a relay address counts twice there.
+func (t *Transport) PeerCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.peers)
+}
+
 func (t *Transport) lookupAddrs(id ports.NodeID) addrPair {
 	t.mu.Lock()
 	defer t.mu.Unlock()

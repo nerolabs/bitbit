@@ -160,8 +160,13 @@ Build order:
   to the relay in the same delivery, and drops a direct address only
   when the fallback proves it stale; and nodes gossip their `-relay`
   service on envelopes so a NATed daemon adopts a discovered relay
-  without `-relay-via`. Still open (cheap latent win): try a direct
-  IPv6 dial before assuming a relay is needed.
+  without `-relay-via`. Still open: (a) try a direct IPv6 dial before
+  assuming a relay is needed (cheap latent win); (b) a NATed node that
+  discovers relays by gossip currently adopts the lowest-ID one and
+  commits to it — if several are gossiped and the chosen one won't
+  register, it retries that one forever instead of failing over to
+  another. Fine while a swarm has one dev relay; wants relay selection +
+  failover once community relays are plural.
 - **Dev node** — a throwaway public `-relay` box (VPS or tunnel) in a
   separate `deploy/`, clearly *not* project-operated, to develop against.
   *Scaffolding done* (`deploy/dev-relay.sh` + systemd unit + neutrality

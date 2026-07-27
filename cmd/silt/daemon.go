@@ -280,7 +280,7 @@ func cmdDaemon(args []string) error {
 			loop: loop, nd: nd, reg: reg, capRep: capRep,
 			selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 			validator: *validator, started: time.Now(),
-			peerCount: func() int { return len(tr.Peers()) },
+			peerCount: func() int { return tr.PeerCount() },
 		}
 		bound, err := ui.serve(*uiAddr)
 		if err != nil {
@@ -410,6 +410,12 @@ func cmdDaemon(args []string) error {
 						// become) known. Adopt the first that shows up.
 						fmt.Println("reachability: no peer could dial back — this node looks NATed; watching the swarm for a gossiped relay (-relay-via RELAYID@HOST:PORT skips the wait)")
 						dlog("natted, watching for gossiped relay")
+						// First cut: adopt the lowest-ID gossiped relay and
+						// commit to it (leanOnRelay then reconnects it with
+						// backoff for the node's lifetime, exactly as an
+						// explicit -relay-via would). Choosing among several
+						// relays and failing over when the chosen one won't
+						// register is a documented follow-up (see BACKLOG).
 						go func() {
 							for {
 								if rs := tr.KnownRelays(); len(rs) > 0 {
