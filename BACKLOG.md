@@ -10,10 +10,14 @@ Work captured for later, most-strategic first. The milestone history
 - **Integration tests before every commit.** The suite runs on every
   push/PR (`go test ./...`, gofmt, vet, link check, changelog sync —
   required on `main` and `staging`). A race-detector build
-  (`go test -race`) and a 45% coverage floor are now in (Phase 0). Still
-  to add (Phase 2): multi-process end-to-end tests — spin real daemons
-  over TCP, publish → chain-commit → fetch, assert bit-perfect — run in
-  CI, not just the in-process sim.
+  (`go test -race`) and a 45% coverage floor are now in (Phase 0).
+  Multi-process end-to-end tests are now in too (Phase 2): the `e2e/`
+  suite builds the binary and runs three real daemons over TCP —
+  publish → chain-commit (a real consensus round to a committed block)
+  → fetch, asserting bit-perfect — as its own CI job, the layer the
+  in-process sim skips and where #36 hid. The unit/race jobs pass
+  `-short` to skip it. Possible extensions: a relay-in-the-middle
+  variant and a kill-a-node erasure-resilience variant.
 - **The website ships with the code.** *Done (Phase 0).* `ROADMAP.md`
   now auto-renders to `website/roadmap.html` (via `scripts/gen_roadmap.py`,
   linked in the site nav), with a CI staleness check like the changelog's;

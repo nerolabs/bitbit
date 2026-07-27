@@ -27,6 +27,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
+- **Multi-process end-to-end tests over real TCP** (CI hardening,
+  BACKLOG Phase 2) — a new `e2e/` suite builds the `silt` binary and
+  runs three daemons as separate OS processes, publishes a 1 MiB file
+  through the chain-backed registry over pinned HTTPS (driving a real
+  consensus round to a committed block), then fetches it back across the
+  swarm and asserts it returns bit-perfect. This exercises the whole
+  wire path the in-process sim deliberately bypasses — exactly where
+  #36's "a reply can never reach a NATed peer" bug hid until real
+  sockets carried it. It runs as its own CI job; the unit and race jobs
+  pass `-short` to skip the process spawning.
 - **Relay discovery by gossip** (#27 polish) — a daemon offering `-relay`
   now stamps the service's dialable `host:port` on every outgoing
   envelope (borrowing the `-advertise` host when the relay listener is

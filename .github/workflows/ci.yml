@@ -33,7 +33,9 @@ jobs:
           # -coverpkg=./... credits cross-package coverage, so the pure
           # core packages (exercised by the sim, which has no unit tests of
           # its own) count toward the total instead of showing as 0%.
-          go test -coverpkg=./... -coverprofile=cover.out ./...
+          # -short skips the process-spawning e2e suite (its own job below);
+          # e2e drives the built binary and adds no in-process coverage.
+          go test -short -coverpkg=./... -coverprofile=cover.out ./...
           total=$(go tool cover -func=cover.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
           floor=60.0
           echo "total coverage: ${total}% (floor ${floor}%)"
@@ -51,7 +53,25 @@ jobs:
           go-version: "1.26"
           cache: true
       - name: go test -race
-        run: go test -race ./...
+        # -short skips e2e: its subprocesses aren't race-instrumented, so
+        # the coverage isn't worth the minutes; the dedicated e2e job runs
+        # the full form.
+        run: go test -race -short ./...
+
+  e2e:
+    name: Go — multi-process e2e (real TCP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: go test ./e2e
+        # Builds the silt binary and drives real daemons over TCP:
+        # publish → chain-commit → fetch, bit-perfect. This is the layer
+        # the in-process sim skips — the class of bug #36 was.
+        run: go test ./e2e/ -count=1 -v
 
   website:
     name: Website — changelog + links
