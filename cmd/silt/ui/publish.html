@@ -56,6 +56,9 @@ go.onclick = async () => {
     if (!r.ok) throw new Error(j.error || r.status);
     msg.innerHTML = `
       <p class="ok" style="margin:0.6rem 0">✓ ${j.name} scattered — ${j.placed} chunk replicas placed</p>
+      <p class="dim" style="margin:0 0 0.6rem">${j.caretaker
+        ? "🛡 this daemon is now caretaking it — repairing lost redundancy as nodes come and go."
+        : "⚠ no caretaker running — redundancy will decay; run a daemon with -care using the care link below."}</p>
       <h2>silt link — share to grant reading</h2>
       <div class="linkbox" onclick="copy(this)">${j.link}</div>
       <h2>care link — grants repair &amp; audit, cannot decrypt</h2>
