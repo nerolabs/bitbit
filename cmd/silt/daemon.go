@@ -357,10 +357,27 @@ func cmdDaemon(args []string) error {
 			}
 		}
 	}
-	// Persist the living address book so the next start needs no flags.
+	// Persist the living address book so the next start needs no flags —
+	// but only peers we've actually reached, not every address ever
+	// observed. Otherwise a warm restart reloads a graveyard of dead
+	// ephemeral publisher identities and drowns lookups in timeouts (#43).
+	// The reachable set lives on the (lock-free) node loop, so snapshot it
+	// there and do the disk write off-loop.
 	go func() {
 		for range time.Tick(30 * time.Second) {
-			discovery.SaveFile(peersPath, tr.Peers())
+			done := make(chan []tcpnet.Peer, 1)
+			loop.Post(func() {
+				reachable := nd.ReachablePeers()
+				all := tr.Peers()
+				live := all[:0]
+				for _, p := range all {
+					if reachable[p.ID] {
+						live = append(live, p)
+					}
+				}
+				done <- live
+			})
+			discovery.SaveFile(peersPath, <-done)
 		}
 	}()
 	// leanOnRelay registers with a relay (configured via -relay-via or
