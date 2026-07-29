@@ -16,10 +16,69 @@ Cast:
 | **Mac A** | home network 1 | publishes a file |
 | **Mac B** | home network 2 (phone hotspot works) | fetches it |
 
-Everything below assumes the silt binary is built on both Macs
-(`go build -o silt ./cmd/silt`) and the dev node is running and prints
-its identity as `peer: <ID>@…`. Call that ID `$DEV`, the VPS's public
-IP `$IP`.
+Everything below assumes the silt binary is built on all three machines
+(§0) and the dev node is running and prints its identity as
+`peer: <ID>@…`. Call that ID `$DEV`, the VPS's public IP `$IP`.
+
+## 0. Build silt on every machine
+
+silt is pure Go — no cgo, no system libraries — so the build needs only
+a Go toolchain and the source. Two flavours of Mac show up in practice:
+one with nothing installed, one carrying a stale binary from an earlier
+round. Both end at the same `./silt`.
+
+**Prerequisite (both):** Go **1.26.5 or newer** (the version pinned in
+`go.mod`). Install the official pkg for your CPU (`arm64` for Apple
+silicon, `amd64` for Intel) from <https://go.dev/dl/>, or `brew install
+go`, then open a fresh terminal and confirm:
+
+```sh
+go version   # must report go1.26.5 or newer
+```
+
+### 0a. A barebones Mac (fresh install)
+
+Because the build is pure Go, you can skip Xcode Command Line Tools
+entirely by fetching the source as a zip instead of cloning:
+
+```sh
+cd ~ && curl -L -o silt.zip https://github.com/nerolabs/silt/archive/refs/heads/main.zip
+unzip silt.zip && mv silt-main silt && cd silt
+CGO_ENABLED=0 go build -o silt ./cmd/silt
+```
+
+(Prefer git? `git clone https://github.com/nerolabs/silt.git ~/silt`
+works too — the first `git` invocation will offer to install the Xcode
+CLT; accept it.)
+
+### 0b. A Mac carrying an old binary
+
+If it already has the checkout, update and rebuild in place:
+
+```sh
+cd ~/silt                        # wherever the repo lives
+git pull --ff-only origin main
+CGO_ENABLED=0 go build -o silt ./cmd/silt
+```
+
+If it has only a loose binary and no source, build fresh per §0a and
+discard the old one. Either way, **make sure you run the binary you just
+built**, not a stale copy still on `$PATH`:
+
+```sh
+which silt                       # a global hit here means: call ./silt explicitly
+./silt -h | grep -c relay-via    # the current binary knows -relay-via; a stale one won't
+```
+
+### 0c. Version-match gate
+
+All three nodes must run the same commit — a mismatched wire format or
+relay-gossip shape will fail in confusing ways. Confirm each machine
+reports the same `HEAD` before starting:
+
+```sh
+git log --oneline -1
+```
 
 ## 1. Dev node (once)
 
