@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/nerolabs/silt/adapters/eventloop"
@@ -135,19 +136,66 @@ func (s *uiServer) apiStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, out)
 }
 
-func (s *uiServer) apiRoots(w http.ResponseWriter, _ *http.Request) {
-	type rootRow struct {
-		Root   string `json:"root"`
-		Shards int    `json:"shards"`
-	}
+const (
+	defaultRootsPage = 50
+	maxRootsPage     = 500
+)
+
+type rootRow struct {
+	Root   string `json:"root"`
+	Shards int    `json:"shards"`
+}
+
+func (s *uiServer) apiRoots(w http.ResponseWriter, r *http.Request) {
 	var rows []rootRow
 	s.onLoop(func() {
 		for root, count := range s.nd.HeldRoots() {
 			rows = append(rows, rootRow{Root: root.String(), Shards: count})
 		}
 	})
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Root < rows[j].Root })
-	writeJSON(w, rows)
+	page, total := paginateRoots(rows,
+		atoiOr(r.URL.Query().Get("limit"), defaultRootsPage),
+		atoiOr(r.URL.Query().Get("offset"), 0))
+	writeJSON(w, map[string]any{"total": total, "rows": page})
+}
+
+// paginateRoots sorts rows by shard count (desc — most-hosted first), then
+// root for a stable order, and returns the [offset, offset+limit) window
+// plus the total. A limit <= 0 uses the default page and is capped at
+// maxRootsPage; offset is clamped, so out-of-range paging yields an empty
+// page rather than a panic.
+func paginateRoots(rows []rootRow, limit, offset int) (page []rootRow, total int) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Shards != rows[j].Shards {
+			return rows[i].Shards > rows[j].Shards
+		}
+		return rows[i].Root < rows[j].Root
+	})
+	total = len(rows)
+	switch {
+	case limit <= 0:
+		limit = defaultRootsPage
+	case limit > maxRootsPage:
+		limit = maxRootsPage
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return rows[offset:end], total
+}
+
+func atoiOr(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
+	}
+	return def
 }
 
 func (s *uiServer) apiRegistry(w http.ResponseWriter, r *http.Request) {
