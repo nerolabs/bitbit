@@ -595,6 +595,7 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 		RequestTimeout: ports.Duration(2 * time.Second),
 		Replication:    3,
 	}, walltime.New(loop), tr, memstore.New())
+	nd.SetEphemeral(true) // a publish/fetch client that keeps nothing — peers must not route to it (#43)
 
 	ps, err := discovery.ParseList(peers)
 	if err != nil {
