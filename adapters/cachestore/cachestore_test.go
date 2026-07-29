@@ -62,10 +62,10 @@ func TestLRUEviction(t *testing.T) {
 	}
 	cache := cachestore.Open(inner, 25) // room for two 10-byte chunks
 
-	cache.Get(ctx, a.ID)  // [a]
-	cache.Get(ctx, b.ID)  // [b a]
-	cache.Get(ctx, a.ID)  // touch a -> [a b]
-	cache.Get(ctx, c.ID)  // admit c, evict LRU (b) -> [c a]
+	cache.Get(ctx, a.ID) // [a]
+	cache.Get(ctx, b.ID) // [b a]
+	cache.Get(ctx, a.ID) // touch a -> [a b]
+	cache.Get(ctx, c.ID) // admit c, evict LRU (b) -> [c a]
 
 	// a is still resident -> hit; b was evicted -> miss (re-read from inner).
 	h0, m0, _ := cache.Stats()
