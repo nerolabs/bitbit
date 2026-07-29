@@ -135,6 +135,10 @@ type Node struct {
 	// and using DHT routing. Exists so the economy scenario can watch
 	// leeches go broke.
 	freeload bool
+	// ephemeral marks this node as a short-lived client (publish/fetch that
+	// keeps nothing): its outgoing messages are stamped so peers don't route
+	// to it. See ports.Message.Ephemeral (#43).
+	ephemeral bool
 	// liar makes the node accept chunk placements, keep the PROOF, and
 	// throw away the DATA — then claim to have the chunk when asked.
 	// It can still answer a challenge with a valid Merkle proof (it
@@ -196,6 +200,10 @@ func (n *Node) logf(lvl ports.LogLevel, event string, kv ...any) {
 // SetFreeload toggles leech behavior.
 func (n *Node) SetFreeload(v bool) { n.freeload = v }
 
+// SetEphemeral marks this node as a short-lived client so peers don't add
+// it to their routing tables (#43).
+func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
+
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
 
@@ -236,6 +244,7 @@ func (n *Node) send(to ports.NodeID, msg ports.Message) error {
 		msg.CapUsed, msg.CapTotal = n.capRep.Capacity()
 	}
 	msg.Domain = n.domainID
+	msg.Ephemeral = n.ephemeral
 	return n.tr.Send(to, msg)
 }
 
@@ -286,7 +295,12 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 
 // handle is the single entry point for every incoming message.
 func (n *Node) handle(from ports.NodeID, msg ports.Message) {
-	n.table.Observe(from) // any message is proof of life
+	// Any message is proof of life — but a short-lived client (publish/fetch
+	// that keeps nothing) will vanish, so routing to it only poisons the
+	// table with ghosts; process its message, but don't add it (#43).
+	if !msg.Ephemeral {
+		n.table.Observe(from)
+	}
 	if msg.CapTotal > 0 {
 		n.peerCaps[from] = capInfo{used: msg.CapUsed, total: msg.CapTotal}
 	}

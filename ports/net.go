@@ -120,6 +120,12 @@ type Message struct {
 	// holds and serves it but lets it expire if it stops being read, so a
 	// hot file fans out under load and contracts on cooldown.
 	Lease bool
+	// Ephemeral marks a message from a short-lived client (a `swarm add` /
+	// `swarm get` publisher or fetcher that keeps nothing and then dies).
+	// Receivers must NOT add such a sender to their routing table: routing
+	// to a peer that will vanish poisons the table with ghosts and drowns
+	// lookups in timeouts (#43).
+	Ephemeral bool
 	// Height is the chain-sync cursor (MsgGetChain).
 	Height uint64
 }
