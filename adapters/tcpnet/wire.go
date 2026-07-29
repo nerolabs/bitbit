@@ -42,6 +42,7 @@ type wireMsg struct {
 	Height    uint64     `cbor:"15,keyasint,omitempty"`
 	Domain    uint64     `cbor:"16,keyasint,omitempty"`
 	Lease     bool       `cbor:"17,keyasint,omitempty"`
+	Ephemeral bool       `cbor:"18,keyasint,omitempty"`
 }
 
 type wireProof struct {
@@ -85,6 +86,7 @@ func toWire(m ports.Message) wireMsg {
 	w.Height = m.Height
 	w.Domain = m.Domain
 	w.Lease = m.Lease
+	w.Ephemeral = m.Ephemeral
 	if len(m.Tag) > 0 {
 		w.Tag = append([]byte(nil), m.Tag...)
 	}
@@ -117,6 +119,7 @@ func fromWire(w wireMsg) ports.Message {
 	m.Height = w.Height
 	m.Domain = w.Domain
 	m.Lease = w.Lease
+	m.Ephemeral = w.Ephemeral
 	m.Tag = w.Tag
 	if w.Proof != nil {
 		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column}

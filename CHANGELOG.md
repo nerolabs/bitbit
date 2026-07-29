@@ -9,6 +9,21 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Ghost routing entries no longer break discovery at scale** (found in
+  the 300-file scaling test, #43): every `swarm add`/`swarm get` ran as a
+  short-lived client with a fresh identity, and nodes both routed to those
+  clients and persisted them to `peers.json` — so a busy node's routing
+  table filled with dead entries (in the test: 327 entries, 2 live, ~75%
+  query timeouts), which broke provider discovery and made most fetches
+  fail. Fixed at both ends: nodes persist only peers they have actually
+  reached, and a short-lived client stamps its messages so peers never
+  route to it.
+- **Re-publishing identical content is idempotent** (#46): a failed
+  publish could leave a root registered but return no link, and a retry
+  then hit "root already published with different entry" — because
+  idempotency compared the whole entry, including the per-invocation
+  publisher identity. It now dedups on content, so a retry (or a second
+  person adding the same file) succeeds instead of colliding.
 - **NATed peers can actually converse** (found in the first real
   cross-network test, #27): the transport dialed a fresh connection per
   message, so a reply required dialing *into* the requester — impossible
@@ -27,6 +42,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
+- **Opt-in in-RAM read cache for hot chunks** (`-cache SIZE`, default off;
+  #42): a cache hit serves trusted bytes from memory, skipping both the
+  disk read and the per-read hash re-verification. Read-through LRU,
+  cache-on-read only, and Delete evicts so purged content is never served.
+- **The daemon caretakes content published through its own UI** by default
+  (`-care-published`, #44): without a caretaker a published file's
+  redundancy only decays as nodes churn — now the publishing daemon
+  repairs its own roots, and both the UI and CLI say whether a caretaker
+  is running.
+- **Paginated, shard-sorted roots list in the daemon UI** (#45): the
+  "identifiers this daemon holds shards of" table now paginates and sorts
+  by shards held, instead of rendering every row (unusable at hundreds).
 - **A public build log** — a chronological "how it was built and why"
   narrative under `docs/buildlog/` (dated Markdown entries), rendered to
   `website/buildlog.html` by `scripts/gen_buildlog.py` on the same

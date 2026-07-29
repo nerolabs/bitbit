@@ -6,7 +6,6 @@ package registry
 
 import (
 	"context"
-	"reflect"
 	"sync"
 
 	"github.com/nerolabs/silt/ports"
@@ -25,14 +24,17 @@ func New() *Log {
 	return &Log{byRoot: make(map[ports.Hash]int)}
 }
 
-// Publish appends e. Re-publishing an identical entry is a no-op
-// (convergent encryption makes duplicate adds of the same file normal);
-// publishing a different entry under an existing root is an error.
+// Publish appends e. Re-publishing the same CONTENT is a no-op:
+// convergent encryption makes duplicate adds of a file yield an identical
+// root, manifest, and size, and the Publisher records only WHO added it,
+// not WHAT — so a retry from a fresh CLI identity (each `swarm add` mints
+// one) or a second person adding the same file must dedup, not collide.
+// Only a genuinely different entry under an existing root is an error.
 func (l *Log) Publish(_ context.Context, e ports.Entry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if i, ok := l.byRoot[e.Root]; ok {
-		if reflect.DeepEqual(l.entries[i], e) {
+		if sameContent(l.entries[i], e) {
 			return nil
 		}
 		return ports.ErrDupPublish
@@ -40,6 +42,21 @@ func (l *Log) Publish(_ context.Context, e ports.Entry) error {
 	l.byRoot[e.Root] = len(l.entries)
 	l.entries = append(l.entries, e)
 	return nil
+}
+
+// sameContent reports whether two entries describe the same file —
+// everything but Publisher, which is metadata about who added it.
+func sameContent(a, b ports.Entry) bool {
+	if a.Root != b.Root || a.FileSize != b.FileSize ||
+		len(a.ManifestChunks) != len(b.ManifestChunks) {
+		return false
+	}
+	for i := range a.ManifestChunks {
+		if a.ManifestChunks[i] != b.ManifestChunks[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (l *Log) Lookup(_ context.Context, root ports.Hash) (ports.Entry, bool, error) {

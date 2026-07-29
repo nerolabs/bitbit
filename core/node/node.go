@@ -109,6 +109,13 @@ type Node struct {
 	pending map[uint64]*pending
 	Stats   Stats
 
+	// reachable tracks peers that have answered one of our requests and
+	// not since timed out — proof WE can dial THEM, not merely that they
+	// reached us. Only these are persisted as warm-restart seeds, so a
+	// restart re-seeds from live peers instead of reloading every dead
+	// ephemeral identity we ever heard from (#43).
+	reachable map[ports.NodeID]ports.Time
+
 	// reachability probes (our AutoNAT): a check sends helpers a nonce and
 	// waits for one to dial us back. reachProbes maps an outstanding nonce
 	// to its callback; reachSeq mints nonces; reach is the last verdict.
@@ -128,6 +135,10 @@ type Node struct {
 	// and using DHT routing. Exists so the economy scenario can watch
 	// leeches go broke.
 	freeload bool
+	// ephemeral marks this node as a short-lived client (publish/fetch that
+	// keeps nothing): its outgoing messages are stamped so peers don't route
+	// to it. See ports.Message.Ephemeral (#43).
+	ephemeral bool
 	// liar makes the node accept chunk placements, keep the PROOF, and
 	// throw away the DATA — then claim to have the chunk when asked.
 	// It can still answer a challenge with a valid Merkle proof (it
@@ -189,6 +200,10 @@ func (n *Node) logf(lvl ports.LogLevel, event string, kv ...any) {
 // SetFreeload toggles leech behavior.
 func (n *Node) SetFreeload(v bool) { n.freeload = v }
 
+// SetEphemeral marks this node as a short-lived client so peers don't add
+// it to their routing tables (#43).
+func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
+
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
 
@@ -202,6 +217,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		table:       dht.NewTable(id, cfg.K),
 		provs:       dht.NewProviders(),
 		pending:     make(map[uint64]*pending),
+		reachable:   make(map[ports.NodeID]ports.Time),
 		reachProbes: make(map[uint64]*reachProbe),
 		proofs:      make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains: make(map[ports.NodeID]uint64),
@@ -228,12 +244,25 @@ func (n *Node) send(to ports.NodeID, msg ports.Message) error {
 		msg.CapUsed, msg.CapTotal = n.capRep.Capacity()
 	}
 	msg.Domain = n.domainID
+	msg.Ephemeral = n.ephemeral
 	return n.tr.Send(to, msg)
 }
 
 func (n *Node) ID() ports.NodeID        { return n.id }
 func (n *Node) Table() *dht.Table       { return n.table }
 func (n *Node) Store() ports.ChunkStore { return n.store }
+
+// ReachablePeers reports the peers we've had a successful round-trip with
+// and haven't since timed out — the set worth persisting as warm-restart
+// seeds, as opposed to every address we've ever observed. See the
+// reachable field (#43).
+func (n *Node) ReachablePeers() map[ports.NodeID]bool {
+	out := make(map[ports.NodeID]bool, len(n.reachable))
+	for id := range n.reachable {
+		out[id] = true
+	}
+	return out
+}
 
 // bg is the context for local store calls. The event loop has no
 // cancellation semantics, so a background context is honest.
@@ -251,6 +280,7 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 		delete(n.pending, rid)
 		n.Stats.Timeouts++
 		n.table.Remove(to)
+		delete(n.reachable, to) // no longer proven reachable (#43)
 		n.logf(ports.LogDebug, "request timeout", "to", to, "kind", msg.Kind)
 		cb(ports.Message{}, fmt.Errorf("%w (to %s)", ErrTimeout, to))
 	})
@@ -265,7 +295,12 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 
 // handle is the single entry point for every incoming message.
 func (n *Node) handle(from ports.NodeID, msg ports.Message) {
-	n.table.Observe(from) // any message is proof of life
+	// Any message is proof of life — but a short-lived client (publish/fetch
+	// that keeps nothing) will vanish, so routing to it only poisons the
+	// table with ghosts; process its message, but don't add it (#43).
+	if !msg.Ephemeral {
+		n.table.Observe(from)
+	}
 	if msg.CapTotal > 0 {
 		n.peerCaps[from] = capInfo{used: msg.CapUsed, total: msg.CapTotal}
 	}
@@ -280,6 +315,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		delete(n.pending, msg.RID)
 		p.cancel()
+		n.reachable[from] = n.clock.Now() // a reply proves we can dial them (#43)
 		p.cb(msg, nil)
 		return
 	}

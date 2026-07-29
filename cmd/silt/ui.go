@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/nerolabs/silt/adapters/eventloop"
@@ -34,15 +35,16 @@ import (
 var uiFiles embed.FS
 
 type uiServer struct {
-	loop      *eventloop.Loop
-	nd        *node.Node
-	reg       ports.Registry // may be nil (no registry configured)
-	capRep    ports.CapacityReporter
-	selfPeer  string // "id@addr" for the ephemeral clients
-	validator bool
-	started   time.Time
-	peerCount func() int
-	links     *linkbook.Book // client mode only (nil on a plain daemon)
+	loop          *eventloop.Loop
+	nd            *node.Node
+	reg           ports.Registry // may be nil (no registry configured)
+	capRep        ports.CapacityReporter
+	selfPeer      string // "id@addr" for the ephemeral clients
+	validator     bool
+	started       time.Time
+	peerCount     func() int
+	links         *linkbook.Book // client mode only (nil on a plain daemon)
+	carePublished bool           // daemon repairs content published through its own UI (#44)
 }
 
 func (s *uiServer) onLoop(fn func()) {
@@ -135,19 +137,66 @@ func (s *uiServer) apiStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, out)
 }
 
-func (s *uiServer) apiRoots(w http.ResponseWriter, _ *http.Request) {
-	type rootRow struct {
-		Root   string `json:"root"`
-		Shards int    `json:"shards"`
-	}
+const (
+	defaultRootsPage = 50
+	maxRootsPage     = 500
+)
+
+type rootRow struct {
+	Root   string `json:"root"`
+	Shards int    `json:"shards"`
+}
+
+func (s *uiServer) apiRoots(w http.ResponseWriter, r *http.Request) {
 	var rows []rootRow
 	s.onLoop(func() {
 		for root, count := range s.nd.HeldRoots() {
 			rows = append(rows, rootRow{Root: root.String(), Shards: count})
 		}
 	})
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Root < rows[j].Root })
-	writeJSON(w, rows)
+	page, total := paginateRoots(rows,
+		atoiOr(r.URL.Query().Get("limit"), defaultRootsPage),
+		atoiOr(r.URL.Query().Get("offset"), 0))
+	writeJSON(w, map[string]any{"total": total, "rows": page})
+}
+
+// paginateRoots sorts rows by shard count (desc — most-hosted first), then
+// root for a stable order, and returns the [offset, offset+limit) window
+// plus the total. A limit <= 0 uses the default page and is capped at
+// maxRootsPage; offset is clamped, so out-of-range paging yields an empty
+// page rather than a panic.
+func paginateRoots(rows []rootRow, limit, offset int) (page []rootRow, total int) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Shards != rows[j].Shards {
+			return rows[i].Shards > rows[j].Shards
+		}
+		return rows[i].Root < rows[j].Root
+	})
+	total = len(rows)
+	switch {
+	case limit <= 0:
+		limit = defaultRootsPage
+	case limit > maxRootsPage:
+		limit = maxRootsPage
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return rows[offset:end], total
+}
+
+func atoiOr(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
+	}
+	return def
 }
 
 func (s *uiServer) apiRegistry(w http.ResponseWriter, r *http.Request) {
@@ -255,11 +304,23 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 502, opErr)
 		return
 	}
+	// Auto-caretake our own content: without a caretaker, a published
+	// file's redundancy only decays as nodes churn. The publishing daemon
+	// is the natural first caretaker, so it starts repairing this root (its
+	// manifest now counts toward this node's pledge). Opt out with
+	// -care-published=false.
+	cared := false
+	if s.carePublished && s.reg != nil {
+		ch := h.Care()
+		s.onLoop(func() { s.nd.Care(s.reg, ch) })
+		cared = true
+	}
 	writeJSON(w, map[string]any{
-		"name":     hdr.Filename,
-		"link":     h.String(),
-		"careLink": h.Care().String(),
-		"placed":   placed,
+		"name":      hdr.Filename,
+		"link":      h.String(),
+		"careLink":  h.Care().String(),
+		"placed":    placed,
+		"caretaker": cared,
 	})
 }
 

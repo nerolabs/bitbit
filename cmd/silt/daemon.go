@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nerolabs/silt/adapters/cachestore"
 	"github.com/nerolabs/silt/adapters/capstore"
 	"github.com/nerolabs/silt/adapters/chainhost"
 	"github.com/nerolabs/silt/adapters/chainstore"
@@ -61,6 +62,8 @@ func cmdDaemon(args []string) error {
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
 	relayVia := fs.String("relay-via", "", "RELAYID@HOST:PORT of a relay to lean on if this node turns out to be NATed — peers then reach us through it")
 	advertise := fs.String("advertise", "", "publicly dialable HOST:PORT to stamp on outgoing messages — set this on a public box that listens on a wildcard address (a wildcard bind is never advertised on its own)")
+	cacheSize := fs.String("cache", "", "in-RAM read cache for hot chunks, e.g. 512M (default off) — a cache hit skips the disk read and the per-read hash re-verify")
+	carePublished := fs.Bool("care-published", true, "the daemon repairs content published through its own UI, so your own content stays alive as nodes churn (its manifest counts toward this node's pledge); =false to opt out")
 	fs.Parse(args)
 
 	// Identity is a keypair: NodeID = SHA-256(public key), persisted so
@@ -94,12 +97,26 @@ func cmdDaemon(args []string) error {
 		return err
 	}
 	store = disk
+	// -cache: an in-RAM read cache just above disk and below capacity
+	// accounting, so hot chunks skip the disk read and the per-read hash
+	// re-verify. Off by default; capstore stays outermost so it still
+	// reports capacity.
+	if *cacheSize != "" {
+		budget, err := parseSize(*cacheSize)
+		if err != nil {
+			return err
+		}
+		if budget > 0 {
+			store = cachestore.Open(store, budget)
+			fmt.Printf("cache: %s hot-chunk read cache (hits skip disk + re-verify)\n", *cacheSize)
+		}
+	}
 	if *capacity != "" {
 		pledge, err := parseSize(*capacity)
 		if err != nil {
 			return err
 		}
-		capped, err := capstore.Open(disk, pledge)
+		capped, err := capstore.Open(store, pledge)
 		if err != nil {
 			return err
 		}
@@ -285,7 +302,8 @@ func cmdDaemon(args []string) error {
 			loop: loop, nd: nd, reg: reg, capRep: capRep,
 			selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 			validator: *validator, started: time.Now(),
-			peerCount: func() int { return tr.PeerCount() },
+			peerCount:     func() int { return tr.PeerCount() },
+			carePublished: *carePublished,
 		}
 		bound, err := ui.serve(*uiAddr)
 		if err != nil {
@@ -357,10 +375,27 @@ func cmdDaemon(args []string) error {
 			}
 		}
 	}
-	// Persist the living address book so the next start needs no flags.
+	// Persist the living address book so the next start needs no flags —
+	// but only peers we've actually reached, not every address ever
+	// observed. Otherwise a warm restart reloads a graveyard of dead
+	// ephemeral publisher identities and drowns lookups in timeouts (#43).
+	// The reachable set lives on the (lock-free) node loop, so snapshot it
+	// there and do the disk write off-loop.
 	go func() {
 		for range time.Tick(30 * time.Second) {
-			discovery.SaveFile(peersPath, tr.Peers())
+			done := make(chan []tcpnet.Peer, 1)
+			loop.Post(func() {
+				reachable := nd.ReachablePeers()
+				all := tr.Peers()
+				live := all[:0]
+				for _, p := range all {
+					if reachable[p.ID] {
+						live = append(live, p)
+					}
+				}
+				done <- live
+			})
+			discovery.SaveFile(peersPath, <-done)
 		}
 	}()
 	// leanOnRelay registers with a relay (configured via -relay-via or
@@ -595,6 +630,7 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 		RequestTimeout: ports.Duration(2 * time.Second),
 		Replication:    3,
 	}, walltime.New(loop), tr, memstore.New())
+	nd.SetEphemeral(true) // a publish/fetch client that keeps nothing — peers must not route to it (#43)
 
 	ps, err := discovery.ParseList(peers)
 	if err != nil {
