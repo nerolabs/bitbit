@@ -34,15 +34,16 @@ import (
 var uiFiles embed.FS
 
 type uiServer struct {
-	loop      *eventloop.Loop
-	nd        *node.Node
-	reg       ports.Registry // may be nil (no registry configured)
-	capRep    ports.CapacityReporter
-	selfPeer  string // "id@addr" for the ephemeral clients
-	validator bool
-	started   time.Time
-	peerCount func() int
-	links     *linkbook.Book // client mode only (nil on a plain daemon)
+	loop          *eventloop.Loop
+	nd            *node.Node
+	reg           ports.Registry // may be nil (no registry configured)
+	capRep        ports.CapacityReporter
+	selfPeer      string // "id@addr" for the ephemeral clients
+	validator     bool
+	started       time.Time
+	peerCount     func() int
+	links         *linkbook.Book // client mode only (nil on a plain daemon)
+	carePublished bool           // daemon repairs content published through its own UI (#44)
 }
 
 func (s *uiServer) onLoop(fn func()) {
@@ -255,11 +256,23 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 502, opErr)
 		return
 	}
+	// Auto-caretake our own content: without a caretaker, a published
+	// file's redundancy only decays as nodes churn. The publishing daemon
+	// is the natural first caretaker, so it starts repairing this root (its
+	// manifest now counts toward this node's pledge). Opt out with
+	// -care-published=false.
+	cared := false
+	if s.carePublished && s.reg != nil {
+		ch := h.Care()
+		s.onLoop(func() { s.nd.Care(s.reg, ch) })
+		cared = true
+	}
 	writeJSON(w, map[string]any{
-		"name":     hdr.Filename,
-		"link":     h.String(),
-		"careLink": h.Care().String(),
-		"placed":   placed,
+		"name":      hdr.Filename,
+		"link":      h.String(),
+		"careLink":  h.Care().String(),
+		"placed":    placed,
+		"caretaker": cared,
 	})
 }
 

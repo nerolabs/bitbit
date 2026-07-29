@@ -89,6 +89,9 @@ func swarmAdd(args []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "scattered %d chunk replicas into the swarm; client keeps nothing\n", placed)
 	fmt.Fprintf(os.Stderr, "care link (repair rights, no decryption): %s\n", h.Care())
+	fmt.Fprintln(os.Stderr, "note: no caretaker is running for this content yet — its redundancy will")
+	fmt.Fprintln(os.Stderr, "decay as nodes churn. Run a daemon with -care <careLink> to repair it")
+	fmt.Fprintln(os.Stderr, "(publishing via a daemon's UI caretakes your content automatically).")
 	fmt.Println(h)
 	return nil
 }

@@ -61,6 +61,7 @@ func cmdDaemon(args []string) error {
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
 	relayVia := fs.String("relay-via", "", "RELAYID@HOST:PORT of a relay to lean on if this node turns out to be NATed — peers then reach us through it")
 	advertise := fs.String("advertise", "", "publicly dialable HOST:PORT to stamp on outgoing messages — set this on a public box that listens on a wildcard address (a wildcard bind is never advertised on its own)")
+	carePublished := fs.Bool("care-published", true, "the daemon repairs content published through its own UI, so your own content stays alive as nodes churn (its manifest counts toward this node's pledge); =false to opt out")
 	fs.Parse(args)
 
 	// Identity is a keypair: NodeID = SHA-256(public key), persisted so
@@ -285,7 +286,8 @@ func cmdDaemon(args []string) error {
 			loop: loop, nd: nd, reg: reg, capRep: capRep,
 			selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 			validator: *validator, started: time.Now(),
-			peerCount: func() int { return tr.PeerCount() },
+			peerCount:     func() int { return tr.PeerCount() },
+			carePublished: *carePublished,
 		}
 		bound, err := ui.serve(*uiAddr)
 		if err != nil {
