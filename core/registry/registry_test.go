@@ -57,6 +57,28 @@ func TestRepublishSemantics(t *testing.T) {
 	}
 }
 
+func TestRepublishIgnoresPublisher(t *testing.T) {
+	ctx := context.Background()
+	r := registry.New()
+	e := entry(1, 100)
+	e.Publisher = ports.HashBytes([]byte("alice"))
+	if err := r.Publish(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	// Same content, different publisher — a retry from a fresh CLI identity
+	// (each `swarm add` mints one), or a second person adding the same file.
+	// Must dedup, not collide: regression for the "already published with
+	// different entry" failure that made retries unrecoverable (#46).
+	other := e
+	other.Publisher = ports.HashBytes([]byte("bob"))
+	if err := r.Publish(ctx, other); err != nil {
+		t.Fatalf("same content from a different publisher must be idempotent, got %v", err)
+	}
+	if all, _ := r.All(ctx); len(all) != 1 {
+		t.Fatalf("log has %d entries, want 1 (content dedup)", len(all))
+	}
+}
+
 func TestLookupMissing(t *testing.T) {
 	_, ok, err := registry.New().Lookup(context.Background(), ports.HashBytes([]byte("nope")))
 	if ok || err != nil {
