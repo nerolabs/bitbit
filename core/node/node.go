@@ -109,6 +109,13 @@ type Node struct {
 	pending map[uint64]*pending
 	Stats   Stats
 
+	// reachable tracks peers that have answered one of our requests and
+	// not since timed out — proof WE can dial THEM, not merely that they
+	// reached us. Only these are persisted as warm-restart seeds, so a
+	// restart re-seeds from live peers instead of reloading every dead
+	// ephemeral identity we ever heard from (#43).
+	reachable map[ports.NodeID]ports.Time
+
 	// reachability probes (our AutoNAT): a check sends helpers a nonce and
 	// waits for one to dial us back. reachProbes maps an outstanding nonce
 	// to its callback; reachSeq mints nonces; reach is the last verdict.
@@ -202,6 +209,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		table:       dht.NewTable(id, cfg.K),
 		provs:       dht.NewProviders(),
 		pending:     make(map[uint64]*pending),
+		reachable:   make(map[ports.NodeID]ports.Time),
 		reachProbes: make(map[uint64]*reachProbe),
 		proofs:      make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains: make(map[ports.NodeID]uint64),
@@ -235,6 +243,18 @@ func (n *Node) ID() ports.NodeID        { return n.id }
 func (n *Node) Table() *dht.Table       { return n.table }
 func (n *Node) Store() ports.ChunkStore { return n.store }
 
+// ReachablePeers reports the peers we've had a successful round-trip with
+// and haven't since timed out — the set worth persisting as warm-restart
+// seeds, as opposed to every address we've ever observed. See the
+// reachable field (#43).
+func (n *Node) ReachablePeers() map[ports.NodeID]bool {
+	out := make(map[ports.NodeID]bool, len(n.reachable))
+	for id := range n.reachable {
+		out[id] = true
+	}
+	return out
+}
+
 // bg is the context for local store calls. The event loop has no
 // cancellation semantics, so a background context is honest.
 func bg() context.Context { return context.Background() }
@@ -251,6 +271,7 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 		delete(n.pending, rid)
 		n.Stats.Timeouts++
 		n.table.Remove(to)
+		delete(n.reachable, to) // no longer proven reachable (#43)
 		n.logf(ports.LogDebug, "request timeout", "to", to, "kind", msg.Kind)
 		cb(ports.Message{}, fmt.Errorf("%w (to %s)", ErrTimeout, to))
 	})
@@ -280,6 +301,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		}
 		delete(n.pending, msg.RID)
 		p.cancel()
+		n.reachable[from] = n.clock.Now() // a reply proves we can dial them (#43)
 		p.cb(msg, nil)
 		return
 	}
