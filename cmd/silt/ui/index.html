@@ -36,8 +36,13 @@
   <h2>Top-level identifiers this daemon holds shards of</h2>
   <p class="dim" style="margin-bottom:0.6rem;font-size:0.85rem">
     Opaque roots and shard counts — all a daemon can know about its own contents.</p>
-  <table id="roots"><thead><tr><th>root</th><th>shards held</th></tr></thead><tbody></tbody></table>
-  <p class="note">Auto-refreshes every 3s.</p>
+  <table id="roots"><thead><tr><th>root</th><th>shards held ▾</th></tr></thead><tbody></tbody></table>
+  <div class="pager" style="display:flex;gap:0.8rem;align-items:center;margin:0.5rem 0">
+    <button id="rootsPrev" onclick="rootsPage(-1)">‹ prev</button>
+    <span id="rootsRange" class="dim mono"></span>
+    <button id="rootsNext" onclick="rootsPage(1)">next ›</button>
+  </div>
+  <p class="note">Sorted by shards held. Auto-refreshes every 3s.</p>
 </main>
 <script>
 const fmtB = b => b >= 1<<30 ? (b/(1<<30)).toFixed(2)+" GB" : b >= 1<<20 ? (b/(1<<20)).toFixed(1)+" MB"
@@ -73,11 +78,31 @@ async function refresh() {
     document.getElementById("uptime").textContent =
       "up "+Math.floor(s.uptimeSec/60)+"m "+(s.uptimeSec%60)+"s" + (reach ? " · "+reach : "");
 
-    const roots = await (await fetch("/api/roots")).json();
-    document.querySelector("#roots tbody").innerHTML = (roots||[]).map(r =>
-      `<tr><td class="mono">${r.root}</td><td>${r.shards}</td></tr>`).join("")
-      || `<tr><td colspan=2 class="dim">nothing hosted yet</td></tr>`;
+    await loadRoots();
   } catch (e) { /* daemon restarting; keep trying */ }
+}
+
+const ROOTS_PAGE = 50;
+let rootsOffset = 0;
+async function loadRoots() {
+  const data = await (await fetch(`/api/roots?limit=${ROOTS_PAGE}&offset=${rootsOffset}`)).json();
+  const rows = data.rows || [], total = data.total || 0;
+  // if the list shrank past our page (chunks deleted), step back to the last one
+  if (rootsOffset > 0 && rootsOffset >= total) {
+    rootsOffset = Math.max(0, (Math.ceil(total / ROOTS_PAGE) - 1) * ROOTS_PAGE);
+    return loadRoots();
+  }
+  document.querySelector("#roots tbody").innerHTML = rows.map(r =>
+    `<tr><td class="mono">${r.root}</td><td>${r.shards}</td></tr>`).join("")
+    || `<tr><td colspan=2 class="dim">nothing hosted yet</td></tr>`;
+  const from = total ? rootsOffset + 1 : 0, to = rootsOffset + rows.length;
+  document.getElementById("rootsRange").textContent = `${from}–${to} of ${total}`;
+  document.getElementById("rootsPrev").disabled = rootsOffset <= 0;
+  document.getElementById("rootsNext").disabled = to >= total;
+}
+function rootsPage(dir) {
+  rootsOffset = Math.max(0, rootsOffset + dir * ROOTS_PAGE);
+  loadRoots();
 }
 refresh(); setInterval(refresh, 3000);
 </script>
