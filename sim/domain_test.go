@@ -109,7 +109,7 @@ func TestDispersionAuditRespreadsConcentratedStripe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.Distribute(entry, m, false, func(int) {})
+	a.Distribute(entry, m, false, func(int, error) {})
 	cl.Sched.Run()
 
 	before := cl.worstDomainExclusive(m, domOf)
@@ -164,7 +164,7 @@ func TestFailureDomainPlacementSpreadsColumns(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		a.Distribute(entry, m, false, func(int) {})
+		a.Distribute(entry, m, false, func(int, error) {})
 		cl.Sched.Run()
 		return m
 	}

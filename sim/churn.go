@@ -104,7 +104,7 @@ func Churn(seed int64, o ChurnOpts) (ChurnResult, error) {
 		return res, err
 	}
 	distributed := false
-	a.Distribute(entry, m, false, func(int) { distributed = true })
+	a.Distribute(entry, m, false, func(int, error) { distributed = true })
 	cl.Sched.Run() // no repair timers yet: runs to quiescence
 	if !distributed {
 		return res, fmt.Errorf("churn(seed=%d): distribution never completed", seed)

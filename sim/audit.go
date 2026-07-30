@@ -106,7 +106,7 @@ func Audit(seed int64, o AuditOpts) (AuditResult, error) {
 		return res, err
 	}
 	placed := 0
-	publisher.Distribute(entry, m, false, func(p int) { placed = p })
+	publisher.Distribute(entry, m, false, func(p int, _ error) { placed = p })
 	cl.Sched.Run()
 	say(fmt.Sprintf("scatter   | %d chunk replica placements accepted (some by liars, who kept nothing)", placed))
 

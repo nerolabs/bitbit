@@ -31,8 +31,11 @@ import (
 // files fall back to per-chunk placement under each chunk's own id. If
 // keepLocal is false the local copies are deleted afterward: the publisher
 // walks away and the swarm alone carries the file. done receives the
-// number of chunk-replica placements that succeeded.
-func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int)) {
+// number of chunk-replica placements that succeeded and, per tenet B7 (no
+// optimistic operations), a non-nil error if any MANIFEST chunk could not
+// be placed on a single node — a file whose manifest is unreachable is
+// unretrievable, so the caller must NOT register/return a link for it.
+func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int, err error)) {
 	n.distributeFrom(n.store, entry, m, keepLocal, done)
 }
 
@@ -40,16 +43,22 @@ func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal boo
 // how the daemon's UI publishes without the staging ever touching the
 // node's storage pledge (the M9 rule: pledges bound hosting, not
 // staging). The scratch copies are deleted as they ship.
-func (n *Node) DistributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, done func(placed int)) {
+func (n *Node) DistributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, done func(placed int, err error)) {
 	n.distributeFrom(src, entry, m, false, done)
 }
 
-func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int)) {
+func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int, err error)) {
 	leaves := m.Leaves()
 	root := m.Root()
 	manifestN := len(entry.ManifestChunks)
 	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
 	placed := 0
+	// B7: a manifest chunk we actively tried to place but no node accepted
+	// (all candidates full or unreachable) strands the whole file behind an
+	// unretrievable link. Record it so the publish fails loudly instead of
+	// returning a dangling link. (A convergent-dedup SKIP — chunk already in
+	// the swarm, not re-shipped — never reaches placeAt, so it can't trip this.)
+	var distErr error
 	// usedDomains counts how many of this file's columns already live in
 	// each failure domain, so the next column prefers a domain not yet
 	// used — spreading columns across AS/rack/geo/operator, not just node
@@ -94,7 +103,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	nextGroup = func(g int) {
 		if g == len(groups) {
 			n.logf(ports.LogInfo, "file distributed", "root", root, "chunks", len(ids), "placements", placed)
-			done(placed)
+			done(placed, distErr)
 			return
 		}
 		grp := groups[g]
@@ -137,8 +146,16 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 							}
 						}
 					},
-					func(int) {
-						if !keepLocal {
+					func(np int) {
+						// A manifest chunk (groups 0..manifestN-1) that landed
+						// nowhere strands the file — fail the whole distribution
+						// loudly, and keep the local copy (don't delete unconfirmed
+						// data) so a retry can still ship it.
+						if g < manifestN && np == 0 {
+							if distErr == nil {
+								distErr = fmt.Errorf("manifest chunk %s placed on no node (all candidates full or unreachable)", id)
+							}
+						} else if !keepLocal {
 							src.Delete(bg(), id)
 						}
 						nextMember(k + 1)

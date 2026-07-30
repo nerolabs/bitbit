@@ -52,7 +52,7 @@ func Takedown(seed int64) (TakedownResult, error) {
 		entry, _, _ := cl.Registry.Lookup(bgCtx, h.Root)
 		m, _ := pipeline.LoadFull(bgCtx, pub.Store(), entry, h)
 		done := false
-		pub.Distribute(entry, m, false, func(int) { done = true })
+		pub.Distribute(entry, m, false, func(int, error) { done = true })
 		cl.Sched.Run()
 		if !done {
 			panic("distribute never completed")

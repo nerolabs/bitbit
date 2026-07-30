@@ -294,7 +294,7 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 			done()
 			return
 		}
-		e.nd.DistributeFrom(e.nd.Store(), entry, m, func(p int) { placed = p; done() })
+		e.nd.DistributeFrom(e.nd.Store(), entry, m, func(p int, derr error) { placed = p; opErr = derr; done() })
 	})
 	if rerr != nil {
 		httpError(w, 504, rerr)
