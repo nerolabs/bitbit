@@ -15,12 +15,13 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   (all candidates full or unreachable) yet publish still registered the
   root and returned a valid-looking link — ~14% of files were stranded
   behind dangling links (fetch failed with "manifest chunks unreachable").
-  Distribution now treats a manifest chunk that lands nowhere as a hard
-  error, so the publisher fails loudly instead of handing back an
-  unretrievable link. This makes publish honor the new tenet **B7 — trust
-  but verify; no optimistic operations.** (Placement robustness so such
-  publishes *succeed* rather than fail — spill past full nodes — is the
-  tracked follow-up.)
+  A manifest chunk that lands nowhere is now **retried with a fresh lookup**
+  (these misses are usually transient — a relay hiccup once the nearest
+  nodes cap out and load shifts onto NATed hosts), so publishes that used to
+  strand now succeed; if it still can't be placed after several tries the
+  publisher **fails loudly** instead of handing back an unretrievable link.
+  This makes publish honor the new tenet **B7 — trust but verify; no
+  optimistic operations.**
 - **Ghost routing entries no longer break discovery at scale** (found in
   the 300-file scaling test, #43): every `swarm add`/`swarm get` ran as a
   short-lived client with a fresh identity, and nodes both routed to those
