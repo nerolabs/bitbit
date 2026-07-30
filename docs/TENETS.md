@@ -58,6 +58,19 @@ just failures). We optimize for the next reader.
 **B6 — Reactive, not eager.** Data moves when it must (repair on loss, fan-out
 on heat), not on a schedule. Idle is cheap; the system quiesces.
 
+**B7 — Trust but verify; no optimistic operations.** B3 generalized from reads
+to *every* operation: an operation is not "done" until its effect is
+**confirmed**, never assumed. A write is durable only when read back or
+acknowledged by ≥k independent parties; a placement is complete only when
+providers confirm they hold it; a publish returns a link only once the content
+is provably retrievable. We take the **cynical** default — disks, networks,
+peers, and *our own prior steps* lie until proven otherwise — so an optimistic
+ack is a **defect, not an optimization** (learned the hard way — a publish once
+returned a valid-looking link for content it never durably stored, #60). Where
+verification genuinely conflicts with another tenet (e.g. latency/cost vs. S6,
+or eagerness vs. B6), the exception is made **explicit and discussed**, never
+taken silently.
+
 ---
 
 ## Part III — What a successful outcome is (the bar)
@@ -286,7 +299,8 @@ validators + curators + authorities            →  keep the loop honest and law
 **Immutable (amending requires deliberate, reviewed consensus):**
 integrity-is-non-negotiable (S1), privacy-by-construction (B4), no-central-
 control (T1/S4), no-silent-censorship (Don't #2), no-access-surveillance
-(Don't #3), reward-tracks-value (Don't #7).
+(Don't #3), reward-tracks-value (Don't #7), trust-but-verify / no-optimistic-
+operations (B7).
 
 **Evolving (current best practice; expected to change with evidence):**
 specific algorithms and parameters (erasure k/n, replication factor, cache
