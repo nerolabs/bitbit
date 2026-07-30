@@ -3,6 +3,37 @@
 Where this is going (per Andrew, 2026-07-25), structured into
 milestones. M1–M8 are done; this file governs what comes next.
 
+## Tenets are the destination; this roadmap is the path
+
+**V1 is defined by the tenets, satisfied and field-proven — not by a
+feature list.** [`docs/TENETS.md`](docs/TENETS.md) is the destination:
+what "good" is, stated as principles, outcomes, and explicit stances on
+the hard tradeoffs. This roadmap is the *path* to that destination, and
+the open [issues](https://github.com/nerolabs/silt/issues) are the gaps
+and deviations we find while walking it. The relationship is one-way and
+strict:
+
+- **Tenets guide the roadmap.** Every milestone and phase below exists to
+  advance one or more tenets; if a step serves no tenet, it does not
+  belong here. Every open issue should trace to the tenet it advances or
+  the bright line (Part VI) it defends — that traceability is how we know
+  the backlog is the path to V1 and not drift.
+- **A tenet gates V1 as a *principle*, never as a *mechanism*.** "Integrity
+  is non-negotiable" (S1), "no silent-loss shapes" (S3), "cheap to
+  participate" (S6), "reward tracks value" (Don't #7) are gates. *Which*
+  algorithm, economic mechanism, or role satisfies them — and *when* it
+  ships — is a roadmap decision, explicitly held in the tenets' **Evolving**
+  bucket (Part IX). This is what keeps "V1 must adhere to the tenets" from
+  silently expanding V1's scope: e.g. "reward tracks value" is canon, but
+  whether V1 ships the real proof-of-retrieval economy or a clearly-labeled
+  non-authoritative placeholder is a sequencing call made here, and
+  "whether the trust plane is a v1 pillar or a later one" is (per Part IX)
+  still open — see Open Question #3 in the tenets.
+- **Release is gated by proof (tenet R1).** A tenet is only "met" for V1
+  when it is field-proven, not sim-proven-only. The current gate is the
+  multi-machine scale re-test of the #43/#46 fixes (integrity S1 held; the
+  open question is availability — S2/S4/S5).
+
 ## The product stance
 
 - **Daemons are infrastructure, not content.** A daemon stores and

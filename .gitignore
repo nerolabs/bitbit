@@ -1,6 +1,7 @@
 .shardnet/
 bitbit
 *.bin
+.DS_Store
 
 # build artifacts (produced by build.sh; published via GitHub Releases)
 dist/
