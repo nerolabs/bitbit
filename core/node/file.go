@@ -99,14 +99,23 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 		}
 	}
 
-	var nextGroup func(g int)
-	nextGroup = func(g int) {
+	// A manifest chunk carries no erasure redundancy and gets no second
+	// copy, so a single transient placement failure — common on the relay
+	// path once the nearest nodes cap out and load shifts onto NATed hosts —
+	// strands the whole file. Retry a manifest chunk that lands NOWHERE, with
+	// a fresh lookup each time (reachability may have recovered, or a
+	// still-open node surfaces), before failing loud per B7.
+	const manifestPlaceAttempts = 4
+
+	var nextGroup func(g, attempt int)
+	nextGroup = func(g, attempt int) {
 		if g == len(groups) {
 			n.logf(ports.LogInfo, "file distributed", "root", root, "chunks", len(ids), "placements", placed)
 			done(placed, distErr)
 			return
 		}
 		grp := groups[g]
+		manifestGrp := g < manifestN
 		n.IterativeFindNode(grp.key, func(closest []ports.NodeID) {
 			// Steer a coded column onto a domain no other column has used
 			// yet. Manifest chunks and uncoded files place on raw closest —
@@ -115,10 +124,24 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 			if grp.column {
 				candidates = n.preferFreshDomain(closest, usedDomains)
 			}
+			groupPlaced := 0
 			var nextMember func(k int)
 			nextMember = func(k int) {
 				if k == len(grp.members) {
-					nextGroup(g + 1)
+					// A manifest chunk that landed nowhere: retry with a fresh
+					// lookup, then fail loudly (B7) if it still can't be placed —
+					// never register a link for content the swarm never stored.
+					if manifestGrp && groupPlaced == 0 {
+						if attempt+1 < manifestPlaceAttempts {
+							nextGroup(g, attempt+1)
+							return
+						}
+						if distErr == nil {
+							distErr = fmt.Errorf("manifest chunk %s placed on no node after %d attempts (network full or unreachable)",
+								ids[grp.members[0]], manifestPlaceAttempts)
+						}
+					}
+					nextGroup(g+1, 0)
 					return
 				}
 				id := ids[grp.members[k]]
@@ -140,6 +163,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 				n.placeAt(id, c.Data, proof, candidates, n.cfg.Replication,
 					func(target ports.NodeID) {
 						placed++
+						groupPlaced++
 						if grp.column {
 							if d := n.domainOf(target); d != 0 {
 								usedDomains[d]++
@@ -147,15 +171,11 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 						}
 					},
 					func(np int) {
-						// A manifest chunk (groups 0..manifestN-1) that landed
-						// nowhere strands the file — fail the whole distribution
-						// loudly, and keep the local copy (don't delete unconfirmed
-						// data) so a retry can still ship it.
-						if g < manifestN && np == 0 {
-							if distErr == nil {
-								distErr = fmt.Errorf("manifest chunk %s placed on no node (all candidates full or unreachable)", id)
-							}
-						} else if !keepLocal {
+						// Keep a manifest chunk's local copy while it still has
+						// no home (a retry may yet ship it, or the publish fails
+						// loud); otherwise the publisher walks away and the swarm
+						// alone carries it.
+						if !(manifestGrp && np == 0) && !keepLocal {
 							src.Delete(bg(), id)
 						}
 						nextMember(k + 1)
@@ -164,7 +184,7 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 			nextMember(0)
 		})
 	}
-	nextGroup(0)
+	nextGroup(0, 0)
 }
 
 // placeAt walks candidates in order (skipping self) until want have
