@@ -100,7 +100,7 @@ func TestScatterOverRealTLS(t *testing.T) {
 			done()
 			return
 		}
-		a.nd.Distribute(entry, m, false, func(int) { done() })
+		a.nd.Distribute(entry, m, false, func(int, error) { done() })
 	})
 
 	var out bytes.Buffer

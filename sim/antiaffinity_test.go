@@ -88,7 +88,7 @@ func TestRepairPreservesStripeAntiAffinity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %d: load: %v", seed, err)
 		}
-		a.Distribute(entry, m, false, func(int) {})
+		a.Distribute(entry, m, false, func(int, error) {})
 		cl.Sched.Run()
 
 		for _, c := range caretakers {

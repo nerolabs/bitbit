@@ -9,6 +9,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Publish no longer returns a link for content it never stored** (#60,
+  found in the 300-file scaling re-test): under load, once the network
+  passed its capacity cap, a manifest chunk could be placed on *no* node
+  (all candidates full or unreachable) yet publish still registered the
+  root and returned a valid-looking link — ~14% of files were stranded
+  behind dangling links (fetch failed with "manifest chunks unreachable").
+  Distribution now treats a manifest chunk that lands nowhere as a hard
+  error, so the publisher fails loudly instead of handing back an
+  unretrievable link. This makes publish honor the new tenet **B7 — trust
+  but verify; no optimistic operations.** (Placement robustness so such
+  publishes *succeed* rather than fail — spill past full nodes — is the
+  tracked follow-up.)
 - **Ghost routing entries no longer break discovery at scale** (found in
   the 300-file scaling test, #43): every `swarm add`/`swarm get` ran as a
   short-lived client with a fresh identity, and nodes both routed to those

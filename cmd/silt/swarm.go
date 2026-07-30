@@ -80,7 +80,7 @@ func swarmAdd(args []string) error {
 			done()
 			return
 		}
-		e.nd.Distribute(entry, mf, false, func(p int) { placed = p; done() })
+		e.nd.Distribute(entry, mf, false, func(p int, derr error) { placed = p; err = derr; done() })
 	}); rerr != nil {
 		return rerr
 	}

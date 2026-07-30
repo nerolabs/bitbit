@@ -108,7 +108,12 @@ func cmdNet(args []string) error {
 			done()
 			return
 		}
-		a.nd.Distribute(entry, m, false, func(placed int) {
+		a.nd.Distribute(entry, m, false, func(placed int, derr error) {
+			if derr != nil {
+				fmt.Println("distribute:", derr)
+				done()
+				return
+			}
 			fmt.Printf("node 0 scattered %d chunk replicas over TCP and deleted its copies (%.0fms)\n",
 				placed, time.Since(start).Seconds()*1000)
 			done()

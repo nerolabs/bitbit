@@ -142,7 +142,7 @@ func Consensus(seed int64, o ConsensusOpts) (ConsensusResult, error) {
 		return res, err
 	}
 	distributed := false
-	publisher.Distribute(entry, m, false, func(int) { distributed = true })
+	publisher.Distribute(entry, m, false, func(int, error) { distributed = true })
 	sched.Run()
 	if !distributed {
 		return res, fmt.Errorf("consensus(seed=%d): distribution never completed", seed)
