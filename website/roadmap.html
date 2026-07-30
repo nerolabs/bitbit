@@ -29,6 +29,13 @@
   <p class="eyebrow">Roadmap</p>
   <h1>Where Silt is going</h1>
 <p class="lead">Where this is going (per Andrew, 2026-07-25), structured into milestones. M1–M8 are done; this file governs what comes next.</p>
+<h2>Tenets are the destination; this roadmap is the path</h2>
+<p><b>V1 is defined by the tenets, satisfied and field-proven — not by a feature list.</b> [<span class="mono">docs/TENETS.md</span>](docs/TENETS.md) is the destination: what &quot;good&quot; is, stated as principles, outcomes, and explicit stances on the hard tradeoffs. This roadmap is the <em>path</em> to that destination, and the open <a href="https://github.com/nerolabs/silt/issues">issues</a> are the gaps and deviations we find while walking it. The relationship is one-way and strict:</p>
+<ul>
+<li><b>Tenets guide the roadmap.</b> Every milestone and phase below exists to advance one or more tenets; if a step serves no tenet, it does not belong here. Every open issue should trace to the tenet it advances or the bright line (Part VI) it defends — that traceability is how we know the backlog is the path to V1 and not drift.</li>
+<li><b>A tenet gates V1 as a <em>principle</em>, never as a <em>mechanism</em>.</b> &quot;Integrity is non-negotiable&quot; (S1), &quot;no silent-loss shapes&quot; (S3), &quot;cheap to participate&quot; (S6), &quot;reward tracks value&quot; (Don&#x27;t #7) are gates. <em>Which</em> algorithm, economic mechanism, or role satisfies them — and <em>when</em> it ships — is a roadmap decision, explicitly held in the tenets&#x27; <b>Evolving</b> bucket (Part IX). This is what keeps &quot;V1 must adhere to the tenets&quot; from silently expanding V1&#x27;s scope: e.g. &quot;reward tracks value&quot; is canon, but whether V1 ships the real proof-of-retrieval economy or a clearly-labeled non-authoritative placeholder is a sequencing call made here, and &quot;whether the trust plane is a v1 pillar or a later one&quot; is (per Part IX) still open — see Open Question #3 in the tenets.</li>
+<li><b>Release is gated by proof (tenet R1).</b> A tenet is only &quot;met&quot; for V1 when it is field-proven, not sim-proven-only. The current gate is the multi-machine scale re-test of the #43/#46 fixes (integrity S1 held; the open question is availability — S2/S4/S5).</li>
+</ul>
 <h2>The product stance</h2>
 <ul>
 <li><b>Daemons are infrastructure, not content.</b> A daemon stores and serves anonymous, encrypted chunks. It cannot know what it hosts: chunks are ciphertext, manifests are ciphertext, and the top-level identifier is an opaque hash carrying zero metadata. Resolving identifiers into human meaning (names, descriptions) is deliberately NOT this system — a separate layer, like DNS atop IP, built by whoever wants to build it.</li>
