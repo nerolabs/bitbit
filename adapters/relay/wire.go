@@ -52,6 +52,11 @@ type ctrl struct {
 	Target []byte `cbor:"t,omitempty"` // connect: the NodeID being asked for
 	Stream uint64 `cbor:"s,omitempty"` // incoming/accept: splice correlation id
 	Err    string `cbor:"e,omitempty"` // err: human-readable refusal
+	// Addr carries the registrant's public host:port as the relay observed it
+	// (its NAT mapping's source) back in the register-ack — STUN-style. A NATed
+	// node can't know its own public endpoint; this is how it learns one, which
+	// hole-punching (#27) needs to hand a peer a target to dial.
+	Addr string `cbor:"a,omitempty"`
 }
 
 const (

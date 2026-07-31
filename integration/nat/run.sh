@@ -57,6 +57,15 @@ done
 PEERS="$RELAY_ID@10.10.0.10:4001"
 REG="$RELAY_ID@https://10.10.0.10:4003"
 
+# #27 Phase 1: a NATed node learns its PUBLIC endpoint from the relay
+# (STUN-style). The proof that real NAT is in play: nodeA's LAN address is
+# 10.20.0.100, but the relay sees it as natA's masqueraded public IP 10.10.0.11
+# — that mapped address is what a hole-punch will aim at.
+echo "== #27 P1: nodes learn their NAT-mapped public endpoint via the relay =="
+obsA=$(dc exec -T nodeA sh -c 'grep -oE "observed public endpoint.*" /data/debug.log 2>/dev/null | tail -1' | tr -d '\r')
+echo "  nodeA (LAN 10.20.0.100) observed as: ${obsA:-<none>}"
+echo "$obsA" | grep -q "10.10.0.11" || { echo "FAIL: nodeA should learn its NAT-mapped public IP 10.10.0.11, not its LAN address (#27 P1)"; exit 1; }
+
 echo "== publish a ${FILE_BYTES}-byte file from nodeA (behind NAT A) =="
 dc exec -T nodeA sh -c "head -c $FILE_BYTES /dev/urandom > /tmp/f.bin; sha256sum /tmp/f.bin | cut -d' ' -f1 > /tmp/f.sha; silt swarm add /tmp/f.bin -peers '$PEERS' -registry '$REG'" >/tmp/nat_add.txt 2>&1
 LINK=$(grep -oE 'silt:v1:[A-Za-z0-9_:-]+' /tmp/nat_add.txt | head -1)

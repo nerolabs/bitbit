@@ -9,6 +9,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **NATed nodes learn their public endpoint, STUN-style** (#27, the groundwork
+  for hole-punching): when a node registers with a relay, the relay reports the
+  `host:port` it observed the registration coming from — the node's NAT mapping.
+  A node behind NAT cannot otherwise know its own public address, and
+  hole-punching needs it (it's the endpoint a peer aims a simultaneous-open at).
+  Surfaced as `relay.Client.Observed()` / `node.ObservedAddr()` and logged by
+  the daemon. This is phase 1 of #27; the relay-coordinated punch, port-reuse
+  dial, and relay→direct upgrade follow. The `integration/nat` harness asserts
+  a NATed node learns its *mapped* public IP (the gateway's), not its LAN
+  address.
 - **Automated cross-NAT integration harness** (`integration/nat/`, and a
   `nat-integration` CI job): stands up two genuinely-NATed daemons plus a
   public relay in real container networks (real kernel NAT via iptables

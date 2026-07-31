@@ -132,6 +132,10 @@ type Node struct {
 	reachSeq    uint64
 	reachProbes map[uint64]*reachProbe
 	reach       Reachability
+	// observedAddr is this node's public host:port as a relay reported it
+	// (STUN-style, #27) — the endpoint a peer aims a hole-punch at. "" until
+	// a relay registration reports one.
+	observedAddr string
 
 	// caretaker state (repair loop)
 	reg           ports.Registry
@@ -219,6 +223,14 @@ func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
 
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
+
+// SetObservedAddr records this node's public host:port as a relay reported it
+// (#27); ObservedAddr returns it ("" until known). A NATed node hands this to a
+// peer as the endpoint to aim a hole-punch at.
+func (n *Node) SetObservedAddr(a string) { n.observedAddr = a }
+
+// ObservedAddr is this node's relay-observed public endpoint ("" if unknown).
+func (n *Node) ObservedAddr() string { return n.observedAddr }
 
 // SetProofStore attaches durable proof persistence (#69); call before
 // LoadProofs and bootstrap. nil keeps proofs memory-only (sims, clients).
