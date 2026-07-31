@@ -132,6 +132,37 @@ content lands before it can be denied). Full design and honest limits:
 [safety-denylist.md](safety-denylist.md). We consider the adequacy of
 this an open question for reviewers, legal and technical alike.
 
+### Resource-exhaustion attacker (asymmetric DoS)
+Sends cheap requests that cost a node large CPU, disk, or bandwidth — the
+class a CDN/WAF cannot help with, because Silt's core is a P2P TLS protocol
+on raw sockets, not an HTTP origin. **Largely open.** Vectors include
+repair-storms (a cheap "shard lost" signal triggering whole-stripe
+reconstruction), erasure-decode and proof-of-retrieval challenge
+amplification, mTLS handshake floods, unbounded manifests, disk-fill spam,
+and relay-slot exhaustion. One structural relief is free: the transport is
+**TLS-over-TCP, not UDP**, so spoofed-source reflection amplification is off
+the table (a requester's address is proven before we do work). The planned
+defense is a per-peer **resource-accounting** framework with
+operator-configurable rate limits. Full enumeration: A1–A16 in
+[`threat-catalog.md`](threat-catalog.md).
+
+### The launch window itself
+Nearly every attack above — eclipse, quorum capture, evading a version-floor
+— is **easiest on a small network**, i.e. exactly at launch. We treat the
+early network as honestly-labeled "training wheels" (time-boxed seeded
+trust, gated reputation, thresholds that shed on measured decentralization).
+See [`network-protection.md`](network-protection.md).
+
+### Zero-day response
+How the *network* updates without a central kill-switch is a
+**criticality-graded, threshold-signed, recallable version-floor** model
+(Low/Medium/High/Critical, enforced only for security, operator-controlled
+by default). Design in [`network-protection.md`](network-protection.md).
+
+> **The full breadth of enumerated threats — with state markers and
+> mitigation directions — lives in [`threat-catalog.md`](threat-catalog.md).
+> This document is the narrative; that one is the checklist.**
+
 ## What we are NOT claiming
 
 - **Not anonymous.** No onion routing, no traffic-analysis resistance.

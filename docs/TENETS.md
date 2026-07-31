@@ -29,6 +29,17 @@ baked into the binary. No node is load-bearing; none is irreplaceable.
 for a user: content-addressed identity + the key to read it. Durability,
 placement, and repair are the network's job, not the holder's.
 
+**T3 — The naming boundary is immutable (Aslan).** Core resolves *hashes*,
+never *names*. Turning an opaque root into human meaning (names, descriptions,
+moderation, curation) is a separate resolver layer ("Aslan"), and Silt core
+**carries zero meaning, forever**. This is a liability firewall as much as an
+architecture: the moment core learned to resolve names it would inherit every
+takedown, copyright, and safety obligation it exists to shed. Any change that
+teaches core about meaning is a top-severity regression. A link guarantees the
+*bytes it names*; trusting a *name* is trusting whatever resolver you asked —
+like trusting a DNS provider. "File poisoning" (a name resolving to hostile
+content) is therefore a resolver-layer concern by design.
+
 ---
 
 ## Part II — How we build
@@ -139,6 +150,16 @@ the system does and what we say it does.
 
 **R3 — Throwaway stays throwaway.** Test/dev infrastructure (a dev relay, a
 demo registry) is never allowed to quietly become load-bearing.
+
+**R4 — Operator-autonomous updates, security-gated.** Operators control their
+own software; the network **never silently auto-updates**. Only security uses
+graduated enforcement, and the maintainers set the tier: **criticality-graded**
+(Low = advisory · Medium = 30 days · High = 7 days · Critical = 24–48h before
+patched peers refuse old versions), via **threshold-signed** (m-of-n),
+**recallable** (monotonic sequence), **observation-clocked** version-floor
+advisories that fail *open*. Critical is a gate of last resort. Whoever can
+declare Critical can halt the network, so no single key may — the signing
+threshold *is* the safety property.
 
 ---
 
@@ -300,7 +321,8 @@ validators + curators + authorities            →  keep the loop honest and law
 integrity-is-non-negotiable (S1), privacy-by-construction (B4), no-central-
 control (T1/S4), no-silent-censorship (Don't #2), no-access-surveillance
 (Don't #3), reward-tracks-value (Don't #7), trust-but-verify / no-optimistic-
-operations (B7).
+operations (B7), the-naming-boundary-is-Aslan (T3), operator-autonomous-
+security-gated-updates (R4).
 
 **Evolving (current best practice; expected to change with evidence):**
 specific algorithms and parameters (erasure k/n, replication factor, cache
