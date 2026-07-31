@@ -5,18 +5,28 @@ software — and only those people, on purpose. Positioning here is a
 safety control as much as a growth lever (see the
 [fresh-eyes council](fresh-eyes-council.md)).
 
-## The first launch has exactly one goal: feedback
+## The first launch must be credible from day one
 
-We are **community-feedback-first** (see [ROADMAP.md](../ROADMAP.md)). The
-0.1 release is not a product launch — it is a request for review. Market
-for one thing: getting technical people to **break it and tell us what's
-wrong**, especially the weaknesses named in the
-[threat model](threat-model.md). Every message should read "help us
-pressure-test this," never "store your data here." Legal posture and any
-entity are decided *later*, based on what this feedback reveals — nothing
-formal is committed on spec. Before any outreach, Andrew does a personal
-review + hardening pass. Everything below serves this feedback goal until
-the evidence says otherwise.
+We are **harden-first** (Andrew, 2026-07-31 — a re-sequencing of the earlier
+"community-feedback-first" plan; see [ROADMAP.md](../ROADMAP.md)). The
+reasoning: a half-baked experimental drop on a project this ambitious —
+content-addressed storage plus a reputation-quorum chain, in a space thick
+with "AI/web3 storage" noise — reads as a *poser build* and burns the one
+first impression we get with the exact technical audience we need. So the
+tenets are **field-proven — floors and pillars both — before we launch**:
+the durability floors, the DoS resistance, cross-network hole-punching, and a
+*real* (non-toy) proof-of-retrieval economy on a **field-tested chain**.
+
+Feedback is still the point of the first release — market for technical
+people to **break it and tell us what's wrong**, especially the weaknesses
+named in the [threat model](threat-model.md), and lead every message with
+"help us pressure-test this," never "store your data here." What changed is
+the *bar for what we hand them*: something that already stands up, not a
+request to finish our hardening for us. Legal posture and any entity are
+still decided later, informed by the engagement — nothing formal is committed
+on spec — but now *after* a credible artifact exists, not instead of one.
+The pre-launch waves are in [ROADMAP.md](../ROADMAP.md); Andrew's personal
+review + hardening pass is the final gate before any outreach.
 
 ## Positioning
 
@@ -66,9 +76,15 @@ piracy communities. Wrong audience, wrong signal, real downside.
 ## Actions, phased
 
 **Phase 0 — before any announcement (gate).**
-Independent security review + a legal read; stand up the entity; cut a
-signed v0.1 with checksums; write `CONTRIBUTING.md`. Do not launch wide
-until these exist — see the [risk register](risk-register.md).
+The technical bar comes first (harden-first): the pre-launch waves in
+[ROADMAP.md](../ROADMAP.md) field-proven, an independent security review, a
+signed v0.1 with checksums, and `CONTRIBUTING.md`. A *legal read* (understand
+the exposure) is prudent here, but **standing up the entity is not a
+pre-launch gate** — the legal posture (entity, jurisdiction, or stay a pure
+code-publishing project) is still decided *after* the engagement reveals
+whether it's warranted, never on spec (see [ROADMAP.md](../ROADMAP.md) and
+the [risk register](risk-register.md)). Do not launch wide until the
+technical gate and review exist.
 
 **Phase 1 — technical soft launch.**
 Turn the `docs/math` notes into 2–3 blog posts (Merkle/erasure,
