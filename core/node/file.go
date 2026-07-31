@@ -32,9 +32,12 @@ import (
 // keepLocal is false the local copies are deleted afterward: the publisher
 // walks away and the swarm alone carries the file. done receives the
 // number of chunk-replica placements that succeeded and, per tenet B7 (no
-// optimistic operations), a non-nil error if any MANIFEST chunk could not
-// be placed on a single node — a file whose manifest is unreachable is
-// unretrievable, so the caller must NOT register/return a link for it.
+// optimistic operations), a non-nil error if the file was not placed
+// durably enough to be retrievable: any MANIFEST chunk (or any chunk of an
+// uncoded file, which carries no parity) that landed on no node, OR any
+// erasure STRIPE left with fewer placed shards than reconstruction needs
+// (#64). A link is unretrievable in all three cases, so the caller must NOT
+// register/return one for it.
 func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int, err error)) {
 	n.distributeFrom(n.store, entry, m, keepLocal, done)
 }
@@ -53,12 +56,18 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	manifestN := len(entry.ManifestChunks)
 	ids := append(append([]ports.ChunkID{}, entry.ManifestChunks...), leaves...)
 	placed := 0
-	// B7: a manifest chunk we actively tried to place but no node accepted
-	// (all candidates full or unreachable) strands the whole file behind an
-	// unretrievable link. Record it so the publish fails loudly instead of
-	// returning a dangling link. (A convergent-dedup SKIP — chunk already in
-	// the swarm, not re-shipped — never reaches placeAt, so it can't trip this.)
+	// B7: a chunk we actively tried to place but no node accepted (all
+	// candidates full or unreachable) can strand content behind an
+	// unretrievable link. We track placement so publish fails loudly instead
+	// of returning a dangling link. (A convergent-dedup SKIP — chunk already
+	// in the swarm, not re-shipped — never reaches placeAt, so it can't trip
+	// this.)
 	var distErr error
+	// shardPlaced[i] records whether ids[i] landed on at least one node, so
+	// after distribution we can verify every erasure stripe kept enough
+	// placed shards to be reconstructable (#64) — the data-shard analogue of
+	// the required-chunk (manifest / uncoded) check below.
+	shardPlaced := make([]bool, len(ids))
 	// usedDomains counts how many of this file's columns already live in
 	// each failure domain, so the next column prefers a domain not yet
 	// used — spreading columns across AS/rack/geo/operator, not just node
@@ -71,17 +80,18 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 	// a whole column lands on the same hosts — one shard per stripe each,
 	// making anti-affinity structural rather than a placement heuristic.
 	type group struct {
-		key     ports.Hash
-		members []int // indices into ids
-		column  bool  // a coded column (domain-spread); vs manifest/uncoded
+		key      ports.Hash
+		members  []int // indices into ids
+		column   bool  // a coded column (domain-spread); vs manifest/uncoded
+		required bool  // no redundancy (manifest chunk or uncoded data): every one MUST place, or the file is unretrievable (B7)
 	}
 	var groups []group
 	for i := 0; i < manifestN; i++ {
-		groups = append(groups, group{key: ids[i], members: []int{i}})
+		groups = append(groups, group{key: ids[i], members: []int{i}, required: true})
 	}
 	if m.K == 0 {
 		for i := manifestN; i < len(ids); i++ {
-			groups = append(groups, group{key: ids[i], members: []int{i}})
+			groups = append(groups, group{key: ids[i], members: []int{i}, required: true})
 		}
 	} else {
 		byCol := map[int][]int{}
@@ -99,23 +109,35 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 		}
 	}
 
-	// A manifest chunk carries no erasure redundancy and gets no second
-	// copy, so a single transient placement failure — common on the relay
-	// path once the nearest nodes cap out and load shifts onto NATed hosts —
-	// strands the whole file. Retry a manifest chunk that lands NOWHERE, with
-	// a fresh lookup each time (reachability may have recovered, or a
-	// still-open node surfaces), before failing loud per B7.
-	const manifestPlaceAttempts = 4
+	// A redundancy-free chunk (manifest / uncoded data) gets no second copy,
+	// so a single transient placement failure — common on the relay path once
+	// the nearest nodes cap out and load shifts onto NATed hosts — strands the
+	// whole file; a coded column landing nowhere costs every stripe one shard.
+	// Retry a group that lands NOWHERE, with a fresh lookup each time
+	// (reachability may have recovered, or a still-open node surfaces), before
+	// failing loud per B7.
+	const placeAttempts = 4
 
 	var nextGroup func(g, attempt int)
 	nextGroup = func(g, attempt int) {
 		if g == len(groups) {
+			// B7 / #64: before returning a link, verify every erasure stripe
+			// kept enough placed shards to reconstruct. Column placement means
+			// a shard-position that landed on no node is missing from EVERY
+			// stripe; if that leaves a stripe with fewer stored shards than it
+			// needs, the file is unrecoverable and we must fail loud — never
+			// register a link for content the swarm can't rebuild.
+			if m.K != 0 && distErr == nil {
+				if s, cnt, stored, need := understockedStripe(m, manifestN, shardPlaced); s >= 0 {
+					distErr = fmt.Errorf("stripe %d unrecoverable: only %d of %d shards placed, need %d (network full or unreachable)",
+						s, cnt, stored, need)
+				}
+			}
 			n.logf(ports.LogInfo, "file distributed", "root", root, "chunks", len(ids), "placements", placed)
 			done(placed, distErr)
 			return
 		}
 		grp := groups[g]
-		manifestGrp := g < manifestN
 		n.IterativeFindNode(grp.key, func(closest []ports.NodeID) {
 			// Steer a coded column onto a domain no other column has used
 			// yet. Manifest chunks and uncoded files place on raw closest —
@@ -128,17 +150,24 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 			var nextMember func(k int)
 			nextMember = func(k int) {
 				if k == len(grp.members) {
-					// A manifest chunk that landed nowhere: retry with a fresh
-					// lookup, then fail loudly (B7) if it still can't be placed —
-					// never register a link for content the swarm never stored.
-					if manifestGrp && groupPlaced == 0 {
-						if attempt+1 < manifestPlaceAttempts {
+					// A group that landed nowhere: retry with a fresh lookup,
+					// then decide. A REQUIRED group (manifest chunk / uncoded
+					// data, no parity) failing is fatal on its own — fail loud
+					// (B7). A coded COLUMN landing nowhere isn't necessarily
+					// fatal (a stripe survives losing up to n-k shards), so we
+					// retry it too but let the per-stripe check above be judge.
+					if groupPlaced == 0 && (grp.required || grp.column) {
+						if attempt+1 < placeAttempts {
 							nextGroup(g, attempt+1)
 							return
 						}
-						if distErr == nil {
-							distErr = fmt.Errorf("manifest chunk %s placed on no node after %d attempts (network full or unreachable)",
-								ids[grp.members[0]], manifestPlaceAttempts)
+						if grp.required && distErr == nil {
+							kind := "manifest"
+							if g >= manifestN {
+								kind = "data"
+							}
+							distErr = fmt.Errorf("%s chunk %s placed on no node after %d attempts (network full or unreachable)",
+								kind, ids[grp.members[0]], placeAttempts)
 						}
 					}
 					nextGroup(g+1, 0)
@@ -171,11 +200,12 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 						}
 					},
 					func(np int) {
-						// Keep a manifest chunk's local copy while it still has
-						// no home (a retry may yet ship it, or the publish fails
-						// loud); otherwise the publisher walks away and the swarm
-						// alone carries it.
-						if !(manifestGrp && np == 0) && !keepLocal {
+						shardPlaced[grp.members[k]] = np > 0
+						// Keep the local copy of any redundancy-free chunk or
+						// coded shard that still has no home (a retry may yet
+						// ship it, or the publish fails loud); otherwise the
+						// publisher walks away and the swarm alone carries it.
+						if !((grp.required || grp.column) && np == 0) && !keepLocal {
 							src.Delete(bg(), id)
 						}
 						nextMember(k + 1)
@@ -185,6 +215,41 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 		})
 	}
 	nextGroup(0, 0)
+}
+
+// understockedStripe returns the first erasure stripe left with too few
+// placed shards to reconstruct (or -1 if every stripe is safe), plus counts
+// for a diagnostic. shardPlaced is indexed over ids = [manifest chunks ‖
+// data leaves ‖ parity leaves]. A stripe reconstructs from any k of its n
+// coded shards; in a short final stripe the k−r missing data positions are
+// known-zero padding, free to the decoder, so that stripe needs only its r
+// real-data-shard count placed among stored (real-data + parity) shards — a
+// full stripe therefore needs k, the last may need fewer.
+func understockedStripe(m *manifest.Manifest, manifestN int, shardPlaced []bool) (stripe, placed, stored, need int) {
+	dataN, k, nn := len(m.Chunks), m.K, m.N
+	parPer := nn - k
+	stripes := (dataN + k - 1) / k
+	for s := 0; s < stripes; s++ {
+		r := k
+		if rem := dataN - s*k; rem < r {
+			r = rem
+		}
+		cnt := 0
+		for i := s * k; i < s*k+r; i++ {
+			if shardPlaced[manifestN+i] {
+				cnt++
+			}
+		}
+		for pj := s * parPer; pj < (s+1)*parPer; pj++ {
+			if idx := manifestN + dataN + pj; idx < len(shardPlaced) && shardPlaced[idx] {
+				cnt++
+			}
+		}
+		if cnt < r {
+			return s, cnt, r + parPer, r
+		}
+	}
+	return -1, 0, 0, 0
 }
 
 // placeAt walks candidates in order (skipping self) until want have
