@@ -45,8 +45,7 @@ func (n *Node) EnforceDenylist() int {
 	purged := 0
 	for id, p := range n.proofs {
 		if n.isDenied(p.Root) {
-			n.store.Delete(bg(), id) // the bytes are gone; serving already no-ops
-			delete(n.proofs, id)
+			n.dropHosted(id) // bytes + proof gone; serving already no-ops
 			purged++
 		}
 	}

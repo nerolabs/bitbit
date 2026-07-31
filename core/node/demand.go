@@ -66,7 +66,7 @@ func (n *Node) demandTick() {
 	}
 	for id, exp := range n.leases {
 		if now > exp {
-			n.store.Delete(bg(), id)
+			n.dropHosted(id)
 			delete(n.leases, id)
 			delete(n.serveLoad, id)
 			delete(n.proofs, id)

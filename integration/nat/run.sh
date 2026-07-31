@@ -82,8 +82,29 @@ if [ "${splices_after:-0}" -le "${splices_before:-0}" ]; then
   echo "FAIL: no relay splice observed — the fetch did not cross NAT (topology is not exercising the relay path)"; pass=0
 fi
 
+# #69: prove content survives a restart. Restart the WHOLE swarm (stores
+# persist across `restart`, but every in-memory provider record is lost), then
+# re-fetch. This only works if each holder reloads its persisted proofs and
+# re-announces its coded shards under the right column key — otherwise the
+# disk-full-of-content is invisible.
+if [ "${RESTART:-0}" = 1 ] && [ "$pass" = 1 ]; then
+  echo "== #69: restart the whole swarm (stores persist, provider records don't), then re-fetch =="
+  dc restart >/dev/null 2>&1
+  for _ in $(seq 1 60); do
+    dc logs --since 2m nodeA 2>&1 | grep -q "relay-via: registered" && break
+    sleep 1
+  done
+  sleep 6   # let AnnounceHeld (after re-bootstrap) re-plant provider records
+  reloaded=$(dc exec -T nodeA sh -c 'grep -oE "reloaded storage proofs.*" /data/debug.log 2>/dev/null | tail -1' | tr -d '\r')
+  echo "  nodeA on restart: ${reloaded:-<no reload line>}"
+  dc exec -T nodeB sh -c "silt swarm get '$LINK' -o /tmp/out2.bin -peers '$PEERS' -registry '$REG' && sha256sum /tmp/out2.bin | cut -d' ' -f1" >/tmp/nat_get2.txt 2>&1
+  GOT2=$(grep -oE '^[a-f0-9]{64}' /tmp/nat_get2.txt | tail -1)
+  echo "  re-fetch after restart got: ${GOT2:-<none>}"
+  [ "$WANT" = "$GOT2" ] || { echo "FAIL: content undiscoverable after restart — reprovide broken (#69)"; cat /tmp/nat_get2.txt; pass=0; }
+fi
+
 if [ "$pass" = 1 ]; then
-  echo "RESULT: PASS ✅  cross-NAT publish→fetch bit-perfect, via the relay"
+  echo "RESULT: PASS ✅  cross-NAT publish→fetch bit-perfect, via the relay${RESTART:+ (survived a full-swarm restart)}"
 else
   echo "RESULT: FAIL ❌"
 fi

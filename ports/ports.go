@@ -87,6 +87,23 @@ type CapacityReporter interface {
 	Capacity() (used, total int64)
 }
 
+// ProofStore persists the StorageProof that arrived with each hosted chunk.
+// Provider records live only in peers' memories (they die with a process), so
+// a restarting daemon must re-announce everything it holds — but a coded
+// shard is announced under its COLUMN key hash(root‖column), which it can only
+// compute from that shard's proof. Keeping proofs in memory meant a restart
+// re-announced coded shards under the wrong key, leaving a disk full of
+// content undiscoverable (#69). Persisting them alongside the chunks lets the
+// re-announce reconstruct the right keys — and lets the node still answer
+// storage-audit challenges after a restart. A nil ProofStore means
+// no persistence (memory-only, fine for sims and ephemeral clients).
+type ProofStore interface {
+	Put(id ChunkID, p StorageProof) error
+	// Load returns every persisted proof, for repopulating on startup.
+	Load() (map[ChunkID]StorageProof, error)
+	Delete(id ChunkID) error
+}
+
 // Entry is what gets published to the global registry: the Merkle root
 // that names a file, plus enough metadata to begin retrieval. The chunk
 // IDs of the serialized manifest are included because the root alone
