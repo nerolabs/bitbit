@@ -8,6 +8,19 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Added
+- **Automated cross-NAT integration harness** (`integration/nat/`, and a
+  `nat-integration` CI job): stands up two genuinely-NATed daemons plus a
+  public relay in real container networks (real kernel NAT via iptables
+  MASQUERADE, real TLS over real sockets), publishes from behind one NAT and
+  fetches from behind another, and asserts the bytes come back bit-perfect
+  having crossed the relay (verified by counting relay splices). This is the
+  automatable replacement for the manual two-machine (Mac A ↔ Mac B) rig — the
+  NAT/relay path that the in-process sim and flat-localhost e2e can't reach —
+  and the seed harness for hole-punching (#27) and restart/re-provide (#69)
+  scenarios. Runs on one host (CI, a dev box, or Docker Desktop); no second
+  machine.
+
 ### Fixed
 - **Fetches survive a saturated relay** (#65): once the public rendezvous
   node hits its capacity cap, every byte to a NATed provider funnels through

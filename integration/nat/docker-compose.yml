@@ -1,0 +1,121 @@
+# A real multi-NAT "internet" on one host, in containers:
+#
+#   lanA (internal) ──[natA: MASQUERADE]──┐
+#     └─ nodeA (NATed, un-dialable)        │
+#                                          ├─ public ── relay (+ registry)
+#   lanB (internal) ──[natB: MASQUERADE]──┘
+#     └─ nodeB (NATed, un-dialable)
+#
+# nodeA and nodeB sit on separate internal LANs with no route to each other,
+# each behind its own NAT. The only way they meet is through the relay on the
+# public segment — exactly the cross-NAT condition the Mac-A↔Mac-B rig tested
+# by hand. run.sh drives publish-from-A / fetch-from-B and asserts bit-perfect.
+#
+# The relay's NodeID isn't known until it boots, so run.sh starts the relay
+# first, reads its id from the logs, exports RELAY_ID, then starts the nodes.
+
+networks:
+  public:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.10.0.0/24 }]
+  lanA:
+    driver: bridge
+    internal: true          # no route out except through natA
+    ipam:
+      config: [{ subnet: 10.20.0.0/24 }]
+  lanB:
+    driver: bridge
+    internal: true
+    ipam:
+      config: [{ subnet: 10.30.0.0/24 }]
+
+services:
+  # Public rendezvous: relay + chain-backed registry. Reachable by both LANs.
+  relay:
+    image: silt-nat
+    command:
+      - silt
+      - daemon
+      - -id-seed=1                    # deterministic NodeID across runs (int seed)
+      - -listen=0.0.0.0:4001
+      - -relay=0.0.0.0:4002
+      - -serve-registry=0.0.0.0:4003
+      - -advertise=10.10.0.10:4001
+      - -store=/data
+      - -capacity=1        # relay+registry only: refuse storage so content lives on nodeA, forcing the fetch to splice
+      - -mdns=false
+      - -debug
+    networks:
+      public:
+        ipv4_address: 10.10.0.10
+
+  natA:
+    image: silt-nat
+    entrypoint: ["natgw.sh"]
+    environment:
+      LAN_SUBNET: 10.20.0.0/24
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      public:
+        ipv4_address: 10.10.0.11
+      lanA:
+        ipv4_address: 10.20.0.2
+
+  natB:
+    image: silt-nat
+    entrypoint: ["natgw.sh"]
+    environment:
+      LAN_SUBNET: 10.30.0.0/24
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      public:
+        ipv4_address: 10.10.0.12
+      lanB:
+        ipv4_address: 10.30.0.2
+
+  nodeA:
+    image: silt-nat
+    entrypoint: ["node.sh"]
+    environment:
+      GATEWAY: 10.20.0.2
+    cap_add: [NET_ADMIN]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=5G
+      - -mdns=false
+      - -debug
+      - -bootstrap=${RELAY_ID:-unset}@10.10.0.10:4001
+      - -relay-via=${RELAY_ID:-unset}@10.10.0.10:4002
+      - -registry=${RELAY_ID:-unset}@https://10.10.0.10:4003
+    networks:
+      lanA:
+        ipv4_address: 10.20.0.100
+
+  nodeB:
+    image: silt-nat
+    entrypoint: ["node.sh"]
+    environment:
+      GATEWAY: 10.30.0.2
+    cap_add: [NET_ADMIN]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=1        # the NATed fetcher vantage (holds nothing, like Mac B)
+      - -mdns=false
+      - -debug
+      - -bootstrap=${RELAY_ID:-unset}@10.10.0.10:4001
+      - -relay-via=${RELAY_ID:-unset}@10.10.0.10:4002
+      - -registry=${RELAY_ID:-unset}@https://10.10.0.10:4003
+    networks:
+      lanB:
+        ipv4_address: 10.30.0.100
