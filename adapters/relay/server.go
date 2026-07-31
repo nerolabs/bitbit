@@ -17,17 +17,23 @@ import (
 // "rate-capped, opt-in" guardrails from the cross-network design, not a
 // real abuse story (that's flagged for launch).
 type Config struct {
-	MaxSessions     int   // concurrent splices across all peers (default 64)
-	PerPeerSessions int   // concurrent splices per registered target (default 8)
+	MaxSessions     int   // concurrent splices across all peers (default 128)
+	PerPeerSessions int   // concurrent splices per registered target (default 16)
 	MaxSessionBytes int64 // per-direction byte cap per splice (default 1 GiB)
 }
 
 func (c Config) withDefaults() Config {
 	if c.MaxSessions == 0 {
-		c.MaxSessions = 64
+		// Splices are short-lived (a request frame and its reply), so the cap
+		// bounds *concurrent* fan-out, not total traffic. The original 64/8
+		// throttled a single NATed target to 8 concurrent exchanges, which
+		// saturated under a conc-10 publish/fetch sweep (#65); 128/16 gives a
+		// rendezvous node realistic headroom while staying a bounded,
+		// operator-tunable cost (each splice is still byte-capped below).
+		c.MaxSessions = 128
 	}
 	if c.PerPeerSessions == 0 {
-		c.PerPeerSessions = 8
+		c.PerPeerSessions = 16
 	}
 	if c.MaxSessionBytes == 0 {
 		c.MaxSessionBytes = 1 << 30

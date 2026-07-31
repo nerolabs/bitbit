@@ -321,34 +321,58 @@ func (n *Node) resolveProviders(id ports.ChunkID, done func([]ports.NodeID)) {
 // store, trying them in order and hash-verifying every byte before it is
 // kept (a provider serving garbage is just skipped). Reports whether the
 // chunk is now held. Shared by per-chunk and per-column fetch.
+//
+// A whole sweep of the provider set can fail *transiently* rather than
+// because nobody has the chunk: once the public rendezvous node caps out,
+// every byte to a NATed provider funnels through the relay, whose per-peer
+// splice slots saturate under concurrent fan-out and return "relay at
+// capacity" (#65). Those slots free within moments, so a backed-off re-sweep
+// usually succeeds — the fetch-side analogue of the #63 placement retry.
+// We re-sweep only when at least one provider failed with a transport error
+// (timeout / relay refusal); a sweep where every provider cleanly answered
+// "don't have it" is a real miss and retrying it would just burn time.
 func (n *Node) fetchFrom(id ports.ChunkID, provs []ports.NodeID, done func(bool)) {
-	if ok, _ := n.store.Has(bg(), id); ok {
-		done(true)
-		return
-	}
-	var try func(i int)
-	try = func(i int) {
-		if i >= len(provs) {
-			done(false)
+	attempt := 0
+	var sweep func()
+	sweep = func() {
+		if ok, _ := n.store.Has(bg(), id); ok {
+			done(true)
 			return
 		}
-		if provs[i] == n.id {
-			try(i + 1)
-			return
-		}
-		n.request(provs[i], ports.Message{Kind: ports.MsgFetchChunk, ChunkID: id},
-			func(resp ports.Message, err error) {
-				if err == nil && resp.Found {
-					c := ports.Chunk{ID: id, Data: resp.Data}
-					if c.Verify() && n.store.Put(bg(), c) == nil { // a node that trusts is a bug
-						done(true)
-						return
-					}
+		transient := false
+		var try func(i int)
+		try = func(i int) {
+			if i >= len(provs) {
+				attempt++
+				if transient && attempt < n.cfg.FetchAttempts {
+					n.clock.AfterFunc(ports.Duration(attempt)*n.cfg.FetchBackoff, sweep)
+					return
 				}
+				done(false)
+				return
+			}
+			if provs[i] == n.id {
 				try(i + 1)
-			})
+				return
+			}
+			n.request(provs[i], ports.Message{Kind: ports.MsgFetchChunk, ChunkID: id},
+				func(resp ports.Message, err error) {
+					if err == nil && resp.Found {
+						c := ports.Chunk{ID: id, Data: resp.Data}
+						if c.Verify() && n.store.Put(bg(), c) == nil { // a node that trusts is a bug
+							done(true)
+							return
+						}
+					}
+					if err != nil {
+						transient = true // timeout or relay-at-capacity: worth a re-sweep
+					}
+					try(i + 1)
+				})
+		}
+		try(0)
 	}
-	try(0)
+	sweep()
 }
 
 // FetchChunk gets one chunk into the local store, resolving its providers

@@ -55,6 +55,14 @@ type Config struct {
 	// spans a fresh outbound dial + handshake on the helper's side, so it is
 	// deliberately looser than RequestTimeout.
 	ReachabilityTimeout ports.Duration
+	// FetchAttempts is how many times a chunk fetch re-sweeps its providers
+	// when every provider failed *transiently* (a timeout or a relay-at-
+	// capacity refusal, not a clean "don't have it"): the post-cap relay path
+	// saturates under concurrent fan-out (#65) and its freed slots make a
+	// backed-off retry succeed. FetchBackoff is the base delay, grown
+	// linearly per attempt. FetchAttempts <= 1 disables the retry.
+	FetchAttempts int
+	FetchBackoff  ports.Duration
 }
 
 func DefaultConfig() Config {
@@ -70,6 +78,8 @@ func DefaultConfig() Config {
 		FanoutReplicas: 2,
 
 		ReachabilityTimeout: 3 * ports.Second,
+		FetchAttempts:       3,
+		FetchBackoff:        200 * ports.Millisecond,
 	}
 }
 

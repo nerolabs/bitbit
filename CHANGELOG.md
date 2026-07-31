@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Fetches survive a saturated relay** (#65): once the public rendezvous
+  node hits its capacity cap, every byte to a NATed provider funnels through
+  the relay, whose per-peer splice slots saturate under concurrent fan-out
+  and return "relay at capacity" — and the fetch path had **no retry**, so a
+  transiently-refused chunk was reported unreachable (the tail-of-sweep
+  fetch failures seen from a second network). A chunk fetch now **re-sweeps
+  its providers with a backoff** when every provider failed *transiently* (a
+  timeout or relay refusal, not a clean "don't have it") — the freed slots
+  make the retry succeed — the fetch-side analogue of the #63 placement
+  retry (`FetchAttempts`/`FetchBackoff`, default 3× / 200 ms). A clean miss
+  (nobody has the chunk) still returns after a single pass. The relay's
+  concurrency defaults are also raised from **64/8 to 128/16**
+  (global/per-peer): splices are short-lived, so this is realistic headroom
+  for a rendezvous node while staying a bounded, operator-tunable cost (each
+  splice is still byte-capped). Remaining, tracked in #65: register-after-
+  distribute (a loud placement failure still leaves a dangling registry
+  entry), and hole-punching (the structural fix that moves bulk bytes off
+  the relay entirely).
 - **Publish no longer returns a link for a file the swarm can't rebuild**
   (#64, the data-shard twin of #60): placement verified that *manifest*
   chunks landed durably, but **data and parity shards were placed
