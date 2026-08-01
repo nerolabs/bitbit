@@ -25,8 +25,17 @@ ARCH=$(go env GOARCH)
 ( cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -o integration/nat/probe.bin ./integration/nat/probe )
 docker build -q -t silt-nat . >/dev/null
 
-echo "== bring up topology =="
-dc up -d relay natA natB nodeA nodeB
+echo "== bring up topology (relay first, discover its id, then the NATed nodes) =="
+dc up -d relay natA natB
+RELAY_ID=""
+for _ in $(seq 1 30); do
+  RELAY_ID=$(dc logs relay 2>&1 | grep -oE 'peer: [a-f0-9]{64}' | head -1 | awk '{print $2}')
+  [ -n "$RELAY_ID" ] && break
+  sleep 1
+done
+[ -n "$RELAY_ID" ] || { echo "FAIL: relay id not found"; exit 1; }
+export RELAY_ID
+dc up -d nodeA nodeB
 sleep 4
 
 for c in relay nodeA nodeB; do
