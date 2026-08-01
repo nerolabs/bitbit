@@ -63,8 +63,9 @@ type Server struct {
 // multiple goroutines (pongs from its reader, incoming notices from
 // connectors), hence the write lock.
 type control struct {
-	conn net.Conn
-	wmu  sync.Mutex
+	conn     net.Conn
+	wmu      sync.Mutex
+	observed string // the registrant's public host:port as we saw it (#27)
 }
 
 func (c *control) write(fr ctrl) error {
@@ -168,18 +169,18 @@ func (s *Server) handle(conn *tls.Conn) {
 // re-register from the same identity replaces the old conn (the client
 // reconnected before the idle reaper noticed).
 func (s *Server) serveControl(from ports.NodeID, conn *tls.Conn) {
-	c := &control{conn: conn}
+	// The remote address is the registrant's NAT mapping as we see it — hand
+	// it back (STUN-style) so a NATed node learns its own public endpoint, and
+	// keep it to hand a hole-punch initiator (#27).
+	c := &control{conn: conn, observed: conn.RemoteAddr().String()}
 	s.mu.Lock()
 	if old := s.regs[from]; old != nil {
 		old.conn.Close()
 	}
 	s.regs[from] = c
 	s.mu.Unlock()
-	// The remote address is the registrant's NAT mapping as we see it — hand
-	// it back (STUN-style) so a NATed node learns its own public endpoint (#27).
-	observed := conn.RemoteAddr().String()
-	s.logf(ports.LogInfo, "relay registered", "peer", from, "observed", observed)
-	if c.write(ctrl{Op: "ok", Addr: observed}) != nil {
+	s.logf(ports.LogInfo, "relay registered", "peer", from, "observed", c.observed)
+	if c.write(ctrl{Op: "ok", Addr: c.observed}) != nil {
 		s.unregister(from, c)
 		return
 	}
@@ -190,13 +191,39 @@ func (s *Server) serveControl(from ports.NodeID, conn *tls.Conn) {
 			s.unregister(from, c)
 			return
 		}
-		if fr.Op == "ping" {
+		switch fr.Op {
+		case "ping":
 			if c.write(ctrl{Op: "pong"}) != nil {
 				s.unregister(from, c)
 				return
 			}
+		case "punch":
+			s.coordinatePunch(from, c, fr)
 		}
 	}
+}
+
+// coordinatePunch relays a hole-punch request from `from` for the target in fr:
+// it tells each registered peer the OTHER's observed endpoint, so both dial it
+// at once (#27). The relay only swaps addresses — it forwards no bytes for the
+// direct path. If the target isn't registered here, nothing happens and the
+// requester keeps using the relay.
+func (s *Server) coordinatePunch(from ports.NodeID, cFrom *control, fr ctrl) {
+	if len(fr.Target) != 32 {
+		return
+	}
+	var target ports.NodeID
+	copy(target[:], fr.Target)
+	s.mu.Lock()
+	cTarget := s.regs[target]
+	s.mu.Unlock()
+	if cTarget == nil || target == from {
+		return
+	}
+	// tell the target to punch the requester, and the requester to punch the target
+	_ = cTarget.write(ctrl{Op: "punch", Target: from[:], Addr: cFrom.observed})
+	_ = cFrom.write(ctrl{Op: "punch", Target: target[:], Addr: cTarget.observed})
+	s.logf(ports.LogInfo, "relay punch coordinated", "a", from, "b", target)
 }
 
 func (s *Server) unregister(from ports.NodeID, c *control) {

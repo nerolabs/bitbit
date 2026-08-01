@@ -1,0 +1,18 @@
+# Overlay for holepunch.sh: nodeB runs as a CARETAKER of a root whose content
+# lives on nodeA. Its repair loop probes/fetches the shards from nodeA — real
+# daemon-to-daemon traffic through the relay — which is what triggers the
+# relay->direct hole-punch (#27). CARE_LINK is filled in after publishing.
+services:
+  nodeB:
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=1
+      - -mdns=false
+      - -debug
+      - -bootstrap=${RELAY_ID:-unset}@10.10.0.10:4001
+      - -relay-via=${RELAY_ID:-unset}@10.10.0.10:4002
+      - -registry=${RELAY_ID:-unset}@https://10.10.0.10:4003
+      - -care=${CARE_LINK:-none}

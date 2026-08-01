@@ -101,6 +101,13 @@ type Transport struct {
 	// exactly the events that are invisible-but-fatal across real
 	// networks. nil = off.
 	lg ports.Logger
+
+	// requestPunch asks our relay to coordinate a hole-punch with a peer we
+	// currently reach through the relay (wired to relay.Client.RequestPunch by
+	// the daemon; nil if we run no relay client). punchedAt rate-limits those
+	// requests per peer so a busy relay path doesn't spam them (#27).
+	requestPunch func(ports.NodeID)
+	punchedAt    map[ports.NodeID]time.Time
 }
 
 var _ ports.Transport = (*Transport)(nil)
@@ -171,6 +178,7 @@ func New(loop *eventloop.Loop, ident *identity.Identity, listenAddr string) (*Tr
 		peers:      make(map[ports.NodeID]addrPair),
 		relays:     make(map[ports.NodeID]string),
 		conns:      make(map[ports.NodeID]*peerConn),
+		punchedAt:  make(map[ports.NodeID]time.Time),
 	}
 	go t.acceptLoop()
 	return t, nil
@@ -429,6 +437,12 @@ func (t *Transport) deliver(to ports.NodeID, pair addrPair, frame []byte, freshD
 			return
 		}
 		go t.readLoop(conn)
+		if addr == pair.relay && addr != "" {
+			// We reached the peer through the relay; try to upgrade to a direct
+			// link so the bulk traffic leaves the relay (#27). Harmless if it
+			// fails — this relay conn keeps serving.
+			t.maybeRequestPunch(to)
+		}
 		return
 	}
 }

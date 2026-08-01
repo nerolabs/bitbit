@@ -64,6 +64,66 @@ func TestRegisterReportsObservedAddr(t *testing.T) {
 	}
 }
 
+// TestPunchCoordination is the #27 Phase-3 protocol check: when a registered
+// peer requests a hole-punch with another registered peer, the relay tells
+// EACH the OTHER's observed endpoint (and only that — it forwards no bytes for
+// the direct path). Each client's onPunch fires with the peer id, an address
+// to dial, and its own reusable local port.
+func TestPunchCoordination(t *testing.T) {
+	identR, identA, identB := identity.FromSeed(30), identity.FromSeed(31), identity.FromSeed(32)
+	srv, err := Serve("127.0.0.1:0", identR, Config{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	type punch struct {
+		peer ports.NodeID
+		addr string
+		port int
+	}
+	gotA := make(chan punch, 1)
+	gotB := make(chan punch, 1)
+
+	clA, err := NewClient(identA, identR.NodeID(), srv.Addr(), func(net.Conn) {}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clA.SetOnPunch(func(peer ports.NodeID, addr string, port int) { gotA <- punch{peer, addr, port} })
+	clB, err := NewClient(identB, identR.NodeID(), srv.Addr(), func(net.Conn) {}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clB.SetOnPunch(func(peer ports.NodeID, addr string, port int) { gotB <- punch{peer, addr, port} })
+	startClient(t, clA)
+	startClient(t, clB)
+
+	clA.RequestPunch(identB.NodeID())
+
+	select {
+	case p := <-gotB:
+		if p.peer != identA.NodeID() {
+			t.Fatalf("B told to punch the wrong peer")
+		}
+		if _, _, err := net.SplitHostPort(p.addr); err != nil {
+			t.Fatalf("B punch addr %q is not host:port", p.addr)
+		}
+		if p.port == 0 {
+			t.Fatalf("B punch has no local port to reuse")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("B never received the punch signal")
+	}
+	select {
+	case p := <-gotA:
+		if p.peer != identB.NodeID() {
+			t.Fatalf("A told to punch the wrong peer")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("A never received the punch signal")
+	}
+}
+
 func TestSpliceRoundTrip(t *testing.T) {
 	identR, identB, identS := identity.FromSeed(1), identity.FromSeed(2), identity.FromSeed(3)
 	srv, err := Serve("127.0.0.1:0", identR, Config{}, nil)
