@@ -93,6 +93,20 @@ jobs:
         # swarm and re-fetches, gating the #69 reprovide-on-restart fix.
         run: RESTART=1 ./integration/nat/run.sh
 
+  nat-holepunch:
+    name: Integration — NAT hole-punch (cone punches, symmetric falls back)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Cone NAT is punchable (direct connection through both NATs)
+        run: ./integration/nat/probe.sh
+      - name: Symmetric NAT defeats the punch (relay fallback is genuinely needed)
+        run: NAT_MODE=symmetric ./integration/nat/probe.sh
+
   website:
     name: Website — changelog + links
     runs-on: ubuntu-latest
