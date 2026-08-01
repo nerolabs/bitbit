@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Security
+- **Launch-window training wheels** (#79, risk 15): a young network is the
+  easiest to capture — a Sybil quorum is cheap before the network has
+  decentralized. A validator set may now declare **anchors** (`-anchors`,
+  `-anchor-quorum`): while the network is immature, a commit ALSO requires
+  anchor sign-off, so a Sybil quorum cannot write to a young registry. The
+  requirement **sheds mechanically** once `-mature-validators` distinct
+  non-anchor validators have attested a committed block — measured
+  decentralization, never a flag day. Because attesting requires earned bond
+  standing (#78), the maturity metric can't be cheaply inflated by Sybils.
+  Anchors are plural (a threshold; no single anchor is load-bearing, cf. R4)
+  and their power is transparent, on-chain, and time-limited — they can never
+  gate a *mature* network. Off by default (empty anchors). Proven for the
+  OUTCOME at unit (`TestTrainingWheelsGateYoungNetworkThenShed`) and sim
+  (`TestTrainingWheelsShedThroughTheNodeLoop` — the shed through the real
+  propose/attest/commit loop); e2e deliberately skipped and recorded (the shed
+  is deterministic chain logic covered at unit+sim, and the `-anchors` wiring
+  is confirmed by a daemon smoke check — a bespoke multi-daemon shed e2e is
+  high-cost/low-value).
 - **Identity costs storage: bond-gated consensus standing** (#78): reputation —
   the number the chain gates writes on — is no longer dominated by
   self-reported serving (which two colluding nodes could wash-mint for free,
