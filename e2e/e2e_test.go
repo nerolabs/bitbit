@@ -150,6 +150,48 @@ func runClient(t *testing.T, args ...string) string {
 	return stdout.String()
 }
 
+// runClientAllowErr runs a one-shot client and returns its combined output
+// and exit error (nil on success) instead of failing the test — for
+// asserting a command MUST fail (e.g. a publish the safe defaults refuse).
+func runClientAllowErr(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	cmd := exec.Command(siltBin, args...)
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err := cmd.Run()
+	return out.String(), err
+}
+
+// TestDefaultsRefuseRubberStampCommit is the OUTCOME test for the safe
+// consensus defaults. Use case: an operator runs a validator with DEFAULT
+// flags (no -quorum / -min-rep). Outcome required: a lone, unearned node must
+// NOT be able to rubber-stamp the registry — the publish's commit is refused.
+// (TestPublishCommitFetchOverTCP is the positive control: with the explicit
+// -quorum 0 trusted-deployment setting, the same publish DOES commit.)
+func TestDefaultsRefuseRubberStampCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	a := startDaemon(t, "A",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-serve-registry", "127.0.0.1:0", "-validator",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "2001")
+	peer := a.waitFor(t, rePeer, 20*time.Second)
+	idA, addrA := peer[1], peer[2]
+	regRef := a.waitFor(t, reRegistry, 20*time.Second)[1]
+	bootstrapA := idA + "@" + addrA
+
+	src := filepath.Join(t.TempDir(), "payload.bin")
+	if err := os.WriteFile(src, make([]byte, 64<<10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runClientAllowErr(t, "swarm", "add", src,
+		"-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+	if err == nil {
+		t.Fatalf("safe defaults must REFUSE a lone/unearned commit, but the publish succeeded:\n%s", out)
+	}
+}
+
 // TestPublishCommitFetchOverTCP is the whole real-network path in one
 // test: three daemons in three processes, a chain-backed registry over
 // pinned HTTPS, a publish that must reach quorum and commit a block, and
