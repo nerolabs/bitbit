@@ -155,8 +155,11 @@ type Node struct {
 	// kept that), but it cannot compute the nonce tag, which is the
 	// whole point of the tag. Exists so audits have someone to catch.
 	liar bool
-	// proofs holds the storage proof for each chunk this node hosts.
-	proofs map[ports.ChunkID]ports.StorageProof
+	// proofs holds the storage proof for each chunk this node hosts. It is
+	// mirrored to proofStore (when set) so a restart can re-announce coded
+	// shards under the right column key and still answer audits (#69).
+	proofs     map[ports.ChunkID]ports.StorageProof
+	proofStore ports.ProofStore // nil = memory-only (sims, ephemeral clients)
 
 	// capacity gossip: capRep is the store's reporter (nil if the store
 	// is unbounded); peerCaps accumulates what peers report about
@@ -216,6 +219,41 @@ func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
 
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
+
+// SetProofStore attaches durable proof persistence (#69); call before
+// LoadProofs and bootstrap. nil keeps proofs memory-only (sims, clients).
+func (n *Node) SetProofStore(ps ports.ProofStore) { n.proofStore = ps }
+
+// LoadProofs repopulates the in-memory proof map from the proof store, so a
+// restarted node re-announces its held coded shards under the correct column
+// key (AnnounceHeld reads n.proofs) instead of their bare ids — the
+// difference between a disk full of content being discoverable or invisible
+// (#69). No-op without a proof store. Call after New, before AnnounceHeld.
+func (n *Node) LoadProofs() {
+	if n.proofStore == nil {
+		return
+	}
+	m, err := n.proofStore.Load()
+	if err != nil {
+		n.logf(ports.LogWarn, "proof reload failed", "err", err)
+	}
+	for id, p := range m {
+		n.proofs[id] = p
+	}
+	if len(m) > 0 {
+		n.logf(ports.LogInfo, "reloaded storage proofs", "count", len(m))
+	}
+}
+
+// dropHosted removes a chunk this node hosts, keeping the proof map and store
+// in sync so a delete never leaves an orphan proof behind.
+func (n *Node) dropHosted(id ports.ChunkID) {
+	n.store.Delete(bg(), id)
+	delete(n.proofs, id)
+	if n.proofStore != nil {
+		n.proofStore.Delete(id)
+	}
+}
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
@@ -386,6 +424,11 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 				n.provs.Add(key, n.id) // we are now a provider
 				if msg.Proof != nil {
 					n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
+					if n.proofStore != nil { // persist so a restart re-announces under the right key (#69)
+						if err := n.proofStore.Put(msg.ChunkID, *msg.Proof); err != nil {
+							n.logf(ports.LogWarn, "proof persist failed", "chunk", msg.ChunkID, "err", err)
+						}
+					}
 				}
 				if msg.Lease {
 					n.takeLease(msg.ChunkID) // demand-driven cache copy: hold, but let it expire

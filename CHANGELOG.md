@@ -22,6 +22,19 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   machine.
 
 ### Fixed
+- **A restarted daemon's content stays discoverable** (#69, found in the #65
+  field test): provider records live only in peers' memory and die with the
+  process, so a daemon re-announces everything on its disk at startup
+  (`AnnounceHeld`) — but a coded shard must be announced under its *column
+  key* `hash(root‖column)`, where readers look, and that key is derived from
+  the shard's storage proof. Proofs were kept only in memory, so after a
+  restart the re-announce fell back to the bare chunk id and a disk full of
+  intact content was invisible until it happened to be re-hosted. Storage
+  proofs are now **persisted alongside the chunks** (`adapters/diskproofs`) and
+  reloaded on startup, so the re-announce lands on the right key again — and
+  the node can still answer storage-audit challenges after a restart. The
+  `integration/nat` harness gained a `RESTART=1` scenario that restarts the
+  whole swarm and re-fetches to prove it.
 - **Fetches survive a saturated relay** (#65): once the public rendezvous
   node hits its capacity cap, every byte to a NATed provider funnels through
   the relay, whose per-peer splice slots saturate under concurrent fan-out

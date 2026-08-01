@@ -399,7 +399,7 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 		cleanup := func() {
 			for _, r := range stripeRefs {
 				if !heldBefore[r.id] { // keep what we host; drop only fetched copies
-					n.store.Delete(bg(), r.id)
+					n.dropHosted(r.id)
 				}
 			}
 			done()

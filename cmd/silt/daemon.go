@@ -15,6 +15,7 @@ import (
 	"github.com/nerolabs/silt/adapters/chainhost"
 	"github.com/nerolabs/silt/adapters/chainstore"
 	"github.com/nerolabs/silt/adapters/discovery"
+	"github.com/nerolabs/silt/adapters/diskproofs"
 	"github.com/nerolabs/silt/adapters/diskstore"
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/fileregistry"
@@ -152,6 +153,16 @@ func cmdDaemon(args []string) error {
 		if lg != nil {
 			lg.Log(ports.LogInfo, event, kv...)
 		}
+	}
+	// #69: persist each hosted chunk's storage proof so a restart re-announces
+	// coded shards under the right column key (AnnounceHeld, below, reads the
+	// reloaded proofs) — otherwise a disk full of content is invisible until
+	// re-hosted. Loading now, before bootstrap/announce.
+	if pf, perr := diskproofs.Open(filepath.Join(*storeDir, "proofs")); perr != nil {
+		return perr
+	} else {
+		nd.SetProofStore(pf)
+		nd.LoadProofs()
 	}
 	// obs is lg as a nullable interface (a typed-nil *Sink would pass
 	// the adapters' nil checks and then explode).

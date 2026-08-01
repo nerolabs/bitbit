@@ -59,11 +59,13 @@ docker compose down -v                     # tear down when done
 
 ## Scenarios (this is the seed; more to come)
 
-- **Now:** cross-NAT publish → fetch through the relay (proves the relay path;
-  the automatable form of the #65 fetch-under-load test — raise the fetch
-  concurrency here to exercise the retry against a real saturated relay).
+- **`./run.sh`** — cross-NAT publish → fetch through the relay (proves the
+  relay path; the automatable form of the #65 fetch-under-load test — raise the
+  fetch concurrency here to exercise the retry against a real saturated relay).
+- **`RESTART=1 ./run.sh`** — the #69 test: after the fetch, restart the whole
+  swarm (stores persist, in-memory provider records do not) and re-fetch,
+  proving each holder reloads its persisted proofs and re-announces its coded
+  shards under the right column key.
 - **Next:** hole-punching (#27) — set the gateways to full-cone vs symmetric
   conntrack and assert a *direct* A↔B connection forms (bytes bypass the
   relay) for the punchable cases, and falls back to the relay for symmetric.
-- **Next:** restart → re-provide (#69) — restart a holder and assert its
-  content is still discoverable.

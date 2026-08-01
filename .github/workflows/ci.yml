@@ -82,15 +82,16 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
-      - name: Cross-NAT publish → fetch through the relay
+      - name: Cross-NAT publish → fetch through the relay (+ restart survival)
         # Stands up two NATed daemons + a public relay in real container
         # networks (real kernel NAT via iptables MASQUERADE), publishes from
         # behind NAT A and fetches from behind NAT B, asserting bit-perfect
         # across the relay. This is the automatable replacement for the
         # manual two-machine (Mac A ↔ Mac B) rig — the layer that proves the
         # relay/NAT path, which flat-localhost e2e can't. Docker + compose
-        # are preinstalled on ubuntu-latest.
-        run: ./integration/nat/run.sh
+        # are preinstalled on ubuntu-latest. RESTART=1 also restarts the whole
+        # swarm and re-fetches, gating the #69 reprovide-on-restart fix.
+        run: RESTART=1 ./integration/nat/run.sh
 
   website:
     name: Website — changelog + links
