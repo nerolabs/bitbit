@@ -1,0 +1,10 @@
+# Overlay for probe.sh: the NAT hole-punch probe only needs the containers up
+# with their NAT routes — it runs its own coordinator, not the silt daemons. So
+# replace nodeA/nodeB's daemon command with a keep-alive (node.sh still sets the
+# default route through the gateway first), decoupling the probe from silt
+# daemon startup / RELAY_ID discovery entirely.
+services:
+  nodeA:
+    command: ["sleep", "infinity"]
+  nodeB:
+    command: ["sleep", "infinity"]

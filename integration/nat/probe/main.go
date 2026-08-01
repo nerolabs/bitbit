@@ -14,7 +14,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -117,31 +116,20 @@ func peer(coordAddr, lport, name string) {
 	}
 	fmt.Fprintf(os.Stderr, "peer %s: punching toward %s from :%s\n", name, peerAddr, lport)
 
-	// 2. listen on lport (REUSEPORT) to catch the peer's crossing SYN...
-	lc := net.ListenConfig{Control: reuse}
-	ln, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf(":%s", lport))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "peer listen:", err)
-	}
+	// Pure TCP simultaneous-open: BOTH sides connect() to each other from the
+	// reused local port; the crossing SYNs establish one connection per side.
+	// No separate listener (binding a connecting socket to a listener's port
+	// fails). Retry to keep firing SYNs until they cross.
 	got := make(chan net.Conn, 4)
-	if ln != nil {
-		go func() {
-			for {
-				c, err := ln.Accept()
-				if err != nil {
-					return
-				}
-				got <- c
-			}
-		}()
-	}
-	// 3. ...and dial the peer from lport, retrying to keep firing SYNs.
 	go func() {
-		for i := 0; i < 20; i++ {
+		for i := 0; i < 30; i++ {
 			c, err := dialer.Dial("tcp", peerAddr)
 			if err == nil {
 				got <- c
 				return
+			}
+			if i == 0 || i == 5 {
+				fmt.Fprintf(os.Stderr, "peer %s: dial attempt %d: %v\n", name, i, err)
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
