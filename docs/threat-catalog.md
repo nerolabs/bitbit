@@ -70,7 +70,7 @@ limits operator-configurable with sane defaults.
 - A16 **Relay slot exhaustion / free-CDN abuse** ~ — hold the per-peer splice slots (default raised 8→16, global 64→128 for #65 fan-out), or pump bulk NAT↔NAT bytes on someone else's dime → per-identity slot + byte quotas, throughput timeouts, credit-metering. **Structural relief now BUILT: hole-punching** (#27) upgrades a relay path to a direct connection through cone NAT (proven, CI-gated), so bulk bytes leave the relay entirely — the relay is demoted to rendezvous. Symmetric-NAT peers still relay; per-identity abuse quotas still open.
 
 ## B. Sybil / eclipse (the taproot — top open weakness)
-- B1 **Bulk identity minting** ✗ — free keypairs → the enabler for most of D, and for eclipse/quorum capture. PoW/stake deferred; lean on earned-reputation + training-wheels meanwhile.
+- B1 **Bulk identity minting** ~ — minting keypairs is still free, BUT consensus STANDING now costs challenged, held storage (T1/#82 bond): a fresh identity has no standing until it proves an identity-bound storage bond peers can challenge, so the downstream (D1/D3) is much reduced. PoW/stake on *minting* still deferred; bond is space-lite (in-RAM, not memory-hard) — labeled.
 - B2 **Eclipse a key's neighborhood** ✗ — surround a chunk's key to suppress its provider records (censor discovery of one file).
 - B3 **Size-estimate bias** ~ — skew XOR-density estimate via placed identities (the #43 family; partly fixed for ephemeral clients).
 - B4 **Eclipse of new nodes** ✗ — feed a joining node a poisoned peer set (see discovery D-layer, F14).
@@ -83,9 +83,9 @@ limits operator-configurable with sane defaults.
 - C5 **Registry poisoning** ~ — spam dangling entries to bloat/mislead (A11).
 
 ## D. Economic / incentive
-- D1 **Wash-serving / self-dealing** ✗ — Sybils "serve" each other to mint credits+reputation with no real work. Core weakness of a self-reported economy → serving must be witnessed/challenged.
+- D1 **Wash-serving / self-dealing** ~ — wash-serving still moves the BALANCE economy (observability), but it no longer buys STANDING: reputation dropped self-reported `servedBytes` and is built on challenged held storage + audits (T1/#82). So sybils can't wash-serve their way to a quorum. (Witnessed/challenged *serving* for the balance side is still future.)
 - D2 **Credit-farming → spam funding** ✗ — farmed credits fund publish-spam/disk-fill (feeds A9/A10).
-- D3 **Reputation collusion → quorum capture** ✗ — accrue reputation across Sybils until the set forms/blocks a validator quorum → false or vetoed revocations (censorship). The economy→consensus bridge; scariest.
+- D3 **Reputation collusion → quorum capture** ~ — accruing standing across sybils now costs N real storage bonds (T1/#82), not free wash-serving; and on a young network commits also need anchor sign-off that sheds on measured decentralization (T2/#83 training wheels). Not eliminated (a well-resourced adversary can buy disk), but no longer cheap — the economy→consensus bridge is priced.
 - D4 **Audit gaming / "storage theater"** ~ — pass challenges from briefly-borrowed shards, or precompute if predictable → reputation without durable storage → unpredictable, unborrowable challenges.
 - D5 **Withholding / trickle-serving** ✗ — pledge + accept placements, then serve at a trickle → reputation must weight bytes *actually served*, challenged.
 - D6 **Selective serving / griefing** ✗ — serve everyone except a target → censorship below the revocation layer.
@@ -100,7 +100,7 @@ limits operator-configurable with sane defaults.
 - E5 **Revocation-as-weapon** ~ — quorum revokes lawful content (auditable, but abuse remains; adoption-bound).
 
 ## F. Privacy / deanonymization (beyond the doc'd traffic-analysis)
-- F1 **Publisher identity on-chain** ? → likely ✗ — the registry/chain entry carries a `publisher` NodeID (seen in `pipeline.go` and live `registry.jsonl`). Every publication is permanently linked to a keypair; an observer maps publisher → all their roots. May be intended (reputation needs attribution) but is an un-obvious surface needing an explicit decision + doc line.
+- F1 **Publisher identity on-chain** ✓ — CLOSED (T3/#84). A publish is authorized by a quorum-issued **blind publish token** (a serial blind-signed by k distinct validators), so a committed entry carries the token and NO Publisher NodeID — authorship is unlinked from the durable key. Residuals (labeled): a colluding validator set narrows the anonymity *set* to same-epoch requesters of the same subset (use a canonical set); the RSA issuer key is in-RAM (cross-restart persistence + on-chain issuer registration are follow-ups).
 - F2 **Access-pattern correlation** ✗ — a participating node sees which roots you fetch/hold over time.
 - F3 **Timing/size fingerprinting** ✗ — chunk sizes + timing fingerprint files even encrypted (no padding).
 - F4 **IP↔NodeID persistence** ✗ — reputation needs a long-lived identity; long-lived identity is persistent trackability. A genuine tension.

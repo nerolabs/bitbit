@@ -48,6 +48,14 @@ publishes the software **runs no part of the network** — see
   **not** an anonymity system: a network observer, or a participating
   node, can see which opaque hashes move where and infer traffic
   patterns. Content is encrypted; *access patterns are not hidden.*
+- **Authorship is unlinked from identity (who-writes), even though access
+  is not (who-reads).** A publish is authorized by a quorum-issued **blind
+  publish token** (T3/#84), so a committed chain entry carries the token, not a
+  Publisher NodeID — an observer can no longer map a durable reputation key to
+  every root it published. The fee/anti-spam economics are preserved (the
+  publisher pays with its durable identity to *acquire* the token; the issuers
+  never see the serial). Residual: a colluding validator set narrows the
+  anonymity *set*, and this does not hide *access* patterns.
 - **The majority of reputation-bearing validators are assumed honest.**
   The chain is a reputation quorum, **not** a Byzantine-fault-tolerant
   consensus (see below).
@@ -68,14 +76,19 @@ proof-of-data-possession / proof-of-space. Hardening this is on the
 roadmap.
 
 ### Sybil / eclipse attacker
-Creates many node IDs to surround a key in XOR space. **Not hardened.**
-An attacker who eclipses a chunk's neighborhood could suppress its
-provider records (censor discovery of a specific file), or bias the
-network-size estimate (which is derived from local XOR density). Node IDs
-are `SHA-256(pubkey)`, so IDs aren't free to *target* a specific key, but
-they are free to *mint in bulk*. There is no proof-of-work, stake, or
-identity cost on joining today. **This is the weakness we most want
-review on.**
+Creates many node IDs to surround a key in XOR space. **DHT eclipse is still
+unhardened** — an attacker who eclipses a chunk's neighborhood could suppress its
+provider records (censor discovery of a specific file), or bias the network-size
+estimate. Node IDs are `SHA-256(pubkey)`: free to *mint in bulk*, not free to
+*target* a specific key. **What changed (2026-08): consensus STANDING is no
+longer free.** A validator earns write standing only by proving an
+identity-bound **storage bond** that peers challenge over the wire (T1/#82), so
+N sybils cost N real bonds on N disks, and a young network additionally requires
+**anchor sign-off that sheds on measured decentralization** (T2/#83 training
+wheels). So Sybil→*quorum-capture* is now priced, not free. Still open: cheap
+identity minting itself (PoW/stake deferred), DHT-level eclipse/lookup hardening,
+and the bond is space-lite (in-RAM, not memory-hard). **Eclipse hardening is the
+weakness we now most want review on.**
 
 ### Free-rider / leech
 Consumes without serving. **Mitigated** by the credit economy: serving
