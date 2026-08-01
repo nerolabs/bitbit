@@ -55,6 +55,7 @@ services:
     entrypoint: ["natgw.sh"]
     environment:
       LAN_SUBNET: 10.20.0.0/24
+      NAT_MODE: ${NAT_MODE:-cone}
     cap_add: [NET_ADMIN]
     sysctls:
       net.ipv4.ip_forward: "1"
@@ -69,6 +70,7 @@ services:
     entrypoint: ["natgw.sh"]
     environment:
       LAN_SUBNET: 10.30.0.0/24
+      NAT_MODE: ${NAT_MODE:-cone}
     cap_add: [NET_ADMIN]
     sysctls:
       net.ipv4.ip_forward: "1"
