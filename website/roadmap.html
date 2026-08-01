@@ -75,7 +75,7 @@
 <h2>Open questions being explicitly deferred</h2>
 <ul>
 <li>Economic settlement across the chain (M5 credits become chain state eventually).</li>
-<li>NAT traversal (daemons on home networks) — likely relay-assisted, post-M12.</li>
+<li>~~NAT traversal (daemons on home networks) — likely relay-assisted, post-M12.~~ <b>Done</b> (#27): mDNS → reachability (now also STUN-style observed-endpoint) → content-blind relay → cross-network field-proof → hole-punching. The relay is built and field-proven; hole-punching (relay demoted to rendezvous) has its punch <b>proven through cone NAT</b> (falls back to relay on symmetric) in the automated Docker NAT harness, gated in CI. See the launch track below and <span class="mono">docs/design/cross-network.md</span>.</li>
 </ul>
 <h2>Prioritized sequence (agreed 2026-07-25)</h2>
 <p>Ordered by value = risk retired + capability unlocked, weighted by cost-of-delay, over effort. The governing decision: <b>the placement backbone lands <em>before</em> any public launch</b> — it changes placement/ routing wire semantics, and migrating a live network of independent operators through that is far more expensive than doing it while the network is empty.</p>

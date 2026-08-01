@@ -110,7 +110,12 @@ peers it serves, when they talk, and roughly how much — a superset of
 the on-path eavesdropper above, self-selected by running the relay.
 Consistent with Silt's "not anonymous" stance; choose relays the way
 you choose any peer you reveal your IP to. No relay is baked into the
-binary or operated by the project.
+binary or operated by the project. **Hole-punching (#27) shrinks this
+exposure:** once two NATed peers meet through a relay, it coordinates a
+simultaneous-open and — through a cone NAT — they form a *direct* connection
+and the relay drops out (demoted to rendezvous), so it no longer sees the
+bulk traffic or its timing. This is built and proven (cone → direct;
+symmetric NAT still relays). It also lowers relay cost/abuse surface (A16).
 
 ### Someone who knows a candidate plaintext (convergent mode)
 Convergent encryption keys a file by its own content, which enables

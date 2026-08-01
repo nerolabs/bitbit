@@ -1,5 +1,12 @@
 # Runbook: proving cross-network publish + fetch (two Macs, two networks)
 
+> **Now largely automated.** The `integration/nat` Docker harness stands up two
+> genuinely-NATed daemons + a relay in real container networks (real kernel NAT)
+> and proves cross-NAT publish→fetch, restart survival, and hole-punch (cone →
+> direct, symmetric → relay) — gated in CI (`nat-integration`, `nat-holepunch`).
+> This manual two-Mac runbook is the optional hands-on version; it is no longer
+> the gate.
+
 This is #27's step 5 — the moment the localhost story becomes a
 person-to-person one: **two machines behind two different home routers
 publish and retrieve through a relay, with no port forwarding and no

@@ -1,11 +1,12 @@
 # Release checklist — cutting v0.1 (the feedback release)
 
-v0.1 is a **feedback release**: experimental, unaudited, published so
-technical people can review and break it (see
-[ROADMAP.md](../ROADMAP.md) Phase A and
-[launch-plan.md](launch-plan.md)). Everything here is ready-to-fire; the
-last step — pushing the tag — is deliberately manual and is Andrew's to
-pull, *after* a personal review and hardening pass.
+v0.1 is experimental and unaudited, published so technical people can review
+and break it (see the launch track in [ROADMAP.md](../ROADMAP.md) and
+[launch-plan.md](launch-plan.md) — now **harden-first**: the tenets
+field-proven before any wide outreach, not a community-driven hardening pass).
+Everything here is ready-to-fire; the last step — pushing the tag — is
+deliberately manual and is Andrew's to pull, *after* a personal review and
+hardening pass.
 
 Nothing is signed or notarized (a wider-push concern). Binaries ship with
 a `SHA256SUMS` file so anyone can verify them.

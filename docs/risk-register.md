@@ -23,9 +23,33 @@ yet done) · **open** (needs a decision).
 | 11 | **Asymmetric resource-exhaustion DoS** — cheap calls that cost nodes large CPU/disk/bandwidth (repair-storm, decode/challenge amplification, handshake flood, disk-fill). Un-WAF-able (P2P surface). | High × High | Per-peer resource accounting; configurable rate limits; probe-before-repair; bounded frames/manifests; fuzz + panic-recover. | **planned** (catalog §A) |
 | 12 | **Sybil / wash-serving → reputation-quorum capture** — free identities farm reputation/credits and collude to force or veto commits (censorship). | Med × Severe | Earned reputation; witnessed/challenged serving; training-wheels at launch; (PoW/stake **deferred**). | **open** (catalog B, D1, D3) |
 | 13 | **Zero-day patch propagation** across a decentralized fleet without a central kill-switch. | Med × High | Criticality-graded, threshold-signed, recallable version-floor advisories; operator-controlled upgrade. | **designed** (network-protection.md); build **planned** |
-| 14 | **Publisher deanonymization** — the chain records publisher NodeID per root, linking a keypair to all its publications. | Med × Med | Decide intended vs. leak; if a leak, unlink/blind; document the trade-off (reputation needs attribution). | **open** (catalog F1) — needs a decision |
+| 14 | **Publisher deanonymization** — the chain records publisher NodeID per root, linking a keypair to all its publications. | Med × Med | **Decided (2026-07-31): blind-signed publish tokens** (Chaumian-style) — a publish is unlinked from the durable reputation key while the fee/anti-spam economics are preserved (the ledger issues N tokens; it can't tell which publish each became). Note: silt protects *who-reads* (access) far better than *who-writes* (authorship); this closes the authorship gap. | direction **decided** (catalog F1); implementation pending |
 | 15 | **Day-one smallness** — eclipse, quorum capture, version-floor evasion all peak on a tiny launch network. | High × High | Launch-as-control: seeded anchors (time-boxed), gated reputation ramp, maturity-scaled thresholds, shed on measured decentralization. | **planned** (network-protection.md) |
 | 16 | **Local-API hijack** — DNS-rebinding/CSRF drives the daemon's UI/JSON API on localhost (publish, spend credits, read link-book). | Med × Med | `Origin`/`Host` allow-listing + per-daemon API token; scoped app capabilities. | **open** (catalog I) |
+
+## Recent status (2026-08-01)
+
+Shipped since this register was last revised (on the current build wave, not
+yet merged to main):
+- **Silent-loss on publish is CLOSED** (S3/B7): #60 (manifest chunk) and #64
+  (data-shard stripe eroding below k) — publish now returns no link unless the
+  content is provably reconstructable, else fails loud.
+- **Restart no longer orphans stored content** (#69): storage proofs are
+  persisted (`adapters/diskproofs`) and reloaded, so a restarted holder
+  re-announces its coded shards under the right key.
+- **Relay throughput raised** (#65): session limits 64/8 → 128/16, plus a
+  fetch-side retry for transient relay saturation.
+- **Hole-punching primitive proven** (#27): relay paths upgrade to direct
+  through cone NAT (symmetric falls back), CI-gated.
+- **Testing is now automated**: an `integration/nat` Docker harness exercises
+  cross-NAT publish/fetch, relay, hole-punch, and restart against real kernel
+  NAT, gating every PR — the two-machine manual rig is demoted to optional.
+- **New risk filed:** #71 config-drift (the daemon builds `node.Config` by
+  hand and silently drops `DefaultConfig` fields — how the #65 fetch-retry was
+  briefly inert and demand-dispersion is currently off).
+- Still open/top weakness: Sybil (PoW/stake deferred) and its downstream
+  (wash-serving, quorum capture); the security + legal review below is
+  unchanged as the highest-leverage remaining action.
 
 ## The through-line
 

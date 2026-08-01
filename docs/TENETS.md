@@ -326,8 +326,19 @@ security-gated-updates (R4).
 
 **Evolving (current best practice; expected to change with evidence):**
 specific algorithms and parameters (erasure k/n, replication factor, cache
-policy, DHT constants), the exact economic mechanism, which roles ship first,
-and whether the trust plane is a v1 pillar or a later one.
+policy, DHT constants), the exact economic mechanism, and which roles ship
+first. *(The trust-plane-scope question moved out of this bucket — see the
+note below.)*
+
+> **Decided 2026-07-31 (Open Question #3, closed):** the **trust plane is a
+> V1 pillar**, not a later fast-follow. V1 therefore ships a *real,
+> field-proven* proof-of-retrieval economy and chain, not a labeled
+> placeholder — the deliberate, higher-cost path, chosen because the launch
+> must be credible from day one (see `ROADMAP.md` and `launch-plan.md`,
+> harden-first). Publisher privacy (F1) was also decided: **blind-signed
+> publish tokens** (Chaumian-style) unlink a publish from the durable
+> reputation key while preserving the fee/anti-spam economics. These are
+> decisions *taken*; full ratification of the tenets is still open (#54).
 
 ---
 
@@ -336,7 +347,7 @@ and whether the trust plane is a v1 pillar or a later one.
 1. Confirm/rename the **"Aslan"** persona (#1). What is it?
 2. Is **application operator (#12)** a distinct seat from **developer (#11)**, or
    the same person wearing two hats?
-3. Is the **trust plane required for v1**, or is a v1 storage-plane substrate
-   legitimate on its own (with the chain as a fast-follow)?
+3. ~~Is the **trust plane required for v1**...~~ **CLOSED (2026-07-31): yes —
+   the trust plane is a V1 pillar** (see Part IX note above).
 4. Which **tensions in Part VIII** do you want to rule differently?
 5. Anything in **Part IX** you'd move between immutable and evolving?

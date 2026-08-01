@@ -138,8 +138,13 @@ design. Silt ships zero Aslan code, ever.
 ## Open questions being explicitly deferred
 - Economic settlement across the chain (M5 credits become chain state
   eventually).
-- NAT traversal (daemons on home networks) — likely relay-assisted,
-  post-M12.
+- ~~NAT traversal (daemons on home networks) — likely relay-assisted,
+  post-M12.~~ **Done** (#27): mDNS → reachability (now also STUN-style
+  observed-endpoint) → content-blind relay → cross-network field-proof →
+  hole-punching. The relay is built and field-proven; hole-punching (relay
+  demoted to rendezvous) has its punch **proven through cone NAT** (falls
+  back to relay on symmetric) in the automated Docker NAT harness, gated in
+  CI. See the launch track below and `docs/design/cross-network.md`.
 
 ## Prioritized sequence (agreed 2026-07-25)
 
