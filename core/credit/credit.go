@@ -1,16 +1,21 @@
-// Package credit is the v1 credit ledger: every byte served earns one
-// credit, publishing costs a flat fee, and each registered node starts
-// with a small grant.
+// Package credit is the v1 ledger. It runs TWO economies that earlier
+// versions conflated — and the conflation was the wash-serving hole:
 //
-// THIS IS DELIBERATELY GAMEABLE. Serving claims are self-reported by
-// whoever calls RecordServe — two colluding nodes could ping-pong a
-// chunk forever and mint credit, and nothing here would notice. That is
-// fine: v1's job is to make the ECONOMICS OBSERVABLE in sim metrics
-// (who earns, who freeloads, how unequal it gets), not to be secure.
-// The cryptographic proof-of-retrieval that would make serving claims
-// trustworthy plugs in behind the same ports.CreditLedger interface —
-// the Merkle inclusion proofs from core/manifest are the intended
-// building block.
+//   - BALANCES (RecordServe → 1 byte served = 1 credit, minus a publish
+//     fee). Still self-reported and DELIBERATELY GAMEABLE: two colluding
+//     nodes can ping-pong a chunk to mint credit and nothing here
+//     notices. That is fine — balances fund the anti-spam publish fee and
+//     drive the observatory's who-earns/who-freeloads metrics. They are
+//     NOT a security boundary and never gate consensus.
+//
+//   - STANDING (Reputation → the number the chain gates writes on). This
+//     is NO LONGER self-reported. It is built only on evidence a Sybil
+//     cannot fabricate: challenged, identity-bound held storage
+//     (RecordBondChallenge, backed by core/bond) and passed storage
+//     audits (core/node/por.go). Wash-serving moves balances but buys
+//     ZERO standing — which is what closes the reputation→quorum-capture
+//     path (threat-catalog D1/D3): standing now costs real disk, not
+//     chatter. See Reputation and RecordBondChallenge.
 package credit
 
 import (
@@ -25,6 +30,18 @@ type account struct {
 	fetchedBytes int64
 	auditsPassed int
 	auditsFailed int
+	// Storage-bond standing — the Sybil cost. bondedBytes is the size of
+	// the identity-bound bond (core/bond) this node last PROVED it holds
+	// under a random challenge; it is the only large, unforgeable input to
+	// Reputation, so N identities cost N real bonds on real disk. bondFails
+	// counts challenges it could not answer. firstSeen/lastBond bound when
+	// standing began and was last refreshed, so DecayStale can retire it —
+	// standing must be *continuously* re-proven, making time-in-good-
+	// standing the scarce resource (you cannot buy last month's uptime).
+	bondedBytes   int64
+	bondFails     int
+	firstSeenTick uint64
+	lastBondTick  uint64
 }
 
 // Ledger implements ports.CreditLedger plus the observability the sim's
@@ -99,16 +116,72 @@ func (l *Ledger) Audits(n ports.NodeID) (passed, failed int) {
 	return a.auditsPassed, a.auditsFailed
 }
 
+// RecordBondChallenge settles one storage-bond challenge (core/bond): the
+// prover either answered a random challenge on its identity-bound bond of
+// provenBytes, or failed to. Passing sets the node's challenged-storage
+// standing — the large, unforgeable term Reputation is built on; failing
+// zeroes it (a bond you cannot answer buys nothing). tick is a monotonic
+// counter (the auditor's request clock, exactly like the PoR nonce in
+// por.go) so DecayStale can retire standing that stops being re-proven.
+//
+// NOTE: intentionally NOT (yet) on ports.CreditLedger. The bond auditor
+// reaches it through an optional interface (a type assertion) so this
+// lands without touching every CreditLedger implementer; promote it to
+// the port once the auditor is wired in core/node/por.go.
+func (l *Ledger) RecordBondChallenge(prover ports.NodeID, provenBytes int64, passed bool, tick uint64) {
+	a := l.acct(prover)
+	if a.firstSeenTick == 0 {
+		a.firstSeenTick = tick
+	}
+	if passed {
+		a.bondedBytes = provenBytes
+		a.lastBondTick = tick
+		return
+	}
+	a.bondedBytes = 0
+	a.bondFails++
+}
+
+// DecayStale zeroes any standing whose last passing bond-challenge is
+// older than maxAge, so a node that stops answering loses standing
+// without anyone having to catch it lying. The validator/caretaker loop
+// calls it with a monotonic now. This is what makes standing an integral
+// over *sustained* proof rather than a one-time pass.
+func (l *Ledger) DecayStale(now, maxAge uint64) {
+	for _, a := range l.accounts {
+		if a.bondedBytes > 0 && now > a.lastBondTick && now-a.lastBondTick > maxAge {
+			a.bondedBytes = 0
+		}
+	}
+}
+
+// bondUnit converts bonded bytes into standing points: one point per
+// 64 KiB of continuously-proven, identity-bound storage. This is the
+// exchange rate between real disk and consensus weight — a tuning
+// parameter (Evolving, per the tenets), NOT a fixed law.
+const bondUnit = 64 << 10
+
 // Reputation condenses a node's observed history into the number the
-// chain consults (M12): storage honesty weighs most, failed audits
-// bite hard, and serving earns steadily — a hoarder that stores but
-// never serves builds reputation slowly, per the freeloader doctrine.
-// Like everything in this ledger it is naively gameable; the chain's
-// protection is that each validator computes it from its OWN
-// observations, so lying to one buys nothing with the others.
+// chain consults (M12). It is built ONLY on evidence a node cannot
+// fabricate:
+//
+//   - challenged, identity-bound held storage (bondedBytes, core/bond) —
+//     the Sybil cost: N identities need N real bonds on real disk;
+//   - passed storage audits (por.go), which a liar without the bytes
+//     cannot answer; minus
+//   - failed audits and failed bond challenges, which bite hard.
+//
+// Self-reported serving (servedBytes / RecordServe) is DELIBERATELY NOT
+// here anymore: a wash-serving Sybil ring can move it freely, so it funds
+// the balance economy and the observatory but buys zero standing. Each
+// validator still computes this from its OWN observations, so lying to
+// one buys nothing with the others.
 func (l *Ledger) Reputation(n ports.NodeID) int64 {
 	a := l.acct(n)
-	return int64(a.auditsPassed)*25 - int64(a.auditsFailed)*250 + a.servedBytes/(64<<10)
+	return a.bondedBytes/bondUnit +
+		int64(a.auditsPassed)*25 -
+		int64(a.auditsFailed)*250 -
+		int64(a.bondFails)*250
 }
 
 func (l *Ledger) Balance(n ports.NodeID) int64      { return l.acct(n).balance }

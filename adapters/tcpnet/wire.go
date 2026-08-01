@@ -43,6 +43,8 @@ type wireMsg struct {
 	Domain    uint64     `cbor:"16,keyasint,omitempty"`
 	Lease     bool       `cbor:"17,keyasint,omitempty"`
 	Ephemeral bool       `cbor:"18,keyasint,omitempty"`
+	BondRoot  []byte     `cbor:"19,keyasint,omitempty"`
+	BondSize  int64      `cbor:"20,keyasint,omitempty"`
 }
 
 type wireProof struct {
@@ -87,6 +89,10 @@ func toWire(m ports.Message) wireMsg {
 	w.Domain = m.Domain
 	w.Lease = m.Lease
 	w.Ephemeral = m.Ephemeral
+	w.BondSize = m.BondSize
+	if m.BondRoot != (ports.Hash{}) {
+		w.BondRoot = append([]byte(nil), m.BondRoot[:]...)
+	}
 	if len(m.Tag) > 0 {
 		w.Tag = append([]byte(nil), m.Tag...)
 	}
@@ -120,6 +126,8 @@ func fromWire(w wireMsg) ports.Message {
 	m.Domain = w.Domain
 	m.Lease = w.Lease
 	m.Ephemeral = w.Ephemeral
+	m.BondSize = w.BondSize
+	copy(m.BondRoot[:], w.BondRoot)
 	m.Tag = w.Tag
 	if w.Proof != nil {
 		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column}

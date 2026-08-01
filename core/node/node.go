@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/nerolabs/silt/core/bond"
 	"github.com/nerolabs/silt/core/chain"
 	"github.com/nerolabs/silt/core/denylist"
 	"github.com/nerolabs/silt/core/dht"
@@ -63,6 +64,12 @@ type Config struct {
 	// linearly per attempt. FetchAttempts <= 1 disables the retry.
 	FetchAttempts int
 	FetchBackoff  ports.Duration
+	// BondAuditInterval is how often a validator challenges the storage
+	// bonds of the validators it knows, and BondMaxAge is how long a bond
+	// may go un-re-proven before its standing decays — so consensus
+	// standing must be backed by *sustained* held storage (T1b, #78).
+	BondAuditInterval ports.Duration
+	BondMaxAge        ports.Duration
 }
 
 func DefaultConfig() Config {
@@ -80,6 +87,9 @@ func DefaultConfig() Config {
 		ReachabilityTimeout: 3 * ports.Second,
 		FetchAttempts:       3,
 		FetchBackoff:        200 * ports.Millisecond,
+
+		BondAuditInterval: 60 * ports.Second,
+		BondMaxAge:        300 * ports.Second, // ~5 audit intervals unproven → standing lapses
 	}
 }
 
@@ -170,6 +180,13 @@ type Node struct {
 	// themselves, the raw material of the network capacity estimate.
 	capRep   ports.CapacityReporter
 	peerCaps map[ports.NodeID]capInfo
+
+	// bond audit (T1b, #78): bond is this node's own sealed storage bond
+	// (nil = none advertised); peerBonds accumulates the bond roots/sizes
+	// peers gossip, which a validator challenges to make consensus standing
+	// cost real held storage. See bondaudit.go.
+	bond      *bond.Commitment
+	peerBonds map[ports.NodeID]bondInfo
 
 	// failure-domain gossip: domainID is this node's own domain hash
 	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
@@ -281,6 +298,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		reachProbes: make(map[uint64]*reachProbe),
 		proofs:      make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains: make(map[ports.NodeID]uint64),
+		peerBonds:   make(map[ports.NodeID]bondInfo),
 		serveLoad:   make(map[ports.ChunkID]int),
 		leases:      make(map[ports.ChunkID]ports.Time),
 	}
@@ -305,6 +323,9 @@ func (n *Node) send(to ports.NodeID, msg ports.Message) error {
 	}
 	msg.Domain = n.domainID
 	msg.Ephemeral = n.ephemeral
+	if n.bond != nil {
+		msg.BondRoot, msg.BondSize = n.bond.Root, n.bond.Size
+	}
 	return n.tr.Send(to, msg)
 }
 
@@ -366,6 +387,9 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 	}
 	if msg.Domain != 0 {
 		n.peerDomains[from] = msg.Domain
+	}
+	if msg.BondRoot != (ports.Hash{}) && !msg.Ephemeral {
+		n.peerBonds[from] = bondInfo{root: msg.BondRoot, size: msg.BondSize}
 	}
 
 	if msg.IsReply() {
@@ -480,6 +504,8 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			return
 		}
 		n.reply(from, msg, n.answerChallenge(msg))
+	case ports.MsgBondChallenge:
+		n.reply(from, msg, n.answerBondChallenge(msg))
 	case ports.MsgCheckReachability:
 		// A peer wants to know if it is publicly reachable. Answering means
 		// dialing it back at its advertised address: if the reply lands, the

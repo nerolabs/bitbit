@@ -58,6 +58,8 @@ func cmdDaemon(args []string) error {
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
 	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
+	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (V1: held in RAM) — a bigger bond earns more standing")
+	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -131,6 +133,7 @@ func cmdDaemon(args []string) error {
 	// only what the daemon genuinely needs to differ on.
 	cfg := node.DefaultConfig()
 	cfg.RequestTimeout = ports.Duration(2 * time.Second) // patient vs the 500ms default (real WAN)
+	cfg.BondAuditInterval = ports.Duration(*bondAudit)
 	nd := node.New(id, cfg, walltime.New(loop), tr, store)
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
@@ -232,6 +235,10 @@ func cmdDaemon(args []string) error {
 			}
 		}
 		nd.EnableChain(ch, ident.Signer())
+		if sz, perr := parseSize(*bondSize); perr == nil && sz > 0 {
+			nd.EnableBond(sz)
+			fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
+		}
 		nd.OnCommit(func(b chain.Block) {
 			fmt.Printf("chain: committed block %d (%d entries, %d attestations)\n",
 				b.Height, len(b.Entries), len(b.Atts))
@@ -513,6 +520,11 @@ func cmdDaemon(args []string) error {
 						chainstore.Save(chainPath, nd.Chain().Blocks(0))
 					}
 				})
+			}
+			// Start challenging peers' storage bonds (and refreshing our own
+			// standing): consensus writes are gated on earned, held storage.
+			if *validator {
+				nd.StartBondAudit()
 			}
 			nd.AnnounceHeld(func(count int) {
 				if count > 0 {

@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nerolabs/silt/adapters/identity"
 )
 
 var siltBin string
@@ -190,6 +192,87 @@ func TestDefaultsRefuseRubberStampCommit(t *testing.T) {
 	if err == nil {
 		t.Fatalf("safe defaults must REFUSE a lone/unearned commit, but the publish succeeded:\n%s", out)
 	}
+}
+
+// TestBondEarnedStandingCommitsOverTCP is the e2e tier for the trust pivot
+// (T1b, #78): two validators earn consensus standing by proving their storage
+// bonds to EACH OTHER over TCP (gossip → challenge → verify → ledger), and a
+// publish then commits on the SAFE min-rep path — no `-quorum 0` trusted-
+// deployment shortcut. Standing is earned, not granted; a publish that commits
+// here means real held storage bought the write.
+func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	// Deterministic ids so A can name B as its attester before B exists.
+	idB := identity.FromSeed(1002).NodeID().String()
+
+	// A: registry + validator + bond; min-rep 100 (earned standing required),
+	// quorum 1, and B is its attester. Fast bond audit so the test is quick.
+	a := startDaemon(t, "A",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-serve-registry", "127.0.0.1:0", "-validator",
+		"-min-rep", "100", "-quorum", "1", "-attesters", idB,
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "1001")
+	peer := a.waitFor(t, rePeer, 20*time.Second)
+	idA, addrA := peer[1], peer[2]
+	regRef := a.waitFor(t, reRegistry, 20*time.Second)[1]
+	bootstrapA := idA + "@" + addrA
+
+	// B: validator + bond, joined to A. Both run bond audits, so each earns
+	// the other's standing in its own ledger.
+	b := startDaemon(t, "B",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-bootstrap", bootstrapA, "-validator",
+		"-min-rep", "100", "-quorum", "1",
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "1002")
+	b.waitFor(t, reBootstrap, 20*time.Second)
+
+	src := filepath.Join(t.TempDir(), "payload.bin")
+	want := make([]byte, 256<<10)
+	rand.New(rand.NewSource(0xB0AD)).Read(want)
+	if err := os.WriteFile(src, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Publish, retrying until the bond audit has earned standing on both sides
+	// (a few 1s rounds). A success here is a real quorum commit on min-rep 100.
+	// runClientAllowErr returns combined stdout+stderr, so match the link
+	// anywhere (not the ^-anchored, stdout-only reLink). "silt:v1:" does not
+	// occur inside the "siltcare:v1:" care link, so this finds the real link.
+	reAnyLink := regexp.MustCompile(`silt:v1:\S+`)
+	var link, lastOut string
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		out, err := runClientAllowErr(t, "swarm", "add", src,
+			"-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+		lastOut = out
+		if err == nil {
+			if link = reAnyLink.FindString(out); link != "" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("bonded validators never earned committable standing:\n%s", lastOut)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	// The publish drove a real quorum commit (not a self-commit).
+	a.waitFor(t, reCommitted, 10*time.Second)
+
+	// And the file round-trips bit-perfect.
+	dst := filepath.Join(t.TempDir(), "fetched.bin")
+	runClient(t, "swarm", "get", link, "-o", dst, "-peers", bootstrapA, "-registry", regRef)
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) || !bytes.Equal(got, want) {
+		t.Fatalf("round-trip corrupted the file: got %d bytes, want %d", len(got), len(want))
+	}
+	_ = b
 }
 
 // TestPublishCommitFetchOverTCP is the whole real-network path in one
