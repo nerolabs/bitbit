@@ -16,10 +16,13 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   simultaneous-open). Through a cone NAT the crossing SYNs establish a direct
   link, which the transport adopts so the bulk traffic leaves the relay; on
   symmetric NAT it simply fails and the relay path stays. The relay forwards no
-  bytes for the direct path — it only swaps addresses. Proven end-to-end
-  against real kernel NAT by the `integration/nat` harness (cone → direct,
-  symmetric → relay). This demotes the relay from every-byte carrier to
-  rendezvous, the big cost win for cheap public infrastructure (S6).
+  bytes for the direct path — it only swaps addresses. The punch **primitive is
+  proven end-to-end against real kernel NAT** by the `integration/nat` harness,
+  CI-gated (cone → direct connection, symmetric → relay); the relay
+  coordination is unit-tested. This demotes the relay from every-byte carrier
+  to rendezvous, the big cost win for cheap public infrastructure (S6). (The
+  live two-daemon upgrade has a harness scenario in progress — the caretaker
+  traffic-trigger needs the minimal-network provider resolution sorted.)
 - **NATed nodes learn their public endpoint, STUN-style** (#27, the groundwork
   for hole-punching): when a node registers with a relay, the relay reports the
   `host:port` it observed the registration coming from — the node's NAT mapping.
