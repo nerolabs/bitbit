@@ -29,12 +29,14 @@ func (n *Node) EnableBond(size int64) {
 }
 
 // StartBondAudit begins the periodic sweep in which this validator challenges
-// the bonds of the validators it knows. Needs a ledger to settle results into.
+// the bonds of the validators it knows. It fires an immediate first sweep (so
+// the node's own standing exists before peers are known — see the self-record
+// in bondAuditOnce) and then reschedules. Needs a ledger to settle into.
 func (n *Node) StartBondAudit() {
 	if n.ledger == nil {
 		return
 	}
-	n.clock.AfterFunc(n.cfg.BondAuditInterval, n.bondAuditTick)
+	n.bondAuditTick()
 }
 
 // AuditBondsOnce runs a single bond-audit sweep now — no reschedule, no decay.
@@ -57,6 +59,15 @@ func (n *Node) bondAuditTick() {
 func (n *Node) bondAuditOnce(now uint64) {
 	if n.ledger == nil {
 		return
+	}
+	// Record our OWN bond first: we hold it, so asserting it to ourselves is
+	// honest self-knowledge — and it is what our local proposer/attester
+	// pre-check reads, which a node cannot otherwise satisfy since it never
+	// challenges itself (each validator judges by its own ledger). PEERS
+	// still verify our bond independently over the wire, so a self-assertion
+	// buys nothing with the quorum — only real held storage does.
+	if n.bond != nil {
+		n.ledger.RecordBondChallenge(n.id, n.bond.Size, true, now)
 	}
 	// Snapshot: the callbacks below mutate nothing here, but a peer could be
 	// learned mid-sweep — challenge the set we knew at sweep start.
