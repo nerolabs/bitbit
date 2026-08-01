@@ -175,8 +175,11 @@ func (s *Server) serveControl(from ports.NodeID, conn *tls.Conn) {
 	}
 	s.regs[from] = c
 	s.mu.Unlock()
-	s.logf(ports.LogInfo, "relay registered", "peer", from)
-	if c.write(ctrl{Op: "ok"}) != nil {
+	// The remote address is the registrant's NAT mapping as we see it — hand
+	// it back (STUN-style) so a NATed node learns its own public endpoint (#27).
+	observed := conn.RemoteAddr().String()
+	s.logf(ports.LogInfo, "relay registered", "peer", from, "observed", observed)
+	if c.write(ctrl{Op: "ok", Addr: observed}) != nil {
 		s.unregister(from, c)
 		return
 	}

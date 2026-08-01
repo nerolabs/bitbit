@@ -33,6 +33,37 @@ func startClient(t *testing.T, cl *Client) {
 	}
 }
 
+// TestRegisterReportsObservedAddr is the #27 Phase-1 check: the relay reports
+// a registrant its public host:port as observed (STUN-style), and the client
+// exposes it via Observed(). A NATed node can't otherwise learn its own
+// public endpoint — hole-punching needs it.
+func TestRegisterReportsObservedAddr(t *testing.T) {
+	identR, identB := identity.FromSeed(20), identity.FromSeed(21)
+	srv, err := Serve("127.0.0.1:0", identR, Config{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	cl, err := NewClient(identB, identR.NodeID(), srv.Addr(), func(net.Conn) {}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startClient(t, cl)
+
+	obs := cl.Observed()
+	if obs == "" {
+		t.Fatal("Observed() empty — relay did not report the registrant's endpoint")
+	}
+	host, port, err := net.SplitHostPort(obs)
+	if err != nil {
+		t.Fatalf("observed %q is not host:port: %v", obs, err)
+	}
+	if host != "127.0.0.1" || port == "" {
+		t.Fatalf("observed %q: want a 127.0.0.1:<port> loopback source", obs)
+	}
+}
+
 func TestSpliceRoundTrip(t *testing.T) {
 	identR, identB, identS := identity.FromSeed(1), identity.FromSeed(2), identity.FromSeed(3)
 	srv, err := Serve("127.0.0.1:0", identR, Config{}, nil)

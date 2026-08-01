@@ -433,6 +433,11 @@ func cmdDaemon(args []string) error {
 				tr.SetAdvertise(rc.Addr())
 				fmt.Printf("relay-via: registered — peers reach us at %s\n", rc.Addr())
 				dlog("relay-via registered", "addr", rc.Addr())
+				if seen := rc.Observed(); seen != "" { // STUN-style, for hole-punching (#27)
+					nd.SetObservedAddr(seen)
+					fmt.Printf("relay-via: this node's public endpoint looks like %s (observed by the relay)\n", seen)
+					dlog("observed public endpoint", "addr", seen)
+				}
 				nd.Bootstrap(seeds, func() {
 					fmt.Printf("re-bootstrapped through the relay (%d table entries)\n", nd.Table().Size())
 					dlog("re-bootstrapped via relay", "table", nd.Table().Size())

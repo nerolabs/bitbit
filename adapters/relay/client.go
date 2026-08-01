@@ -60,9 +60,19 @@ type Client struct {
 	onConn    func(net.Conn)
 	lg        ports.Logger
 
-	mu     sync.Mutex
-	conn   net.Conn // current control conn, nil between attempts
-	closed bool
+	mu       sync.Mutex
+	conn     net.Conn // current control conn, nil between attempts
+	closed   bool
+	observed string // our public host:port as the relay last reported it (#27)
+}
+
+// Observed returns this node's public host:port as the relay saw it at
+// registration ("" until the first successful register). A NATed node uses it
+// as the endpoint a peer should aim a hole-punch at (#27).
+func (c *Client) Observed() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.observed
 }
 
 // NewClient prepares a registration with the relay; Run starts it.
@@ -161,7 +171,12 @@ func (c *Client) session(registered func(error)) error {
 		conn.Close()
 		return fmt.Errorf("relay register refused (%v %s)", err, fr.Err)
 	}
-	c.logf(ports.LogInfo, "relay registered", "relay", c.relayAddr)
+	if fr.Addr != "" { // the relay's STUN-style view of our public endpoint (#27)
+		c.mu.Lock()
+		c.observed = fr.Addr
+		c.mu.Unlock()
+	}
+	c.logf(ports.LogInfo, "relay registered", "relay", c.relayAddr, "observed", fr.Addr)
 	registered(nil)
 
 	// Pings keep the NAT mapping (and the relay's idle reaper) at bay.
