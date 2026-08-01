@@ -13,6 +13,7 @@ package node
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 
@@ -192,6 +193,11 @@ type Node struct {
 	// tokenIssuer, when set, makes this validator blind-sign publish-token
 	// requests (T3, #14/F1) — the publisher-privacy issuance role.
 	tokenIssuer *blindtoken.Issuer
+	// issuer-key distribution: our own issuer pubkey (DER, served on
+	// MsgGetIssuerKey) and a cache of peers' issuer keys (fetched), so tokens
+	// can be blinded against and verified across the network.
+	issuerKeyDER   []byte
+	peerIssuerKeys map[ports.NodeID]*rsa.PublicKey
 
 	// failure-domain gossip: domainID is this node's own domain hash
 	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
@@ -291,21 +297,22 @@ func (n *Node) dropHosted(id ports.ChunkID) {
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
-		cfg:         cfg,
-		id:          id,
-		clock:       clock,
-		tr:          tr,
-		store:       store,
-		table:       dht.NewTable(id, cfg.K),
-		provs:       dht.NewProviders(),
-		pending:     make(map[uint64]*pending),
-		reachable:   make(map[ports.NodeID]ports.Time),
-		reachProbes: make(map[uint64]*reachProbe),
-		proofs:      make(map[ports.ChunkID]ports.StorageProof),
-		peerDomains: make(map[ports.NodeID]uint64),
-		peerBonds:   make(map[ports.NodeID]bondInfo),
-		serveLoad:   make(map[ports.ChunkID]int),
-		leases:      make(map[ports.ChunkID]ports.Time),
+		cfg:            cfg,
+		id:             id,
+		clock:          clock,
+		tr:             tr,
+		store:          store,
+		table:          dht.NewTable(id, cfg.K),
+		provs:          dht.NewProviders(),
+		pending:        make(map[uint64]*pending),
+		reachable:      make(map[ports.NodeID]ports.Time),
+		reachProbes:    make(map[uint64]*reachProbe),
+		proofs:         make(map[ports.ChunkID]ports.StorageProof),
+		peerDomains:    make(map[ports.NodeID]uint64),
+		peerBonds:      make(map[ports.NodeID]bondInfo),
+		peerIssuerKeys: make(map[ports.NodeID]*rsa.PublicKey),
+		serveLoad:      make(map[ports.ChunkID]int),
+		leases:         make(map[ports.ChunkID]ports.Time),
 	}
 	if cfg.Domain != "" {
 		n.domainID = domainHash(cfg.Domain)
@@ -513,6 +520,8 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.reply(from, msg, n.answerBondChallenge(msg))
 	case ports.MsgTokenRequest:
 		n.reply(from, msg, n.answerTokenRequest(from, msg))
+	case ports.MsgGetIssuerKey:
+		n.reply(from, msg, n.answerIssuerKey())
 	case ports.MsgCheckReachability:
 		// A peer wants to know if it is publicly reachable. Answering means
 		// dialing it back at its advertised address: if the reply lands, the

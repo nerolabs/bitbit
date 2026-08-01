@@ -2,11 +2,39 @@ package blindtoken
 
 import (
 	"crypto/rsa"
+	"encoding/binary"
 	"errors"
+	"math/big"
 )
 
 // ErrDoubleSpend is returned when a token serial is presented more than once.
 var ErrDoubleSpend = errors.New("blindtoken: token already spent")
+
+// MarshalPub / ParsePub serialize an RSA issuer public key for the wire as
+// len(N)‖N‖E — a validator publishes it so peers can verify its token
+// signatures. (Manual, not x509, so core keeps a minimal import surface.)
+func MarshalPub(pub *rsa.PublicKey) []byte {
+	nb := pub.N.Bytes()
+	out := make([]byte, 8+len(nb))
+	binary.BigEndian.PutUint32(out[0:4], uint32(len(nb)))
+	copy(out[4:], nb)
+	binary.BigEndian.PutUint32(out[4+len(nb):], uint32(pub.E))
+	return out
+}
+
+func ParsePub(b []byte) (*rsa.PublicKey, error) {
+	if len(b) < 8 {
+		return nil, errors.New("blindtoken: issuer key too short")
+	}
+	n := binary.BigEndian.Uint32(b[:4])
+	if uint64(len(b)) < uint64(8)+uint64(n) {
+		return nil, errors.New("blindtoken: issuer key truncated")
+	}
+	return &rsa.PublicKey{
+		N: new(big.Int).SetBytes(b[4 : 4+n]),
+		E: int(binary.BigEndian.Uint32(b[4+n : 8+n])),
+	}, nil
+}
 
 // Issuer blind-signs fee-paid publish tokens and later accepts them for spend,
 // rejecting double-spends. The RSA key is generated at the edge and injected;

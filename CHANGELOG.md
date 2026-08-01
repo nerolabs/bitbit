@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Security
+- **Publisher privacy: quorum-issued blind publish tokens** (#14 / F1): the
+  chain recorded a Publisher NodeID per root, letting an observer map a durable
+  reputation key to every root it published (silt protects who-READS far better
+  than who-WRITES). A publish is now authorized by a **publish token** — a
+  random serial blind-signed by a QUORUM of distinct validators (a k-of-n
+  Chaumian blind multisignature: no single issuer, no trusted-dealer/DKG). The
+  publisher pays the fee with its durable identity to acquire the token, but the
+  issuers never see the serial, so the committed entry carries the token and
+  **NO Publisher identity**, and each serial spends exactly once (chain-wide
+  double-spend rejection). Daemon: `-require-tokens N` makes the chain accept
+  only token-carrying entries and validators issue; `swarm add -token-quorum N`
+  acquires one over the wire. Proven at three tiers: unit (blind sig, quorum
+  bundle, chain enforcement), sim (acquire-then-publish through the node loop),
+  e2e (three validators, a 2-of-3 token over real TCP). Honest residuals
+  (labeled): each signature is unlinkable (Chaum), but a colluding validator set
+  narrows the anonymity *set* to same-epoch requesters of the same subset (use a
+  canonical validator set); the RSA issuer key is in-RAM (cross-restart
+  persistence is a follow-up).
 - **Launch-window training wheels** (#79, risk 15): a young network is the
   easiest to capture — a Sybil quorum is cheap before the network has
   decentralized. A validator set may now declare **anchors** (`-anchors`,

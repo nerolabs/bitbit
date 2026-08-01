@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,11 +29,22 @@ import (
 
 // entryJSON is the wire form (hex strings, greppable), mirroring
 // fileregistry's on-disk format.
+type tokenSigJSON struct {
+	Validator string `json:"validator"`
+	Sig       string `json:"sig"` // base64
+}
+
+type tokenJSON struct {
+	Serial string         `json:"serial"` // base64
+	Sigs   []tokenSigJSON `json:"sigs"`
+}
+
 type entryJSON struct {
-	Root           string   `json:"root"`
-	ManifestChunks []string `json:"manifest_chunks"`
-	FileSize       int64    `json:"file_size"`
-	Publisher      string   `json:"publisher,omitempty"`
+	Root           string     `json:"root"`
+	ManifestChunks []string   `json:"manifest_chunks"`
+	FileSize       int64      `json:"file_size"`
+	Publisher      string     `json:"publisher,omitempty"`
+	Token          *tokenJSON `json:"token,omitempty"`
 }
 
 func toJSON(e ports.Entry) entryJSON {
@@ -42,6 +54,16 @@ func toJSON(e ports.Entry) entryJSON {
 	}
 	if e.Publisher != (ports.NodeID{}) {
 		ej.Publisher = e.Publisher.String()
+	}
+	if e.Token != nil {
+		tj := &tokenJSON{Serial: base64.StdEncoding.EncodeToString(e.Token.Serial)}
+		for _, s := range e.Token.Sigs {
+			tj.Sigs = append(tj.Sigs, tokenSigJSON{
+				Validator: s.Validator.String(),
+				Sig:       base64.StdEncoding.EncodeToString(s.Sig),
+			})
+		}
+		ej.Token = tj
 	}
 	return ej
 }
@@ -63,6 +85,25 @@ func fromJSON(ej entryJSON) (ports.Entry, error) {
 		if e.Publisher, err = ports.ParseHash(ej.Publisher); err != nil {
 			return ports.Entry{}, err
 		}
+	}
+	if ej.Token != nil {
+		serial, err := base64.StdEncoding.DecodeString(ej.Token.Serial)
+		if err != nil {
+			return ports.Entry{}, err
+		}
+		tok := &ports.PublishToken{Serial: serial}
+		for _, s := range ej.Token.Sigs {
+			v, err := ports.ParseHash(s.Validator)
+			if err != nil {
+				return ports.Entry{}, err
+			}
+			sig, err := base64.StdEncoding.DecodeString(s.Sig)
+			if err != nil {
+				return ports.Entry{}, err
+			}
+			tok.Sigs = append(tok.Sigs, ports.TokenSig{Validator: v, Sig: sig})
+		}
+		e.Token = tok
 	}
 	return e, nil
 }

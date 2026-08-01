@@ -73,6 +73,8 @@ const (
 	MsgBondReply         // Data: CBOR bond.Answer (empty if the bond isn't held)
 	MsgTokenRequest      // Data: a blinded publish-token serial to blind-sign (fee charged to sender)
 	MsgTokenReply        // Data: the blind signature; OK=false if refused
+	MsgGetIssuerKey      // ask a validator for its publish-token issuer public key
+	MsgIssuerKeyReply    // Data: the issuer public key (blindtoken.MarshalPub); OK=false if none
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:
@@ -164,7 +166,7 @@ func (k MsgKind) String() string {
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply, MsgTokenReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply, MsgTokenReply, MsgIssuerKeyReply:
 		return true
 	}
 	return false

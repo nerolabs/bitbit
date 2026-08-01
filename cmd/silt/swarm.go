@@ -2,14 +2,39 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"os"
 
+	"github.com/nerolabs/silt/adapters/discovery"
+	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/crypto"
 	"github.com/nerolabs/silt/core/link"
+	"github.com/nerolabs/silt/core/node"
 	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/ports"
 )
+
+// acquirePublishToken fetches the validators' token-issuer keys, then collects
+// k blind signatures into an unlinkable publish token (T3). Runs on the node's
+// loop; cont fires once with the token or an error.
+func acquirePublishToken(nd *node.Node, validators []ports.NodeID, k int, cont func(*ports.PublishToken, error)) {
+	var fetchNext func(i int)
+	fetchNext = func(i int) {
+		if i >= len(validators) {
+			serial, err := blindtoken.NewSerial(rand.Reader)
+			if err != nil {
+				cont(nil, err)
+				return
+			}
+			nd.AcquireToken(rand.Reader, serial, validators, nd.IssuerKeyOf, k, cont)
+			return
+		}
+		nd.FetchIssuerKey(validators[i], func(error) { fetchNext(i + 1) }) // best-effort; AcquireToken handles shortfall
+	}
+	fetchNext(0)
+}
 
 // cmdSwarm publishes to / retrieves from a running daemon swarm using a
 // short-lived client node: join, do the thing, leave. The swarm keeps
@@ -34,6 +59,7 @@ func swarmAdd(args []string) error {
 	regURL := fs.String("registry", "", "registry URL (required)")
 	mode := fs.String("mode", "convergent", "encryption mode")
 	chunkSize := fs.Int("chunk-size", pipeline.DefaultChunkSize, "chunk size in bytes")
+	tokenQuorum := fs.Int("token-quorum", 0, "publisher privacy: acquire a publish token from this many of the -peers (validators) so the publish carries no Publisher identity (0 = off)")
 	pos := parseFlexible(fs, args)
 	if len(pos) != 1 || *peers == "" || *regURL == "" {
 		return fmt.Errorf("usage: silt swarm add <file> -peers ID@ADDR -registry URL [flags]")
@@ -58,29 +84,52 @@ func swarmAdd(args []string) error {
 		return err
 	}
 
+	var validators []ports.NodeID
+	if ps, perr := discovery.ParseList(*peers); perr == nil {
+		for _, p := range ps {
+			validators = append(validators, p.ID)
+		}
+	}
+
 	var h link.Handle
 	var placed int
 	err = nil
 	if rerr := run(func(done func()) {
-		var aerr error
-		h, aerr = pipeline.Add(context.Background(), e.nd.Store(), reg, f, pipeline.Options{
-			ChunkSize: *chunkSize,
-			Mode:      m,
-			Publisher: e.nd.ID(),
-		})
-		if aerr != nil {
-			err = aerr
-			done()
-			return
+		publish := func(tok *ports.PublishToken) {
+			opts := pipeline.Options{ChunkSize: *chunkSize, Mode: m}
+			if tok != nil {
+				opts.Token = tok // unlinkable: no Publisher identity
+			} else {
+				opts.Publisher = e.nd.ID()
+			}
+			var aerr error
+			h, aerr = pipeline.Add(context.Background(), e.nd.Store(), reg, f, opts)
+			if aerr != nil {
+				err = aerr
+				done()
+				return
+			}
+			entry, _, _ := reg.Lookup(context.Background(), h.Root)
+			mf, merr := pipeline.LoadFull(context.Background(), e.nd.Store(), entry, h)
+			if merr != nil {
+				err = merr
+				done()
+				return
+			}
+			e.nd.Distribute(entry, mf, false, func(p int, derr error) { placed = p; err = derr; done() })
 		}
-		entry, _, _ := reg.Lookup(context.Background(), h.Root)
-		mf, merr := pipeline.LoadFull(context.Background(), e.nd.Store(), entry, h)
-		if merr != nil {
-			err = merr
-			done()
-			return
+		if *tokenQuorum > 0 {
+			acquirePublishToken(e.nd, validators, *tokenQuorum, func(tok *ports.PublishToken, aerr error) {
+				if aerr != nil {
+					err = aerr
+					done()
+					return
+				}
+				publish(tok)
+			})
+		} else {
+			publish(nil)
 		}
-		e.nd.Distribute(entry, mf, false, func(p int, derr error) { placed = p; err = derr; done() })
 	}); rerr != nil {
 		return rerr
 	}

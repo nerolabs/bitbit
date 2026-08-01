@@ -275,6 +275,84 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	_ = b
 }
 
+// TestUnlinkablePublishOverTCP is the e2e tier for publisher privacy (T3,
+// #14/F1): three validators issue and REQUIRE publish tokens; a `swarm add`
+// acquires a 2-of-3 token over real TCP (paying the fee with its identity, the
+// issuers never seeing the serial) and publishes — the entry commits and the
+// file round-trips, with no Publisher identity gating it.
+func TestUnlinkablePublishOverTCP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	idA := identity.FromSeed(3001).NodeID().String()
+	idB := identity.FromSeed(3002).NodeID().String()
+	idC := identity.FromSeed(3003).NodeID().String()
+
+	// Three validators: each a token issuer, requires a 2-of-3 token, knows the
+	// other two as attesters. Fast bond audit so standing/issuer-keys warm up.
+	common := func(seed string, others string) []string {
+		return []string{
+			"-listen", "127.0.0.1:0", "-store", t.TempDir(), "-validator",
+			"-min-rep", "100", "-quorum", "1", "-attesters", others,
+			"-require-tokens", "2", "-bond", "8M", "-bond-audit", "1s",
+			"-capacity", "1G", "-mdns=false", "-id-seed", seed,
+		}
+	}
+	a := startDaemon(t, "A", append([]string{"-serve-registry", "127.0.0.1:0"}, common("3001", idB+","+idC)...)...)
+	pa := a.waitFor(t, rePeer, 20*time.Second)
+	bootA := pa[1] + "@" + pa[2]
+	regRef := a.waitFor(t, reRegistry, 20*time.Second)[1]
+
+	b := startDaemon(t, "B", append([]string{"-bootstrap", bootA}, common("3002", idA+","+idC)...)...)
+	pb := b.waitFor(t, rePeer, 20*time.Second)
+	bootB := pb[1] + "@" + pb[2]
+	b.waitFor(t, reBootstrap, 20*time.Second)
+
+	c := startDaemon(t, "C", append([]string{"-bootstrap", bootA}, common("3003", idA+","+idB)...)...)
+	pc := c.waitFor(t, rePeer, 20*time.Second)
+	bootC := pc[1] + "@" + pc[2]
+	c.waitFor(t, reBootstrap, 20*time.Second)
+
+	src := filepath.Join(t.TempDir(), "payload.bin")
+	want := make([]byte, 256<<10)
+	rand.New(rand.NewSource(0x70CE)).Read(want)
+	if err := os.WriteFile(src, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Publish with a 2-of-3 token, retrying while standing + issuer keys warm up.
+	allPeers := strings.Join([]string{bootA, bootB, bootC}, ",")
+	reAnyLink := regexp.MustCompile(`silt:v1:\S+`)
+	var link, lastOut string
+	deadline := time.Now().Add(40 * time.Second)
+	for {
+		out, err := runClientAllowErr(t, "swarm", "add", src,
+			"-peers", allPeers, "-registry", regRef, "-token-quorum", "2", "-chunk-size", "65536")
+		lastOut = out
+		if err == nil {
+			if link = reAnyLink.FindString(out); link != "" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("token-gated publish never succeeded:\n%s", lastOut)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	a.waitFor(t, reCommitted, 10*time.Second)
+
+	dst := filepath.Join(t.TempDir(), "fetched.bin")
+	runClient(t, "swarm", "get", link, "-o", dst, "-peers", allPeers, "-registry", regRef)
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("round-trip corrupted the token-published file: got %d bytes, want %d", len(got), len(want))
+	}
+	_ = c
+}
+
 // TestPublishCommitFetchOverTCP is the whole real-network path in one
 // test: three daemons in three processes, a chain-backed registry over
 // pinned HTTPS, a publish that must reach quorum and commit a block, and

@@ -16,13 +16,54 @@ import (
 	"github.com/nerolabs/silt/ports"
 )
 
-// ErrTokenAcquire means fewer than k issuers granted a signature (e.g. offline
-// or out of the requester's credit).
-var ErrTokenAcquire = errors.New("node: could not gather enough publish-token signatures")
+var (
+	// ErrTokenAcquire means fewer than k issuers granted a signature (e.g.
+	// offline or out of the requester's credit).
+	ErrTokenAcquire = errors.New("node: could not gather enough publish-token signatures")
+	errNoIssuerKey  = errors.New("node: peer has no issuer key")
+)
 
-// EnableTokenIssuer makes this validator blind-sign publish-token requests,
-// charging the fee to each requester through the ledger.
-func (n *Node) EnableTokenIssuer(key *rsa.PrivateKey) { n.tokenIssuer = blindtoken.NewIssuer(key) }
+// EnableTokenIssuer makes this validator blind-sign publish-token requests
+// (charging the fee to each requester) and serve its issuer public key to
+// peers who ask (MsgGetIssuerKey).
+func (n *Node) EnableTokenIssuer(key *rsa.PrivateKey) {
+	n.tokenIssuer = blindtoken.NewIssuer(key)
+	n.issuerKeyDER = blindtoken.MarshalPub(&key.PublicKey)
+}
+
+func (n *Node) answerIssuerKey() ports.Message {
+	return ports.Message{Kind: ports.MsgIssuerKeyReply, Data: n.issuerKeyDER, OK: len(n.issuerKeyDER) > 0}
+}
+
+// FetchIssuerKey asks v for its token-issuer public key and caches it, so this
+// node can blind against it (as a publisher) or verify its token signatures
+// (as a validator).
+func (n *Node) FetchIssuerKey(v ports.NodeID, done func(error)) {
+	n.request(v, ports.Message{Kind: ports.MsgGetIssuerKey}, func(resp ports.Message, err error) {
+		switch {
+		case err != nil:
+			done(err)
+		case !resp.OK || len(resp.Data) == 0:
+			done(errNoIssuerKey)
+		default:
+			pub, perr := blindtoken.ParsePub(resp.Data)
+			if perr == nil {
+				n.peerIssuerKeys[v] = pub
+			}
+			done(perr)
+		}
+	})
+}
+
+// IssuerKeyOf returns v's token-issuer public key — this node's own, or one
+// cached from a FetchIssuerKey. Used as the chain's issuerKey lookup and as the
+// publisher's blind-against key.
+func (n *Node) IssuerKeyOf(v ports.NodeID) *rsa.PublicKey {
+	if v == n.id && n.tokenIssuer != nil {
+		return n.tokenIssuer.Public()
+	}
+	return n.peerIssuerKeys[v]
+}
 
 func (n *Node) answerTokenRequest(from ports.NodeID, msg ports.Message) ports.Message {
 	reply := ports.Message{Kind: ports.MsgTokenReply}

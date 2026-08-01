@@ -83,6 +83,13 @@ func (n *Node) bondAuditOnce(now uint64) {
 		targets = append(targets, target{id, info})
 	}
 	for _, t := range targets {
+		// Piggyback issuer-key discovery on the audit: a validator needs each
+		// peer validator's token-issuer key to verify the publish tokens it
+		// blind-signed (T3). Peers may not have been up at bootstrap, so fetch
+		// lazily and self-heal here (cheap; cached once obtained).
+		if n.IssuerKeyOf(t.id) == nil {
+			n.FetchIssuerKey(t.id, func(error) {})
+		}
 		n.rid++
 		nonce := n.rid
 		id, info := t.id, t.info
