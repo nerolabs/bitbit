@@ -8,6 +8,13 @@ storage — not self-reported serving. It is deliberately written before the
 code because it adds wire surface, and the roadmap's rule is not to ossify the
 wire on a live network.
 
+This is the **Sybil corner of the M0 trilemma** (privacy × accountability ×
+Sybil). The bond makes standing *cost* something — token-less, work-backed,
+identity-bound — while publishing stays unlinkable from standing (via the
+blind publish tokens, F1/T3). The design here is a **first cut**: it proves the
+mechanism end-to-end but leaves labeled residuals (below) that Gate 4 replaces
+with the real, memory-hard, multi-machine-proven M0 composition.
+
 ## What exists (T1a)
 
 - `core/bond`: `Seal(id, size)` builds an identity-bound, Merkle-committed blob
@@ -89,18 +96,29 @@ its capacity pledge, or a `-bond` size) and **holds it**. Holding it on disk is
 the real cost; a memory-hard seal makes recompute-on-demand more expensive than
 a disk read.
 
-- **V1 (this pass):** seal in memory at startup; enough to prove the *mechanism*
-  (challenges flow, standing accrues, decay works) end-to-end.
-- **Hardening (recorded follow-up, not skipped):** persist the bond in
+- **First cut (this pass):** seal in memory at startup; enough to prove the
+  *mechanism* (challenges flow, standing accrues, decay works) end-to-end. Both
+  the bond and the issuer key are **in-RAM, not persisted across restart**, and
+  the seal is the placeholder `sealBlock` (iterated SHA-256 — space-lite, **not**
+  memory-hard). Proven in sim + e2e on a **single host only**; not yet
+  multi-machine.
+- **The V1 target (ROADMAP Gate 4 / tenet M0), not skipped:** Gate 4b replaces
+  the space-lite `sealBlock` with a **genuine memory-hard / proof-of-space
+  construction** (built from best-in-class *proven* components per B8 — novel
+  only in the composition, never in the primitive); Gate 4d persists the bond in
   `capstore` so it occupies pledged disk and survives restart (the
-  `diskproofs`/#69 pattern), and swap `sealBlock` for a memory-hard function.
-  Until then the Sybil cost is honestly *space-lite*, per the `core/bond` doc.
+  `diskproofs`/#69 pattern), and persists the issuer key; Gate 4e proves the
+  whole trust plane **multi-machine** across real NAT (#52). Until that lands the
+  Sybil cost is honestly *space-lite* and single-host, per the `core/bond` doc —
+  this note describes a placeholder, not the final construction.
 
 ## Security properties & honest limits
 
 - **Identity cost.** N identities need N distinct bonds; with disk persistence +
-  a memory-hard seal, that is N × size of real disk. Today (in-memory,
-  non-memory-hard) it is weaker and labeled so.
+  a memory-hard seal (Gate 4b/4d), that is N × size of real disk. Today
+  (in-memory, non-memory-hard, single-host) it is weaker and labeled so — the
+  space↔compute tradeoff still lets an attacker recompute the placeholder blocks
+  instead of storing them.
 - **No amplification.** The reply is a fixed, small size regardless of bond
   size, and the transport is TLS-over-TCP (requester address proven). Still,
   cap **challenge rate per challenger** (A8/A13 class) so an authenticated peer
@@ -123,4 +141,6 @@ a disk read.
   all asserted as outcomes, deterministic and seed-replayable.
 - **e2e:** real daemons over TCP — a validator earns standing via bond
   challenges and commits a block; a fresh node is refused. This closes T1a's
-  missing e2e tier; the branch does not merge without it.
+  missing e2e tier; the branch does not merge without it. Note this is
+  **single-host** e2e; the multi-machine proof (real NAT/WAN) is Gate 4e (#52),
+  not this pass.

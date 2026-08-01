@@ -1,15 +1,55 @@
 # silt — Tenets
 
-> Status: **canon (ratified 2026-08-01, #54).** These principles are agreed;
-> changing one now requires a deliberate, reviewed amendment — not a drive-by.
-> The **Immutable** set (Part IX) requires reviewed consensus to touch; the
-> **Evolving** set is expected to change with evidence. The reviewer questions
-> at the end are resolved (see each); they are kept for the record.
+> Status: **canon.** Ratified 2026-08-01 (#54); amended 2026-08-02 to add the
+> mission-immutable (M0), a three-tier structure (immutable / tenet / evolving),
+> and the build principle B8. Changing an **Immutable** (Part 0 + the six in
+> Part IX) requires deliberate, reviewed consensus and is close to redefining
+> the project. **Tenets** are canon too, amendable with reviewed consensus and
+> evidence. **Evolving** parameters are expected to change as we learn.
 >
 > Format: each tenet is a **stance**, stated plainly. Personas are defined by
 > their **desired outcomes** (what "good" looks like from their seat) and the
 > **promise** silt makes to them. Where two personas' outcomes collide, the
 > tenet is our **stance on the tradeoff**.
+
+---
+
+## Part 0 — Why silt exists (the mission-immutable)
+
+**M0 — silt exists to resolve the privacy × accountability × Sybil trilemma.**
+Three properties every prior system in this space has been forced to trade off
+against each other, held together at once:
+
+- **Privacy** — publishing is *unlinkable* to a durable identity; who fetches
+  what is *unsurveilled*.
+- **Accountability** — genuinely harmful content can be removed, curators are
+  themselves accountable, and takedown is **pluralistic** — never a global
+  switch.
+- **Sybil-resistance** — standing cannot be cheaply forged; no actor can spin up
+  identities to capture consensus, wash reputation, or flood a denylist.
+
+The incumbents each pick two corners and surrender the third. **silt's reason to
+exist is to hold all three** — and **abandoning any corner is abandoning the
+project.** Everything below is either a corner made structural, or the
+discipline that keeps the composition honest.
+
+**The bet, stated without a slogan.** Two of the three edges are dissolved by
+architecture silt already has: privacy-vs-accountability dissolves because we
+act on **content, not identity** (deny a *hash*; hosts are content-blind and
+carry no liability for what they cannot read). The live edge — where the novel
+contribution concentrates — is **privacy vs. Sybil**: we **decouple the cost of
+*creating* an identity from the cost of *having standing***. Identity is free
+and pseudonymous; *influence* costs sustained, challenged, real work; and the
+publishing act stays cryptographically **unlinkable** from that bonded identity.
+The load-bearing, field-defining claim is therefore:
+
+> **Token-less, work-backed, identity-bound reputation that publishing stays
+> cryptographically unlinkable from** — cheap for one honest node, ruinous for a
+> Sybil farm, with no coin and no capital lockup.
+
+This is not a labeled placeholder for V1 (see Part IX): it *is* the mission, so
+it is the one mechanism deliberately pulled into V1 scope, and it must ship
+**specified and adversarially proven**, not asserted.
 
 ---
 
@@ -20,7 +60,7 @@
 NAT-traversal) and a **trust plane** (consensus-secured registry, reputation,
 and revocation). The storage plane stands alone and is the default; the trust
 plane is opt-in and secures governance. Neither is the product — silt is the
-**substrate** other things are built on.
+**substrate** other things are built on, and the trust plane is where M0 lives.
 
 **T1 — Capabilities, not infrastructure.** Every role (store, relay, registry,
 validate, caretake) is a *capability any node can offer*, never a special node
@@ -40,6 +80,17 @@ teaches core about meaning is a top-severity regression. A link guarantees the
 *bytes it names*; trusting a *name* is trusting whatever resolver you asked —
 like trusting a DNS provider. "File poisoning" (a name resolving to hostile
 content) is therefore a resolver-layer concern by design.
+
+**silt is use-agnostic.** Core carries zero meaning, and silt takes zero
+position on *use*. We do not enumerate, endorse, or concern ourselves with what
+flows through it — file-sharing, archival, a library of record, or anything
+else users choose is unenumerated and not silt's business. silt's only ambition
+is to be the most trusted, private, secure, scalable, and efficient DFS ever
+built, chosen for its feature set. **"Aslan" names any client or application
+built *on top of* silt** — the application layer, expected to be richly diverse,
+is where use lives; silt below it neither knows nor cares. We expect Aslan use
+cases to drive interest and grow the network, and we care about none of them
+beyond ordinary DFS use.
 
 ---
 
@@ -83,6 +134,15 @@ verification genuinely conflicts with another tenet (e.g. latency/cost vs. S6,
 or eagerness vs. B6), the exception is made **explicit and discussed**, never
 taken silently.
 
+**B8 — Best components, novel composition.** We never reinvent a primitive —
+cryptography, transport, codec, hash. We adopt the single strongest *proven*
+one and treat rolling our own as the amateur tell it is. Novelty is reserved
+for the **composition and incentive design**, where the hard problems (M0)
+actually live — and that novelty must be **specified and adversarially proven**
+(a spec a skeptic can read and a red-team suite they can't break), never
+hand-waved. Boring parts; a novel car. Novel-and-unproven is worse than
+me-too — it ships insecurity to the exact audience we need to convince.
+
 ---
 
 ## Part III — What a successful outcome is (the bar)
@@ -113,7 +173,9 @@ ephemeral identities was a lie we had to fix — #43).
 
 **S6 — Cheap to participate.** The bar for running *any* role is low enough
 that a hobbyist can. Cost that scales unbounded with network activity is a
-design defect, not a fact of life.
+design defect, not a fact of life. *(This is also the constraint that makes M0's
+Sybil corner hard: cheap for the honest, ruinous for the liar — without a
+capital lockup that would price out the hobbyist.)*
 
 ---
 
@@ -130,7 +192,8 @@ implementations, one contract."
 
 **V3 — Test the adversary.** We write the attacker's desired outcome as a test
 that must fail for them: forgery, tamper, equivocation, freeload, Sybil,
-censorship. Security is validated by denial, not assertion.
+censorship. Security is validated by denial, not assertion. For M0's novel
+mechanisms this is the *primary* proof: the red-team suite is the deliverable.
 
 **V4 — Evidence, not vibes.** A change clears the success bar (Part III) with
 observed evidence — a checksum match, a survived kill, a green Byzantine
@@ -142,8 +205,9 @@ suite — reported faithfully, including what was skipped.
 
 **R1 — Gated by proof.** An RC requires the plane's core promises
 *field-proven*: cross-network publish/fetch, scaling under load, crash
-recovery. Sim-proven-only work is labeled as such and is not an RC gate on its
-own.
+recovery, and — because the trust plane is a V1 pillar — the M0 mechanisms
+proven **multi-machine**, not sim-or-single-host only. Sim-proven-only work is
+labeled as such and is not an RC gate on its own.
 
 **R2 — Canon tracks behavior.** Changelog discipline; docs and these tenets are
 updated in the same change that alters behavior. No silent drift between what
@@ -182,7 +246,7 @@ threshold *is* the safety property.
 
 ### A. Value personas
 
-**1. Content consumers (clients).** *Working name "Aslan users" — confirm.*
+**1. Content consumers (clients — "Aslan users").**
 - **Outcomes:** available when asked; authentic; private access; runs no
   infrastructure; a given link keeps working.
 - **Promise:** a link is enough — retrieval, verification, and durability are
@@ -191,10 +255,10 @@ threshold *is* the safety property.
 **2. Publishers / creators.**
 - **Outcomes:** content stays available as long as intended, and they can *tell
   whether it will*; access control + revocation; integrity + attribution;
-  cheap publishing; no silent disappearance.
+  cheap publishing; publish without being deanonymized; no silent disappearance.
 - **Promise:** you can make content durable and know its durability; you can
-  revoke; no one alters it under your name; taking it down is visible, never
-  silent.
+  revoke; no one alters it under your name; your publish is unlinkable to your
+  standing (M0); taking it down is visible, never silent.
 
 **3. Link recipients (audience).**
 - **Outcomes:** the link resolves; bytes are the intended ones; private stays
@@ -235,8 +299,9 @@ threshold *is* the safety property.
 **8. Validators / consensus participants.**
 - **Outcomes:** honest work grows their standing; Byzantine peers can't cheat
   them; influence is earned, not bought raw; low overhead.
-- **Promise:** consensus is deterministic and reputation-gated; equivocation
-  and forgery are detected and cost the actor.
+- **Promise:** consensus is deterministic and reputation-gated; standing costs
+  sustained, challenged real work (M0), not a stake or a coin; equivocation and
+  forgery are detected and cost the actor.
 
 **9. Suppression / takedown / kill-list curators.**
 - **Outcomes:** their lists are honored by operators who *choose* to trust them
@@ -299,60 +364,80 @@ publishers + consumers                         →  the demand that funds the lo
 validators + curators + authorities            →  keep the loop honest and lawful
 ```
 
-**The through-line (proposed canon):**
+**The through-line:**
 - Every persona's incentive is **satisfied by serving the persona above it** —
   reward flows down the stack from the value consumed at the top.
 - **No persona's good may require another's harm.**
 - Where outcomes genuinely tension, the tenet is our **explicit stance on the
   tradeoff**, held in the open:
 
-| Tension | Our stance (draft) |
+| Tension | Our stance |
 |---|---|
 | Publisher permanence vs. takedown | Permanence by default; takedown only via *chosen, transparent* lists — never silent or global. |
 | Consumer privacy vs. legal accountability | Privacy of *access* is absolute; accountability acts on *content* (jurisdiction-scoped), not on who read it. |
+| Privacy vs. Sybil-resistance (the M0 edge) | Identity is free and private; *standing* costs sustained challenged work; publishing stays unlinkable from standing. We buy Sybil-resistance with *proven work*, never with a coin, a stake, or deanonymization. |
 | Operator freedom vs. availability | Operators are free to leave; availability is the network's job (repair), not a shackle on any operator. |
 | Decentralization vs. usability | Rendezvous may be centralized *for convenience* but never *load-bearing*; the decentralized path must always exist. |
 | Openness vs. abuse resistance | Open to participate, but reward is gated on delivered value and reputation, so abuse doesn't pay. |
 
 ---
 
-## Part IX — Immutable vs. evolving
+## Part IX — The three tiers (immutable / tenet / evolving)
 
-**Immutable (amending requires deliberate, reviewed consensus):**
-integrity-is-non-negotiable (S1), privacy-by-construction (B4), no-central-
-control (T1/S4), no-silent-censorship (Don't #2), no-access-surveillance
-(Don't #3), reward-tracks-value (Don't #7), trust-but-verify / no-optimistic-
-operations (B7), the-naming-boundary-is-Aslan (T3), operator-autonomous-
-security-gated-updates (R4).
+**Immutable — amending is close to redefining the project; requires deliberate,
+reviewed consensus.**
 
-**Evolving (current best practice; expected to change with evidence):**
-specific algorithms and parameters (erasure k/n, replication factor, cache
-policy, DHT constants), the exact economic mechanism, and which roles ship
-first. *(The trust-plane-scope question moved out of this bucket — see the
-note below.)*
+- **M0 — the mission:** resolve the privacy × accountability × Sybil trilemma;
+  abandoning any corner abandons the project (Part 0).
+- The six corners made structural:
+  1. **Content-blind by construction** (B4) — hosts store ciphertext they cannot
+     read or choose.
+  2. **The bytes are the truth** (S1/B3) — content-addressed, re-verified,
+     bit-perfect or an explicit failure; never silently wrong.
+  3. **No center** (T1/S4) — nothing load-bearing; no machine or operator can
+     take content down globally.
+  4. **Access is unsurveilled** (Don't #3) — who fetches what is never
+     observable.
+  5. **No silent or global censorship** (Don't #2) — takedown is transparent,
+     consensual, and plural; never one switch.
+  6. **Core carries zero meaning, forever** (T3) — the Aslan boundary.
 
-> **Decided 2026-07-31 (Open Question #3, closed):** the **trust plane is a
-> V1 pillar**, not a later fast-follow. V1 therefore ships a *real,
-> field-proven* proof-of-retrieval economy and chain, not a labeled
-> placeholder — the deliberate, higher-cost path, chosen because the launch
-> must be credible from day one (see `ROADMAP.md` and `launch-plan.md`,
-> harden-first). Publisher privacy (F1) was also decided: **blind-signed
-> publish tokens** (Chaumian-style) unlink a publish from the durable
-> reputation key while preserving the fee/anti-spam economics. These
-> decisions are taken, and the tenets are now **ratified as canon**
-> (2026-08-01, #54 closed).
+**Tenets — canon, amendable with reviewed consensus and evidence.** Everything
+else in Parts I–VIII, including the strong disciplines we hold nearly as firmly
+as the immutables but that describe *how we build and govern* rather than *what
+silt is*: trust-but-verify / no-optimistic-operations (B7), best-components-
+novel-composition (B8), reward-tracks-value (Don't #7), operator-autonomous-
+security-gated-updates (R4), and the per-persona promises and tradeoff stances
+(Parts VII–VIII).
+
+**Evolving — expected to change as we learn.** Specific algorithms and
+parameters (erasure k/n, replication factor, cache policy, DHT constants), the
+*exact* economic mechanism, and which roles ship first.
+
+> **The principle-not-mechanism rule, and its one exception.** A tenet gates V1
+> as a *principle*, never as a *mechanism* — "reward tracks value" is canon, but
+> *which* economic mechanism satisfies it, and *when*, is a roadmap call (see
+> `ROADMAP.md`). The **single deliberate exception** is M0: the trilemma
+> resolution — token-less, work-backed, unlinkable reputation — is not a
+> feature that satisfies a principle, it *is* the reason silt exists, so its
+> real (not placeholder) mechanism is pulled into V1 by definition. Decided
+> 2026-07-31 (trust plane is a V1 pillar) and sharpened 2026-08-02 (hold the
+> real-crypto bar; build the car from best-in-class components, prove it
+> multi-machine). Publisher privacy (F1) ships as **blind-signed publish
+> tokens** (Chaumian) that unlink a publish from the durable reputation key.
 
 ---
 
-## Reviewer questions (resolved at ratification, 2026-08-01)
+## Amendment log
 
-Kept for the record. #3 is explicitly closed below; the rest were reviewed and
-settled as part of ratification (#54). Reopen via a deliberate amendment.
-
-1. Confirm/rename the **"Aslan"** persona (#1). What is it?
-2. Is **application operator (#12)** a distinct seat from **developer (#11)**, or
-   the same person wearing two hats?
-3. ~~Is the **trust plane required for v1**...~~ **CLOSED (2026-07-31): yes —
-   the trust plane is a V1 pillar** (see Part IX note above).
-4. Which **tensions in Part VIII** do you want to rule differently?
-5. Anything in **Part IX** you'd move between immutable and evolving?
+- **2026-08-01** — Ratified as canon (#54). Reviewer questions resolved:
+  persona #1 is "Aslan users" (name kept); application-operator (#12) is a
+  distinct seat from developer (#11); trust plane is a V1 pillar (Open Q#3
+  closed).
+- **2026-08-02** — Added **M0** (mission-immutable, the trilemma) as Part 0 and
+  the supreme immutable; restructured Part IX into three tiers (immutable /
+  tenet / evolving) with six mechanism-immutables; **moved B7, Don't #7, and R4
+  out of the immutable set into the tenet tier** (they are disciplines/stances,
+  not project identity); added **B8** (best components, novel composition);
+  stated the load-bearing novel claim and the principle-not-mechanism exception
+  explicitly.

@@ -22,8 +22,9 @@ scattered across a Kademlia network of daemons. Nodes cannot read what
 they hold: chunks and manifests are ciphertext, and the top-level
 identifier is an opaque hash carrying no metadata. Availability comes
 from erasure coding plus a repair loop; trust comes from content
-addressing (you verify every byte against its hash), earned reputation on
-an append-only chain, and mutual-TLS identity. The organization that
+addressing (you verify every byte against its hash), work-backed
+standing on an append-only chain — reputation bought with proven storage
+work, never a coin/stake or deanonymization — and mutual-TLS identity. The organization that
 publishes the software **runs no part of the network** — see
 [GOVERNANCE.md](../GOVERNANCE.md).
 

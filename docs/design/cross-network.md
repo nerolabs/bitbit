@@ -1,10 +1,14 @@
 # Design: cross-network reachability
 
-**Status:** proposed (issue #27). This is a design checkpoint, not code.
-It covers the two things standing between an impressive localhost demo and
-two real people on separate home networks using Silt: **rendezvous** (how a
-fresh node finds anyone) and **NAT traversal** (how two nodes behind home
-routers actually connect). It also draws the line — sharpened with Andrew,
+**Status:** largely built (issue #27). What began as a design checkpoint is now
+mostly code: the relay is built and field-proven, and TCP hole-punching is
+**proven through a real cone NAT** (falling back to relay on symmetric NAT) in
+an automated Docker NAT harness gated in CI. This doc has been reconciled to
+that reality; it keeps the rendezvous-vs-NAT-traversal split because they remain
+two distinct mechanisms. It covers the two things standing between an impressive
+localhost demo and two real people on separate home networks using Silt:
+**rendezvous** (how a fresh node finds anyone) and **NAT traversal** (how two
+nodes behind home routers actually connect). It also draws the line — sharpened with Andrew,
 2026-07-26 — between the *relay capability* (which belongs in the binary)
 and *running public infrastructure* (which SiltHQ does not do, but which we
 must stand up as throwaway dev scaffolding to build against).
@@ -204,7 +208,7 @@ Concretely, to keep the accident from happening:
 ## Open questions (flagged, not solved here)
 
 - **Relay incentives.** Relaying spends bandwidth for someone else's
-  transfer. Long-term this should earn credit like serving does (the M9
+  transfer. Long-term this should earn credit like serving does (the
   bandwidth-gossip pattern extends to it); short-term, `-relay` is
   altruistic + rate-capped. Don't block the first cut on the economics.
 - **Relay abuse.** An open relay invites bandwidth leeching and amplification
@@ -213,8 +217,9 @@ Concretely, to keep the accident from happening:
 - **IPv6.** Many home networks now hand out globally-routable IPv6. Where
   both peers have it, there may be *no NAT to traverse* — try a direct v6
   dial before assuming a relay is needed. Cheap latent win.
-- **Symmetric NAT.** Hole-punching won't cross it; those peers stay on the
-  relay. Acceptable.
+- **Symmetric NAT.** *Settled, not open.* The harness confirms hole-punching
+  won't cross symmetric NAT; those peers stay on the relay (fallback proven).
+  Acceptable — kept here only to record the demonstrated boundary.
 
 ## Suggested build order (MVP to "two Macs talking")
 

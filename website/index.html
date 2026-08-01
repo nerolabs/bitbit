@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Silt — the infrastructure is not the content</title>
-<meta name="description" content="Silt is a distributed, encrypted, erasure-coded storage network. Nodes store and serve anonymous ciphertext — they cannot know what they carry. Run a node, or build on it.">
+<meta name="description" content="Silt is resilient, private-by-architecture, neutral storage infrastructure — owned by none, run by its participants, funded by no token. Nodes store and serve encrypted ciphertext they cannot read. Run a node, or build on it.">
 <link rel="canonical" href="https://silthq.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,13 +34,16 @@
       <i style="height:4%;background:#6e5124"></i><i style="height:12%;background:#241f18"></i>
       <i style="height:8%;background:#332619"></i><i style="height:14%;background:#1d1913"></i>
     </div>
-    <p class="eyebrow settle">Distributed storage · encrypted at every level</p>
+    <p class="eyebrow settle">Private by architecture · no token · earned standing</p>
     <h1 class="thesis settle settle-2">The infrastructure is <em>not</em> the content.</h1>
     <p class="sub settle settle-3">
-      Silt is a network that stores and serves files as anonymous, encrypted
-      fragments — split, scattered, and healed across many machines. A node
-      <b>cannot read what it holds; it was built to be unable to.</b> Meaning
-      lives elsewhere, with whoever holds the keys.
+      Silt is resilient, private-by-architecture, neutral storage
+      infrastructure — files split into encrypted fragments, scattered and
+      healed across many machines. A node <b>cannot read what it holds; it was
+      built to be unable to.</b> Standing to publish is <b>earned</b> — work-backed
+      reputation, no token, no coin — and publishing stays cryptographically
+      unlinkable from the identity that earned it. Meaning lives elsewhere, with
+      whoever holds the keys.
     </p>
     <div class="cta-row settle settle-4">
       <a href="#download" class="btn">Download a client</a>
@@ -81,7 +84,8 @@
         <div><div class="k">Governed by earned standing</div><h3>Write-access is earned, not bought</h3></div>
         <p>The registry is a chain the operators keep together. Publishing a new
         entry needs a quorum of nodes whose reputation — passed storage audits,
-        bytes served — clears a bar. <b>A fresh identity is a nobody until it proves itself.</b></p>
+        bytes served — clears a bar. No token, no coin: standing is work-backed,
+        and <b>publishing stays cryptographically unlinkable from the identity that earned it.</b></p>
       </div>
     </div>
   </div>
@@ -154,9 +158,13 @@
     <div style="margin:0 0 1.6rem;padding:1rem 1.2rem;border:1px solid var(--ochre);border-radius:8px;max-width:60ch">
       <b style="color:var(--ochre)">Pre-V1 — build from source.</b>
       <span class="dim">Silt is early and unaudited, and there is no official
-      release yet: we're hardening toward a V1 that stands up from day one,
-      rather than shipping something half-built. Build it from source (below),
-      don't store anything you can't afford to lose, and please
+      release yet. The storage plane is field-proven; the trust plane is a first
+      cut on honestly-labeled placeholders (an in-memory bond, a toy
+      proof-of-retrieval) — sim and single-host only, not production. The march
+      is learning-phase 0.x (experimental) → feature-complete 0.9.0 (RC) →
+      1.0.0 = V1, cut only when it's field-proven across machines and signed.
+      Build it from source (below), don't store anything you can't afford to
+      lose, and please
       <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">read the threat model</a>
       — the weaknesses it names are exactly the review we most want.</span>
     </div>

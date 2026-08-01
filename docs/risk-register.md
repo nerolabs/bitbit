@@ -13,7 +13,7 @@ yet done) · **open** (needs a decision).
 | 1 | **CSAM / illegal content published to the network.** | High × Severe | Quorum-governed, decryption-free takedown by opaque hash; operator denylists; moderation at the resolver layer. | takedown **built**; denylist distribution **planned** |
 | 2 | **Node operators face legal liability** for content they unknowingly host. | Med × Severe | Publisher runs no infrastructure/policy; takedown mechanism; operator terms; entity to shield contributors; clear "not an evasion tool" stance. | mechanism **built**; entity **planned** |
 | 3 | **Unaudited crypto/consensus fails at scale** (toy proof-of-retrieval, quorum-not-BFT chain, gameable reputation). | Med × High | Independent audit + threat model before any "production" claim; keep honest labeling; bug-bounty; Sybil/eclipse hardening. | **planned** |
-| 4 | **Reputational capture** — Silt branded a "piracy/dark-web tool." | Med × High | Positioning discipline; crisis-comms plan; visible takedown + no-operator posture; avoid crypto/piracy launch channels. | **planned** |
+| 4 | **Reputational capture** — Silt branded a "tool for wrongdoing / dark-web tool." | Med × High | Positioning discipline; crisis-comms plan; visible takedown + no-operator posture; avoid crypto and wrongdoing-signaling launch channels. | **planned** |
 | 5 | **The publishing org is treated as an operator** and pulled into liability or coercion. | Low × Severe | Structural: no project-run nodes, no project-run list, no override; software-publisher posture; entity holds only trademark/domain/releases. | posture **built** into design; entity **planned** |
 | 6 | **Bus factor** — single maintainer; project stalls or can't respond to incidents. | Med × High | Grow contributors (CONTRIBUTING, CODEOWNERS, review-gated merges); documented incident/disclosure process; foundation. | review-gate **built**; rest **planned** |
 | 7 | **Sybil / eclipse attack** on the DHT or reputation to force bad commits or hide content. | Med × Med | Identity = keypair; **reputation now costs challenged held storage** (T1/#82 bond), so mass-producing *standing* costs real disk; harden lookup; monitor. | identity **built**; reputation-cost **built** (T1); eclipse/lookup hardening **planned** |
@@ -27,10 +27,19 @@ yet done) · **open** (needs a decision).
 | 15 | **Day-one smallness** — eclipse, quorum capture, version-floor evasion all peak on a tiny launch network. | High × High | Launch-as-control: seeded anchors (time-boxed), gated reputation ramp, maturity-scaled thresholds, shed on measured decentralization. | **training wheels BUILT** (T2 #83): while immature, commits require anchor sign-off; sheds mechanically once N distinct non-anchor validators have attested (unit+sim). Remaining: version-floor advisory (R4/#13) |
 | 16 | **Local-API hijack** — DNS-rebinding/CSRF drives the daemon's UI/JSON API on localhost (publish, spend credits, read link-book). | Med × Med | `Origin`/`Host` allow-listing + per-daemon API token; scoped app capabilities. | **open** (catalog I) |
 
-## Recent status (2026-08-01)
+## Recent status (2026-08-02)
 
-Shipped since this register was last revised (on the current build wave, not
-yet merged to main):
+Shipped and merged to main since this register was last revised:
+- **Trust plane, first cut, is landed** (#82/#83/#84, docs reconciled #85):
+  identity-bound storage bond gates consensus standing (T1/#82), maturity-gated
+  anchor sign-off as launch-window training wheels (T2/#83), and quorum-issued
+  blind publish tokens for publisher privacy (T3/#84). All three are honestly
+  labeled first cuts on **placeholders** — the bond seal is space-lite/in-RAM
+  (iterated SHA-256, not memory-hard); proof-of-retrieval proves possession at
+  challenge time, not durable/unique storage; and the issuer key is in-RAM.
+  Proven by unit + single-host sim + e2e only; **multi-machine (#52) not yet
+  done.** The V1 target is the real thing (memory-hard bond, durable PoR,
+  proven multi-machine); these rows describe the residual honestly.
 - **Silent-loss on publish is CLOSED** (S3/B7): #60 (manifest chunk) and #64
   (data-shard stripe eroding below k) — publish now returns no link unless the
   content is provably reconstructable, else fails loud.
@@ -44,12 +53,17 @@ yet merged to main):
 - **Testing is now automated**: an `integration/nat` Docker harness exercises
   cross-NAT publish/fetch, relay, hole-punch, and restart against real kernel
   NAT, gating every PR — the two-machine manual rig is demoted to optional.
-- **New risk filed:** #71 config-drift (the daemon builds `node.Config` by
-  hand and silently drops `DefaultConfig` fields — how the #65 fetch-retry was
-  briefly inert and demand-dispersion is currently off).
-- Still open/top weakness: Sybil (PoW/stake deferred) and its downstream
-  (wash-serving, quorum capture); the security + legal review below is
-  unchanged as the highest-leverage remaining action.
+- **Config-drift CLOSED** (#71): the daemon had built `node.Config` by hand and
+  silently dropped `DefaultConfig` fields (which had left the #65 fetch-retry
+  briefly inert and demand-dispersion off); the daemon now derives from
+  `DefaultConfig` so those defaults hold.
+- Still the top open weakness: Sybil and its downstream (wash-serving, quorum
+  capture, DHT eclipse). The chosen non-token answer — work-backed, identity-bound
+  standing that costs challenged held storage — is landed as a first cut (row 12)
+  and is being hardened for V1 (memory-hard bond, durable/unique PoR); cheap
+  identity *minting* (PoW/stake deferred) and DHT-level eclipse remain unpriced.
+  The security + legal review below is unchanged as the highest-leverage remaining
+  action.
 
 ## The through-line
 

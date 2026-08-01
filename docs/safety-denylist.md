@@ -73,12 +73,24 @@ network choose**, never from a built-in authority:
    replica and is as tamper-evident as any block. Governance of removal
    is identical to governance of publication — decentralized, earned,
    and auditable. (`node.ProposeRevocation`, `chain` `Revocations`.)
+   **Curator accountability**: because every revocation is a committed,
+   attributable record, a bad or overreaching entry is *visible* — the
+   attesting validators are on the record and answer for it with the same
+   earned reputation (the work-backed standing bond, T1/#82) that let them
+   attest at all. A curator who denies lawful content spends reputation to
+   do it. There is no silent takedown and no global override switch — denial
+   is never a hidden, project-flipped kill switch.
 2. **An operator's local list** — a file each operator *chooses* to load
    (`silt daemon -denylist file`), e.g. a jurisdiction's legal list or a
    trusted third-party blocklist (an NCMEC-derived hash set surfaced
    through a trusted intermediary, say). Operators pick which lists to
    honor, the way every network operator picks which blocklists to
-   subscribe to. Silt ships none of these lists.
+   subscribe to. Silt ships none of these lists. **Honest scope**: loading a
+   local list file is built; automatic *distribution/subscription* of
+   third-party lists (feeds an operator can subscribe to and have refresh)
+   is **planned, not yet built** — today an operator supplies the file
+   themselves. The pluralism is by design: many independent lists an
+   operator can mix, never one canonical project list.
 
 The code makes this concrete: there is no hardcoded list anywhere, and
 the node never phones home. See the package comment in

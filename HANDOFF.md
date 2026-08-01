@@ -1,9 +1,11 @@
 > ⚠️ **HISTORICAL — the genesis handoff (project inception).** This is the
-> original greenfield brief; the project is now called **silt** and is
-> substantially built (milestones M1–M14 done; the launch track is harden-first
-> toward V1). Its milestone list and open questions are superseded. For the
-> **current** state read `ROADMAP.md`, `docs/TENETS.md` (ratified canon),
-> `CHANGELOG.md`, and the open issues. Kept for the record of how it started.
+> original greenfield brief from the project's learning phase; the project is
+> now called **silt** and is substantially built. The milestone/wave/tier
+> markers used during that phase are **retired** — do not read them as current.
+> For the **current** state, the single source of truth is the GitHub **`V1`
+> milestone** and its issues, narrated in `ROADMAP.md`; canon lives in
+> `docs/TENETS.md`. See also `CHANGELOG.md`. Kept only for the record of how it
+> started (that history detail lives in `docs/buildlog/`).
 
 # Project Handoff: `shardnet` (working name — rename freely)
 

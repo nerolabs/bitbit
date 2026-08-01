@@ -8,6 +8,27 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Docs
+- **Canon reconciled: mission, mechanisms, and a single roadmap spine**
+  (2026-08-02) — a docs/canon pass, no code or behavior change.
+  `TENETS.md` is restructured into three tiers: a new mission-immutable
+  **M0** (silt exists to resolve the privacy × accountability × Sybil
+  trilemma — unlinkable publishing, real accountability, and Sybil
+  resistance at once), six mechanism-immutables, and the build tenets,
+  which gain **B8** (use best-in-class, proven components; be novel only
+  in how they are composed). `ROADMAP.md` is slimmed to a single GitHub
+  `V1`-milestone spine: the retired M/Wave/Tier markers are dropped in
+  favor of a "learning phase" framing, the 0.1.x/0.2.x line is relabeled
+  experimental/learning, and the cadence is stated as 0.9.0 then 1.0.0.
+  The issue tracker is reconciled (#78 and #79 closed as shipped, the
+  `V1` milestone created), the website roadmap is regenerated from
+  source, and a sensitive term was removed from the public docs. The
+  math notes on proof-of-retrieval (05) and quorum chains (08) are
+  reconciled to match: the current PoR is labeled a challenge-time toy
+  with a real published-scheme PoR as the V1 target, and consensus
+  standing is described as bond-gated challenged storage on a labeled
+  placeholder seal being hardened for V1.
+
 ### Security
 - **Publisher privacy: quorum-issued blind publish tokens** (#14 / F1): the
   chain recorded a Publisher NodeID per root, letting an observer map a durable
