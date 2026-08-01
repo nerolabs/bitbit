@@ -57,6 +57,13 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   machine.
 
 ### Fixed
+- **The daemon no longer silently drops config fields** (#71): `cmd/silt` built
+  `node.Config` field-by-field, so any field added to `DefaultConfig` defaulted
+  to its zero value in the real binary — how the #65 fetch-retry shipped inert
+  and demand-responsive dispersion was off in the daemon while the roadmap
+  listed it as done. The daemon and the ephemeral swarm add/get client now
+  start from `node.DefaultConfig()` and override only what genuinely differs
+  (the daemon's 2s `RequestTimeout`), so new fields are inherited by default.
 - **A restarted daemon's content stays discoverable** (#69, found in the #65
   field test): provider records live only in peers' memory and die with the
   process, so a daemon re-announces everything on its disk at startup
