@@ -9,6 +9,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Deterministic NAT/relay/hole-punch in the sim** (#27): the in-process
+  network (`simnet`) now models a home router — a NATed node dials out freely
+  (each outbound opening the conntrack reverse mapping so replies get back in)
+  but is un-dialable cold from off its LAN. Two NATed nodes on different LANs
+  therefore meet through a designated relay (counted in `Stats.Relayed`), or
+  `HolePunch` opens a direct path for cone NATs and correctly falls back to the
+  relay for symmetric ones. A relayed delivery pointedly does *not* open a
+  direct mapping, so a later direct dial still needs a punch. This is the
+  tier-1, seed-reproducible mirror of the `integration/nat` Docker harness; it
+  is zero-overhead and byte-identical for every existing scenario (no NAT
+  configured → the fast path short-circuits and draws no extra randomness).
 - **Hole-punching: relay paths upgrade to direct connections** (#27): when two
   NATed daemons talk through a relay, the relay now *coordinates* a
   hole-punch — it tells each the other's observed endpoint, and both dial it
