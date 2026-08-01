@@ -152,11 +152,13 @@
   <div class="wrap">
     <div class="stratum-label">Get Silt · one binary, every platform</div>
     <div style="margin:0 0 1.6rem;padding:1rem 1.2rem;border:1px solid var(--ochre);border-radius:8px;max-width:60ch">
-      <b style="color:var(--ochre)">Early &amp; experimental — 0.x.</b>
-      <span class="dim">This is a research release, unaudited, published to get
-      technical feedback. Don't store anything you can't afford to lose, and
-      please <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">read the threat model</a>
-      and help us break it.</span>
+      <b style="color:var(--ochre)">Pre-V1 — build from source.</b>
+      <span class="dim">Silt is early and unaudited, and there is no official
+      release yet: we're hardening toward a V1 that stands up from day one,
+      rather than shipping something half-built. Build it from source (below),
+      don't store anything you can't afford to lose, and please
+      <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">read the threat model</a>
+      — the weaknesses it names are exactly the review we most want.</span>
     </div>
     <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:16ch">Run the client. It serves while it fetches.</h2>
     <p class="dim" style="margin-top:1rem;max-width:58ch">One self-contained binary — no runtime, no install. The desktop client
@@ -168,12 +170,12 @@ git clone https://github.com/nerolabs/silt && cd silt
 <span class="o">go</span> build -o silt ./cmd/silt   &&   ./silt client
 
 <span class="c"># …or cross-compile every target at once</span>
-<span class="o">./build.sh</span> v0.1               <span class="c"># → dist/silt-v0.1-&lt;os&gt;-&lt;arch&gt;</span></pre>
+<span class="o">./build.sh</span> v1.0.0             <span class="c"># → dist/silt-v1.0.0-&lt;os&gt;-&lt;arch&gt;</span></pre>
     <p class="dim" style="margin-top:1.4rem">
-      Prebuilt binaries for <b style="color:var(--bone);font-weight:500">macOS,
-      Windows, and Linux</b> (with a <span class="mono">SHA256SUMS</span> file to
-      verify them — not yet code-signed) are on the
-      <a href="https://github.com/nerolabs/silt/releases">releases page</a>.</p>
+      Signed, checksummed binaries for <b style="color:var(--bone);font-weight:500">macOS,
+      Windows, and Linux</b> will land on the
+      <a href="https://github.com/nerolabs/silt/releases">releases page</a> when V1
+      is cut. Until then, build from source (one command above).</p>
     <p class="dim" style="margin-top:1rem">
       <b style="color:var(--bone);font-weight:500">▶ Want to see it work?</b>
       <a href="https://github.com/nerolabs/silt/blob/main/docs/local-test-network.md">Build your own Silt test network on your own computer</a>

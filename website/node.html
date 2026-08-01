@@ -26,10 +26,10 @@
   <p class="eyebrow">Operator guide</p>
   <h1>Run a public node</h1>
   <div style="margin:0 0 1.4rem;padding:1rem 1.2rem;border:1px solid var(--ochre);border-radius:8px">
-    <b style="color:var(--ochre)">Early &amp; experimental.</b>
-    <span class="dim">Silt is 0.x, unaudited, and published for feedback. Running a
-    public node means storing opaque ciphertext you can't inspect; understand your
-    local law and load a denylist you trust. Read the
+    <b style="color:var(--ochre)">Early &amp; unaudited — pre-V1.</b>
+    <span class="dim">Silt is still hardening toward V1 (there's no official release
+    yet — build from source). Running a public node means storing opaque ciphertext
+    you can't inspect; understand your local law and load a denylist you trust. Read the
     <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">threat model</a>
     and the <a href="https://github.com/nerolabs/silt/blob/main/docs/safety-denylist.md">safety model</a>
     first. This isn't legal advice.</span>
@@ -50,7 +50,7 @@
   </ul>
 
   <h2>Quick start</h2>
-  <p>One binary, no runtime. Build it, or grab a release:</p>
+  <p>One binary, no runtime. Build it from source (signed releases land when V1 is cut):</p>
   <pre class="code">git clone https://github.com/nerolabs/silt && cd silt
 <span class="o">go</span> build -o silt ./cmd/silt</pre>
   <p>Start a node that pledges 2&nbsp;GB of storage and joins an existing swarm:</p>
