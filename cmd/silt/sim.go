@@ -146,6 +146,26 @@ func cmdSim(args []string) error {
 		fmt.Println(res)
 		return err
 
+	case "bondstanding":
+		o := sim.DefaultBondStandingOpts()
+		o.Net = netCfg
+		if *nodes > 0 {
+			o.Nodes = *nodes
+		}
+		o.Report = func(line string) { fmt.Println(line) }
+		fmt.Printf("bondstanding: %d nodes, %d bonded validators, %d sybils, quorum %d, seed %d\n\n",
+			o.Nodes, o.Bonded, o.Sybils, o.Chain.Quorum, *seed)
+		res, err := sim.BondStanding(*seed, o)
+		fmt.Println()
+		fmt.Println(res)
+		if err != nil {
+			return err
+		}
+		if res.Committed != 1 || !res.SybilProposalRejected || !res.SybilQuorumDenied || !res.DecayedOut {
+			return fmt.Errorf("bondstanding did not behave as expected (seed %d reproduces this)", *seed)
+		}
+		return nil
+
 	case "takedown":
 		fmt.Printf("takedown: 40-node swarm, quorum-style denylist, seed %d\n\n", *seed)
 		res, err := sim.Takedown(*seed)
@@ -185,6 +205,6 @@ func cmdSim(args []string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown scenario %q (scenarios: scatter, churn, economy, audit, capacity, consensus, takedown)", scenario)
+		return fmt.Errorf("unknown scenario %q (scenarios: scatter, churn, economy, audit, capacity, consensus, bondstanding, takedown)", scenario)
 	}
 }

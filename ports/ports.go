@@ -138,6 +138,12 @@ type CreditLedger interface {
 	// RecordAudit settles a storage challenge: a passed audit earns the
 	// prover a reward, a failed one costs a slash.
 	RecordAudit(prover NodeID, id ChunkID, passed bool)
+	// RecordBondChallenge settles a storage-BOND challenge: the prover
+	// answered (or failed) a random challenge on its identity-bound bond
+	// of provenBytes. This is the Sybil-cost input to reputation —
+	// standing that must be backed by real, challenged, held storage, not
+	// self-reported serving. tick is a monotonic clock for staleness.
+	RecordBondChallenge(prover NodeID, provenBytes int64, passed bool, tick uint64)
 	Balance(n NodeID) int64
 	CanPublish(n NodeID) bool
 	// ChargePublish deducts the publish fee, or returns
