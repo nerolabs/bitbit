@@ -131,6 +131,8 @@ func cmdDaemon(args []string) error {
 		RepairInterval:      ports.Duration(60 * time.Second),
 		RepairSlack:         2,
 		ReachabilityTimeout: ports.Duration(3 * time.Second),
+		FetchAttempts:       3, // re-sweep providers on transient relay-at-capacity refusals (#65)
+		FetchBackoff:        ports.Duration(200 * time.Millisecond),
 	}, walltime.New(loop), tr, store)
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
@@ -629,6 +631,8 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 		K: 8, Alpha: 3,
 		RequestTimeout: ports.Duration(2 * time.Second),
 		Replication:    3,
+		FetchAttempts:  3, // this is the actual fetcher (swarm get) — retry transient relay refusals (#65)
+		FetchBackoff:   ports.Duration(200 * time.Millisecond),
 	}, walltime.New(loop), tr, memstore.New())
 	nd.SetEphemeral(true) // a publish/fetch client that keeps nothing — peers must not route to it (#43)
 

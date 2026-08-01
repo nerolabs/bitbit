@@ -73,6 +73,25 @@ jobs:
         # the in-process sim skips — the class of bug #36 was.
         run: go test ./e2e/ -count=1 -v
 
+  nat-integration:
+    name: Integration — cross-NAT over a real relay (docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Cross-NAT publish → fetch through the relay
+        # Stands up two NATed daemons + a public relay in real container
+        # networks (real kernel NAT via iptables MASQUERADE), publishes from
+        # behind NAT A and fetches from behind NAT B, asserting bit-perfect
+        # across the relay. This is the automatable replacement for the
+        # manual two-machine (Mac A ↔ Mac B) rig — the layer that proves the
+        # relay/NAT path, which flat-localhost e2e can't. Docker + compose
+        # are preinstalled on ubuntu-latest.
+        run: ./integration/nat/run.sh
+
   website:
     name: Website — changelog + links
     runs-on: ubuntu-latest
