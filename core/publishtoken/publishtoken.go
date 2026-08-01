@@ -28,25 +28,13 @@ var (
 	ErrInsufficientSigs = errors.New("publishtoken: too few distinct qualified validator signatures")
 )
 
-// Sig is one validator's blind signature on a token's serial.
-type Sig struct {
-	Validator ports.NodeID
-	Sig       []byte
-}
-
-// Token is a publish credential: a random serial plus blind signatures from a
-// quorum of distinct validators. It carries no link to the publisher.
-type Token struct {
-	Serial []byte
-	Sigs   []Sig
-}
-
-// Verify checks a quorum token: at least k DISTINCT validators, each qualified
-// (qualified) and each signature valid under that validator's issuer key
-// (issuerKey). Mirrors chain.ValidateCommit — distinct, qualified, count ≥ k.
-// A signature that is present but forged fails the whole token (a liar); an
-// unknown or unqualified validator's signature simply doesn't count.
-func Verify(tok Token, k int, issuerKey func(ports.NodeID) *rsa.PublicKey, qualified func(ports.NodeID) bool) error {
+// Verify checks a quorum token (ports.PublishToken): at least k DISTINCT
+// validators, each qualified (qualified) and each signature valid under that
+// validator's issuer key (issuerKey). Mirrors chain.ValidateCommit — distinct,
+// qualified, count ≥ k. A signature that is present but forged fails the whole
+// token (a liar); an unknown or unqualified validator's signature simply
+// doesn't count.
+func Verify(tok ports.PublishToken, k int, issuerKey func(ports.NodeID) *rsa.PublicKey, qualified func(ports.NodeID) bool) error {
 	seen := make(map[ports.NodeID]bool)
 	valid := 0
 	for _, s := range tok.Sigs {

@@ -33,9 +33,9 @@ func mkValidators(t *testing.T, n int) []validator {
 
 // mkToken plays the publisher: it gets a blind signature from each signer
 // (paying the fee, here a no-op) and assembles the quorum token.
-func mkToken(t *testing.T, rng *mrand.Rand, serial []byte, signers []validator) Token {
+func mkToken(t *testing.T, rng *mrand.Rand, serial []byte, signers []validator) ports.PublishToken {
 	t.Helper()
-	tok := Token{Serial: serial}
+	tok := ports.PublishToken{Serial: serial}
 	for _, v := range signers {
 		blinded, secret, err := blindtoken.Blind(rng, v.pub, serial)
 		if err != nil {
@@ -45,7 +45,7 @@ func mkToken(t *testing.T, rng *mrand.Rand, serial []byte, signers []validator) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		tok.Sigs = append(tok.Sigs, Sig{Validator: v.id, Sig: blindtoken.Unblind(v.pub, blindSig, secret)})
+		tok.Sigs = append(tok.Sigs, ports.TokenSig{Validator: v.id, Sig: blindtoken.Unblind(v.pub, blindSig, secret)})
 	}
 	return tok
 }

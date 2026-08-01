@@ -116,6 +116,26 @@ type Entry struct {
 	// Publisher identifies who pays the publish fee when the registry
 	// is credit-gated. Zero in ungated (local CLI) use.
 	Publisher NodeID
+	// Token, when present, is a quorum-issued publish credential that
+	// authorizes this entry WITHOUT a durable Publisher identity — the fix
+	// for the on-chain authorship leak (F1). The chain verifies it and
+	// rejects a reused serial (double-spend). Verification/issuance live in
+	// core/publishtoken and core/blindtoken; this is just the wire shape.
+	Token *PublishToken `cbor:",omitempty"`
+}
+
+// TokenSig is one validator's blind signature on a publish token's serial.
+type TokenSig struct {
+	Validator NodeID
+	Sig       []byte
+}
+
+// PublishToken is a publisher-unlinkable publish credential: a random serial
+// blind-signed by a quorum of distinct validators. It carries no durable
+// identity, so an observer cannot map a reputation key to the roots it published.
+type PublishToken struct {
+	Serial []byte
+	Sigs   []TokenSig
 }
 
 // Registry is the append-only log of published roots. v1 is a single
