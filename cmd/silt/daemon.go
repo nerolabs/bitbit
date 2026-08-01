@@ -56,8 +56,8 @@ func cmdDaemon(args []string) error {
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
 	uiAddr := fs.String("ui", "", "serve the web UI at this address (e.g. 127.0.0.1:8081)")
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
-	quorum := fs.Int("quorum", 1, "attestations required to commit a block")
-	minRep := fs.Int64("min-rep", 0, "reputation threshold for proposers/attesters (0 = trusted deployment)")
+	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
+	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -249,6 +249,14 @@ func cmdDaemon(args []string) error {
 			}
 			attesterIDs = append(attesterIDs, aid)
 		}
+	}
+
+	// A validator running below the safe thresholds self-commits the
+	// registry (a lone/fresh node can rubber-stamp). Legitimate for a
+	// one-box or fully-trusted swarm, dangerous on an open network — so it
+	// is an explicit, LOUD choice, never a silent default.
+	if *validator && (*quorum < 1 || *minRep <= 0) {
+		fmt.Printf("⚠ trusted-deployment mode (quorum %d, min-rep %d): this validator self-commits the registry — safe only for a one-box or fully-trusted swarm, NOT an open network\n", *quorum, *minRep)
 	}
 
 	var reg ports.Registry

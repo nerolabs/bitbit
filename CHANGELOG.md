@@ -8,6 +8,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **Safe consensus defaults** (#79): `silt daemon -validator` now defaults to
+  `-quorum 3 -min-rep 100` (was `-quorum 1 -min-rep 0`), so a lone or fresh
+  node can no longer rubber-stamp the registry — writing requires earned
+  standing and a real quorum. A trusted one-box swarm opts into self-commit
+  explicitly (`-quorum 0 -min-rep 0`), which now prints a loud
+  trusted-deployment warning rather than being the silent default. Outcome
+  proven end-to-end: e2e `TestDefaultsRefuseRubberStampCommit` asserts the
+  default refuses a lone commit, with `TestPublishCommitFetchOverTCP` (explicit
+  `-quorum 0`) as the positive control.
+
 ### Added
 - **Deterministic NAT/relay/hole-punch in the sim** (#27): the in-process
   network (`simnet`) now models a home router — a NATed node dials out freely
