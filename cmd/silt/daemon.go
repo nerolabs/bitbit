@@ -424,6 +424,13 @@ func cmdDaemon(args []string) error {
 			fmt.Fprintln(os.Stderr, "relay-via:", err)
 			return
 		}
+		// #27: let the transport upgrade a relay path to a direct one. The
+		// relay coordinates (RequestPunch); when it signals us, punch the peer
+		// from our registration port (HolePunch).
+		rc.SetOnPunch(func(peer ports.NodeID, peerAddr string, localPort int) {
+			tr.HolePunch(peer, peerAddr, localPort)
+		})
+		tr.SetRequestPunch(rc.RequestPunch)
 		go rc.Run(func(err error) {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "relay-via: registration failed:", err)

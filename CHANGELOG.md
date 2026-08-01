@@ -9,6 +9,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Hole-punching: relay paths upgrade to direct connections** (#27): when two
+  NATed daemons talk through a relay, the relay now *coordinates* a
+  hole-punch — it tells each the other's observed endpoint, and both dial it
+  from their relay-registration port at once (`SO_REUSEPORT`, TCP
+  simultaneous-open). Through a cone NAT the crossing SYNs establish a direct
+  link, which the transport adopts so the bulk traffic leaves the relay; on
+  symmetric NAT it simply fails and the relay path stays. The relay forwards no
+  bytes for the direct path — it only swaps addresses. Proven end-to-end
+  against real kernel NAT by the `integration/nat` harness (cone → direct,
+  symmetric → relay). This demotes the relay from every-byte carrier to
+  rendezvous, the big cost win for cheap public infrastructure (S6).
 - **NATed nodes learn their public endpoint, STUN-style** (#27, the groundwork
   for hole-punching): when a node registers with a relay, the relay reports the
   `host:port` it observed the registration coming from — the node's NAT mapping.

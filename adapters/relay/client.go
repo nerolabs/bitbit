@@ -60,10 +60,13 @@ type Client struct {
 	onConn    func(net.Conn)
 	lg        ports.Logger
 
-	mu       sync.Mutex
-	conn     net.Conn // current control conn, nil between attempts
-	closed   bool
-	observed string // our public host:port as the relay last reported it (#27)
+	mu        sync.Mutex
+	conn      net.Conn // current control conn, nil between attempts
+	closed    bool
+	observed  string // our public host:port as the relay last reported it (#27)
+	localPort int    // local port of the control conn — reused for the punch dial (#27)
+	writeMu   sync.Mutex
+	onPunch   func(peer ports.NodeID, peerAddr string, localPort int)
 }
 
 // Observed returns this node's public host:port as the relay saw it at
@@ -73,6 +76,42 @@ func (c *Client) Observed() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.observed
+}
+
+// LocalPort is the control conn's local port. A hole-punch dials the peer from
+// this same port so the NAT reuses the mapping the relay observed (#27).
+func (c *Client) LocalPort() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.localPort
+}
+
+// SetOnPunch registers the callback fired when the relay tells us to punch a
+// peer: (peer id, peer's observed endpoint to dial, our reusable local port).
+func (c *Client) SetOnPunch(fn func(peer ports.NodeID, peerAddr string, localPort int)) {
+	c.onPunch = fn
+}
+
+// send writes a control frame to the current registration conn, serialized
+// against the pinger and other senders.
+func (c *Client) send(fr ctrl) error {
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("relay: no control connection")
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return writeCtrl(conn, fr)
+}
+
+// RequestPunch asks the relay to coordinate a hole-punch with target: the relay
+// tells each side the other's observed endpoint (Addr), and both dial it from
+// their registration port at once — DCUtR upgrading a relay to a direct link
+// (#27). Best-effort; if the punch fails the relay path stays.
+func (c *Client) RequestPunch(target ports.NodeID) {
+	_ = c.send(ctrl{Op: "punch", Target: target[:]})
 }
 
 // NewClient prepares a registration with the relay; Run starts it.
@@ -153,15 +192,13 @@ func (c *Client) session(registered func(error)) error {
 		return nil
 	}
 	c.conn = conn
+	if la, ok := conn.LocalAddr().(*net.TCPAddr); ok {
+		c.localPort = la.Port // the port a hole-punch will reuse (#27)
+	}
 	c.mu.Unlock()
 
 	conn.SetDeadline(time.Now().Add(opTimeout))
-	wmu := &sync.Mutex{}
-	write := func(fr ctrl) error {
-		wmu.Lock()
-		defer wmu.Unlock()
-		return writeCtrl(conn, fr)
-	}
+	write := c.send
 	if err := write(ctrl{Op: "register"}); err != nil {
 		conn.Close()
 		return err
@@ -205,8 +242,18 @@ func (c *Client) session(registered func(error)) error {
 			conn.Close()
 			return err
 		}
-		if fr.Op == "incoming" {
+		switch {
+		case fr.Op == "incoming":
 			go c.acceptStream(fr.Stream)
+		case fr.Op == "punch" && c.onPunch != nil && len(fr.Target) == 32 && fr.Addr != "":
+			// The relay is coordinating a hole-punch: dial fr.Addr from our
+			// registration port, right now, while the peer does the same (#27).
+			var peer ports.NodeID
+			copy(peer[:], fr.Target)
+			c.mu.Lock()
+			lp := c.localPort
+			c.mu.Unlock()
+			go c.onPunch(peer, fr.Addr, lp)
 		}
 	}
 }
