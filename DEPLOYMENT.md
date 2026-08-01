@@ -60,10 +60,15 @@ gives the same production / preview / branch model.
 ## CI gates (`.github/workflows/ci.yml`)
 
 Runs on every push and PR: `go vet`, `gofmt`, the full `go test ./...`
-suite, a check that `changelog.html` is in sync with `CHANGELOG.md`, and
-a website link-check. Make these **required status checks** on `main`
-and `staging` (Settings → Branches → protection rules) so nothing merges
-red, and neither environment can deploy a broken build.
+suite (unit + coverage floor), a **race-detector** build, the
+**multi-process e2e** suite (real daemons over TCP), and — new — the
+**cross-NAT integration** jobs over a real-kernel-NAT Docker harness
+(`nat-integration`: cross-NAT publish/fetch + restart survival; `nat-holepunch`:
+cone punches, symmetric falls back), plus changelog/roadmap/buildlog freshness
+checks, a docs-ship-with-code check, and a website link-check. Make these
+**required status checks** on `main` and `staging` (Settings → Branches →
+protection rules) so nothing merges red, and neither environment can deploy a
+broken build.
 
 ## Releases (`.github/workflows/release.yml`)
 
@@ -71,8 +76,8 @@ Dormant until you cut one. When ready:
 
 ```sh
 # 1. move items from "Unreleased" into a dated version in CHANGELOG.md
-# 2. tag and push
-git tag v0.1.0 && git push origin v0.1.0
+# 2. tag and push (target is V1, harden-first; earlier 0.x tags were misfires)
+git tag v1.0.0 && git push origin v1.0.0
 ```
 
 The workflow builds the macOS / Windows / Linux binaries (`build.sh`) and

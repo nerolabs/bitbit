@@ -1,3 +1,10 @@
+> ⚠️ **HISTORICAL — the genesis handoff (project inception).** This is the
+> original greenfield brief; the project is now called **silt** and is
+> substantially built (milestones M1–M14 done; the launch track is harden-first
+> toward V1). Its milestone list and open questions are superseded. For the
+> **current** state read `ROADMAP.md`, `docs/TENETS.md` (ratified canon),
+> `CHANGELOG.md`, and the open issues. Kept for the record of how it started.
+
 # Project Handoff: `shardnet` (working name — rename freely)
 
 **A content-addressed, erasure-coded, distributed file store — built as a real product from day one, simulated in-process until it needs real sockets.**

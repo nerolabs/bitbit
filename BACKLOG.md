@@ -69,8 +69,9 @@ Work captured for later, most-strategic first. The milestone history
   set approvals to 1 for their PRs (he can approve those) + admin bypass.
 
 ### Housekeeping
-- Cut the **v0.1 release** and publish signed binaries (see ROADMAP);
-  the site's downloads point at build-from-source until then.
+- Cut the **V1 release** and publish signed binaries (see ROADMAP,
+  harden-first; earlier `0.x` tags were misfires); the site's downloads
+  point at build-from-source until then.
 - Removed 44 MB of stale `dist/` binaries from the repo and gitignored
   the directory (done in this change).
 
