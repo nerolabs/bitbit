@@ -9,6 +9,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Security
+- **Identity costs storage: bond-gated consensus standing** (#78): reputation —
+  the number the chain gates writes on — is no longer dominated by
+  self-reported serving (which two colluding nodes could wash-mint for free,
+  threat-catalog D1/D3). Standing now costs **real, challenged, held storage**:
+  a validator seals an identity-bound storage bond (`core/bond`, `-bond`), and
+  validators challenge each other's bonds over the wire (`MsgBondChallenge`/
+  `MsgBondReply`), verifying against only the committed Merkle root — no
+  ground-truth fetch. Standing must be *sustained* (it decays if a bond stops
+  being re-proven), so N Sybil identities cost N distinct bonds on N disks.
+  Proven for the OUTCOME at three tiers: unit (`core/bond`), sim
+  (`TestBondAuditEarnsStandingOverTheNetwork` — a no-bond node is refused,
+  decay retires unsustained standing), and e2e
+  (`TestBondEarnedStandingCommitsOverTCP` — two bonded validators earn standing
+  over real TCP and commit on `-min-rep 100`). Honest limit: the bond is held
+  in RAM and the seal is not yet memory-hard (proof-of-*space*-lite, labeled);
+  disk-persistence + a memory-hard seal are tracked follow-ups. Design:
+  `docs/design/bond-audit.md`.
 - **Safe consensus defaults** (#79): `silt daemon -validator` now defaults to
   `-quorum 3 -min-rep 100` (was `-quorum 1 -min-rep 0`), so a lone or fresh
   node can no longer rubber-stamp the registry — writing requires earned
