@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Publish no longer returns a link for a file the swarm can't rebuild**
+  (#64, the data-shard twin of #60): placement verified that *manifest*
+  chunks landed durably, but **data and parity shards were placed
+  optimistically** — a column that no node accepted was ignored, so under
+  load a stripe could silently erode below its erasure threshold `k` and the
+  publish still returned a valid-looking link (in the field, f123 came back
+  `stripe 0: only 9 of 16 shards, need k=10, unrecoverable`). Distribute now
+  tracks per-shard placement and, before returning a link, **verifies every
+  stripe kept enough placed shards to reconstruct** (accounting for the
+  known-zero padding of a short final stripe); a column that lands nowhere is
+  **retried with a fresh lookup** (as manifest chunks already were), and if a
+  stripe still can't be made recoverable the publisher **fails loudly**
+  instead of handing back an unrebuildable link. The same check closes the
+  identical silent-loss on **uncoded files** (which carry no parity, so every
+  chunk is required). Extends tenet **B7 — trust but verify; no optimistic
+  operations** from the manifest path to all of publish.
 - **Publish no longer returns a link for content it never stored** (#60,
   found in the 300-file scaling re-test): under load, once the network
   passed its capacity cap, a manifest chunk could be placed on *no* node

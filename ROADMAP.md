@@ -26,9 +26,12 @@ strict:
   bucket (Part IX). This is what keeps "V1 must adhere to the tenets" from
   silently expanding V1's scope: e.g. "reward tracks value" is canon, but
   whether V1 ships the real proof-of-retrieval economy or a clearly-labeled
-  non-authoritative placeholder is a sequencing call made here, and
-  "whether the trust plane is a v1 pillar or a later one" is (per Part IX)
-  still open — see Open Question #3 in the tenets.
+  non-authoritative placeholder is a sequencing call made here. **Decided
+  2026-07-31: the trust plane IS a V1 pillar** (resolving tenets Open
+  Question #3), so V1 ships a *real, field-proven* proof-of-retrieval
+  economy and chain — not a labeled placeholder. This is the deliberate,
+  higher-cost path, chosen because the launch must be credible from day one
+  (see the launch track below).
 - **Release is gated by proof (tenet R1).** A tenet is only "met" for V1
   when it is field-proven, not sim-proven-only. The current gate is the
   multi-machine scale re-test of the #43/#46 fixes (integrity S1 held; the
@@ -161,59 +164,70 @@ network is empty.
 
 **Phase 1 is complete** — the durability + scale backbone is in.
 
-The launch track is deliberately **community-feedback-first** (Andrew,
-2026-07-25), a re-sequencing of the earlier "form an entity + pay for an
-audit before launch" plan. For an early, unproven infrastructure project,
-spending the scarcest resources (money, legal exposure) on formalities
-ahead of validation is backwards. Instead: ship something real and
-honestly labeled, let the community be the first review, and let what we
-learn decide whether the formal commitments are worth making.
+The launch track is **harden-first** (Andrew, 2026-07-31 — a deliberate
+re-sequencing of the earlier "community-feedback-first" plan). The reasoning:
+a half-baked experimental drop on a project this ambitious — content-addressed
+storage + a reputation-quorum chain, in a space crowded with "AI/web3 storage"
+noise — reads as a *poser build* and burns the one first impression we get
+with the exact technical audience we need. So the first public appearance must
+be **credible and impressive from day one**: the tenet *floors* AND the harder
+*ceilings* (Sybil training-wheels, real proof-of-retrieval, full DoS
+resistance, cross-network hole-punching) are done, and the chain is
+**field-proven**, BEFORE any launch. Feedback is still sought — but on
+something that already stands up, not as a substitute for hardening. (This
+also re-aligns with `launch-plan.md`'s pre-announcement gate.)
 
-**Phase A — Ship & solicit (the feedback release).**
-8. Cut **v0.1**, labeled *experimental, unaudited, for evaluation and
-   feedback — not for data you can't afford to lose.* Not signed/notarized
-   (a wider-push concern); checksums + build-from-source suffice for a
-   technical audience. Andrew does a personal review + hardening pass
-   before any outreach.
-9. Publish the **threat model** (`docs/threat-model.md`) for community
-   review — honest disclosure *and* the invitation to break it. At this
-   stage the community is the security review.
-10. Market for exactly one thing: **feedback.** Narrow, technical
-    audiences ("help us break this," not "use this"); the launch plan is
-    re-pointed at that single goal.
+The pre-public waves, ordered (each item traces to a tenet or catalog risk;
+the open issues are the live task list):
 
-**Phase B — Learn & decide (feedback-driven).**
-11. Triage what comes back: bugs, design critique, security findings, and
-    whether anyone cares.
-12. **Then** decide the legal posture — entity, jurisdiction, or stay a
-    pure code-publishing project — informed by what the early engagement
-    reveals, not made blind. No entity is formed on spec.
+**Wave 0 — silent-loss floor.** #64 data-shard placement verify-≥k
+(the #60 disease on DATA shards), field-proven on the rig; close #46. S3/B7.
 
-**Phase C — Harden & formalize (only if B justifies it).**
-13. **Cross-network reachability — bootstrap rendezvous + NAT traversal**
-    (issue #27). The thing between an impressive demo and person-to-person
-    use: two home nodes on separate networks can neither find nor connect
-    to each other today. Needs a rendezvous (community DNS seeds / relays,
-    never SiltHQ-run) plus NAT traversal (relay of ciphertext — content-
-    blind by design — with hole-punching later). Arguably the highest-value
-    engineering item once feedback validates the direction. Design in
-    `docs/design/cross-network.md`: splits rendezvous from NAT traversal,
-    keeps the relay *capability* in the binary while the public
-    *deployment* stays throwaway dev scaffolding (never project-run), and
-    sets the build order (mDNS → reachability check → relay → dev node →
-    prove two Macs → hole-punching).
-14. Security hardening — Sybil/eclipse resistance, ungameable reputation,
-    real (non-toy) proof-of-retrieval.
-15. Multi-process e2e integration tests over real TCP/daemons.
-16. Denylist distribution/subscription (completes the abuse-handling
-    story); pull-cache tier for demand dispersion.
-17. Formal commitments *if warranted by traction and feedback*: legal
-    entity + DMCA agent, an independent paid audit, signed/notarized
-    binaries, and a wider launch.
+**Wave 1 — panic/parse/local-API floor (cheap).** Panic-recover + fuzz the
+decoders (A5); bound declared manifest chunk count/size (A6); lock the local
+UI/JSON API with Origin/Host allow-listing + a per-daemon token (I1). Frame
+bounds and relay caps already exist.
 
-The gate that used to be "entity + paid audit" is now **"publish the
-threat model for community review."** Everything expensive or irreversible
-waits for evidence. See `docs/launch-plan.md` and `docs/risk-register.md`.
+**Wave 2 — full resource-accounting + durability-under-load.** The per-peer
+resource-accounting framework (catalog §A, A1–A14), repair-storm protection
+(A15: probe-before-repair, backoff, concurrent-repair cap), and the post-cap
+relay throughput / fetch-retry / register-after-distribute work (#65).
+
+**Wave 3 — cross-network hole-punching (#27).** mDNS → reachability → relay →
+two-Macs is done; hole-punching is the remaining structural piece, demoting
+the relay from every-byte to rendezvous. Wire-sensitive, so it lands before
+the network grows. Design in `docs/design/cross-network.md` (rendezvous split
+from NAT traversal; relay *capability* in the binary, public *deployment*
+stays throwaway per R3).
+
+**Wave 4 — the trust plane, as a V1 pillar (the long pole).** Ratify the
+tenets (#54); field-test the chain/consensus multi-machine (#52 — today it is
+sim-proven only, and R1 demands field proof); build **real (non-toy)
+proof-of-retrieval** to replace the self-admittedly-gameable credit ledger
+(Don't #7); and stand up the **Sybil training-wheels + launch-window controls**
+(risk 15: time-boxed seeded anchors, gated reputation ramp, maturity-scaled
+quorum thresholds, shed on *measured* decentralization). With reputation-gated
+writes now in V1, Sybil→quorum-capture (D3) is a direct V1 risk; PoW/stake
+stays deferred, so the training-wheels carry that weight. Resolve publisher
+privacy here (risk 14 / catalog F1) — direction: **blind-signed publish
+tokens** (a Chaumian-style token unlinks a publish from the durable
+reputation key while preserving the fee/anti-spam economics).
+
+**Wave 5 — cut v0.1 (complete + signed) & solicit.** A signed/notarized,
+checksummed release; publish the **threat model** (`docs/threat-model.md`) as
+honest disclosure *and* an invitation to break it; multi-process e2e tests
+over real daemons; then narrow, technical outreach ("help us break this").
+Decide the legal posture (entity, jurisdiction) informed by the engagement —
+still not on spec, but now *after* a credible artifact exists, not instead of
+one.
+
+**Wave 6 — economics & registry cheapness (#47/#48)**, co-designed with the
+Wave 4 economy; denylist distribution/subscription; pull-cache tier.
+
+The pre-launch gate is **"the tenets, field-proven"** (R1) — floors and
+pillars both. Everything expensive or irreversible still waits for proof, but
+"proof" now means *we* proved it stands up, not that we shipped it half-built
+and asked the crowd. See `docs/launch-plan.md` and `docs/risk-register.md`.
 
 ## Release engineering (v0.1)
 - **Cut the v0.1 release + publish signed binaries** — Phase 3. Not done
