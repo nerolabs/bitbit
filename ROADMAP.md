@@ -205,18 +205,21 @@ the network grows. Design in `docs/design/cross-network.md` (rendezvous split
 from NAT traversal; relay *capability* in the binary, public *deployment*
 stays throwaway per R3).
 
-**Wave 4 — the trust plane, as a V1 pillar (the long pole).** Ratify the
-tenets (#54); field-test the chain/consensus multi-machine (#52 — today it is
-sim-proven only, and R1 demands field proof); build **real (non-toy)
-proof-of-retrieval** to replace the self-admittedly-gameable credit ledger
-(Don't #7); and stand up the **Sybil training-wheels + launch-window controls**
-(risk 15: time-boxed seeded anchors, gated reputation ramp, maturity-scaled
-quorum thresholds, shed on *measured* decentralization). With reputation-gated
-writes now in V1, Sybil→quorum-capture (D3) is a direct V1 risk; PoW/stake
-stays deferred, so the training-wheels carry that weight. Resolve publisher
-privacy here (risk 14 / catalog F1) — direction: **blind-signed publish
-tokens** (a Chaumian-style token unlinks a publish from the durable
-reputation key while preserving the fee/anti-spam economics).
+**Wave 4 — the trust plane, as a V1 pillar (the long pole). LARGELY DONE
+(2026-08-01).** The self-admittedly-gameable credit ledger is replaced: consensus
+**standing now costs challenged, held storage** — the "identity costs storage"
+bond (T1/#82), unit+sim+e2e, closing the Sybil→quorum-capture path (D1/D3, Don't
+#7 is no longer wall-art). The **launch-window training wheels** are built (T2/#83):
+while immature a commit needs anchor sign-off, shedding mechanically on measured
+decentralization; safe consensus defaults too (#81). **Publisher privacy** is
+built (T3/#84): quorum-issued (k-of-n) blind publish tokens unlink authorship —
+a committed entry carries the token, not a Publisher NodeID (F1 closed).
+**Remaining in-wave:** ratify any tenet amendments; the multi-machine field test
+of the whole chain (#52 — bonds/tokens are sim+e2e-proven on one host, but R1
+wants a true multi-machine run); the **version-floor advisory** (R4/#13). Honestly-
+labeled residuals carried forward: the bond seal is space-lite/in-RAM (not
+memory-hard); the token issuer key is in-RAM (persist + on-chain registration);
+real cryptographic proof-of-retrieval and PoW/stake stay deferred.
 
 **Wave 5 — cut V1 (complete + signed) & solicit.** A signed/notarized,
 checksummed release; publish the **threat model** (`docs/threat-model.md`) as
