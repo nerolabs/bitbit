@@ -19,18 +19,31 @@ SRC = ROOT / "ROADMAP.md"
 OUT = ROOT / "website" / "roadmap.html"
 
 
+GH_BLOB = "https://github.com/nerolabs/silt/blob/main/"
+
+
+def _href(url: str) -> str:
+    """Keep absolute / anchor / root links as-is; map repo-relative paths
+    (docs/…, ROADMAP.md) to their GitHub blob URL so they resolve on the
+    published site and pass the internal link-check, which skips externals."""
+    if url.startswith(("http://", "https://", "//", "#", "mailto:", "/")):
+        return url
+    return GH_BLOB + url
+
+
 def inline(s: str) -> str:
     """Minimal inline markdown → HTML: escape, then code/bold/italics/links."""
     s = html.escape(s)
     s = re.sub(r"`([^`]+)`", r'<span class="mono">\1</span>', s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)  # bold first, may wrap inner *italics*
     s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)
-    s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
+               lambda m: f'<a href="{_href(m.group(2))}">{m.group(1)}</a>', s)
     return s
 
 
 def render(md: str) -> str:
-    body, para = [], []
+    body, para, quote = [], [], []
     intro_done, lead_used = False, False
     list_kind = None  # None | "ul" | "ol"
 
@@ -45,6 +58,13 @@ def render(md: str) -> str:
         body.append(f'<p class="{cls}">{text}</p>' if cls else f"<p>{text}</p>")
         para = []
 
+    def flush_quote():
+        nonlocal quote
+        if not quote:
+            return
+        body.append(f"<blockquote>{inline(' '.join(quote))}</blockquote>")
+        quote = []
+
     def close_list():
         nonlocal list_kind
         if list_kind:
@@ -57,6 +77,9 @@ def render(md: str) -> str:
             close_list()
             body.append(f"<{kind}>")
             list_kind = kind
+
+    def flush_all():
+        flush_para(); flush_quote(); close_list()
 
     # Unwrap soft wraps: an indented continuation line folds onto the
     # line above it (how Markdown continues a list item or paragraph).
@@ -72,25 +95,28 @@ def render(md: str) -> str:
         line = raw.rstrip()
         if re.match(r"^\[[^\]]+\]:\s+https?://", line) or line.startswith("# "):
             continue
-        if line.startswith("## "):
-            flush_para(); close_list(); intro_done = True
+        if line.startswith("> ") or line == ">":
+            flush_para(); close_list()
+            quote.append(line[2:] if len(line) > 1 else "")
+        elif line.startswith("## "):
+            flush_all(); intro_done = True
             body.append(f"<h2>{inline(line[3:])}</h2>")
         elif line.startswith("### "):
-            flush_para(); close_list()
+            flush_all()
             body.append(f"<h3>{inline(line[4:])}</h3>")
         elif line.startswith("- "):
-            flush_para(); open_list("ul")
+            flush_para(); flush_quote(); open_list("ul")
             body.append(f"<li>{inline(line[2:])}</li>")
         elif re.match(r"^\d+\.\s", line):
-            flush_para(); open_list("ol")
+            flush_para(); flush_quote(); open_list("ol")
             item = re.sub(r"^\d+\.\s", "", line)
             body.append(f"<li>{inline(item)}</li>")
         elif line.strip() == "":
-            flush_para(); close_list()
+            flush_all()
         else:
-            close_list()
+            flush_quote(); close_list()
             para.append(line.strip())
-    flush_para(); close_list()
+    flush_all()
     return "\n".join(body)
 
 
@@ -109,6 +135,8 @@ TEMPLATE = """<!doctype html>
 <style>
   .doc ol {{ padding-left:1.2rem; }}
   .doc ol li {{ margin:0.4rem 0; }}
+  .doc blockquote {{ margin:1.4rem 0; padding:0.1rem 0 0.1rem 1.1rem; border-left:2px solid var(--ochre); color:var(--drab); }}
+  .doc blockquote b {{ color:var(--bone); }}
 </style>
 </head>
 <body>

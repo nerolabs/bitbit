@@ -9,12 +9,32 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Docs
+- **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
+  on the board** (2026-08-02) — a docs/canon + tracker pass, no code or
+  behavior change, acting on an intent-level fresh-eyes review. **M0** is
+  requalified from "*resolve*" the trilemma to "***hold*** it — refuse to
+  trade any corner away," and bound to a falsifiable test (held iff an
+  *external* red-team suite denies all three failure modes); privacy and
+  accountability hold from day one while **Sybil-resistance is the corner that
+  bootstraps**. "No center" becomes **"no *permanent* center"** (immutable #3
+  and T1), reconciling the invariant with the time-boxed launch-window anchors.
+  A new tenet **S7 — "durability must pay for itself"** names the repair-loop
+  economics that killed Freenet/GNUnet. **B8 and V3** now require the adversary
+  that certifies a novel composition to be *external*, not self-graded. On the
+  tracker, the **V1 gate spine is materialized** as GitHub labels + issues
+  (gates 0→6, critical path 1→4→6, pinned epic #94): the previously
+  prose-only Gate 1 floors (#87/#88/#89) and Gate 4 "the car" (#90–#93, the
+  real M0 mechanism) and Gate 5 durability economics (#95) are now filed and
+  traced to their tenet. The site's roadmap/changelog generators gain relative-
+  link and blockquote rendering so the volatile pages stay generated, never
+  hand-edited.
 - **Canon reconciled: mission, mechanisms, and a single roadmap spine**
   (2026-08-02) — a docs/canon pass, no code or behavior change.
   `TENETS.md` is restructured into three tiers: a new mission-immutable
-  **M0** (silt exists to resolve the privacy × accountability × Sybil
-  trilemma — unlinkable publishing, real accountability, and Sybil
-  resistance at once), six mechanism-immutables, and the build tenets,
+  **M0** (silt exists to *hold* the privacy × accountability × Sybil
+  trilemma — unlinkable publishing, content-level accountability, and
+  Sybil-resistance held together without trading any corner away), six
+  mechanism-immutables, and the build tenets,
   which gain **B8** (use best-in-class, proven components; be novel only
   in how they are composed). `ROADMAP.md` is slimmed to a single GitHub
   `V1`-milestone spine: the retired M/Wave/Tier markers are dropped in

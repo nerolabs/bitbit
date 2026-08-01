@@ -1,7 +1,7 @@
-# Bond audit — challenging held storage over the wire (Trust roadmap T1b)
+# Bond audit — challenging held storage over the wire
 
 **Status: design, 2026-08-01.** This is the wire protocol that turns the
-`core/bond` primitive and `credit.RecordBondChallenge` (T1a, #78) into a live
+`core/bond` primitive and `credit.RecordBondChallenge` (#78) into a live
 mechanism: validators challenge *each other's* storage bonds over the network,
 so consensus standing is continuously backed by real, held, identity-bound
 storage — not self-reported serving. It is deliberately written before the
@@ -9,13 +9,17 @@ code because it adds wire surface, and the roadmap's rule is not to ossify the
 wire on a live network.
 
 This is the **Sybil corner of the M0 trilemma** (privacy × accountability ×
-Sybil). The bond makes standing *cost* something — token-less, work-backed,
-identity-bound — while publishing stays unlinkable from standing (via the
-blind publish tokens, F1/T3). The design here is a **first cut**: it proves the
-mechanism end-to-end but leaves labeled residuals (below) that Gate 4 replaces
-with the real, memory-hard, multi-machine-proven M0 composition.
+Sybil) — the corner silt exists to *hold*, not trade away. The bond makes
+standing *cost* something — token-less, work-backed, identity-bound — while
+publishing stays unlinkable from standing (via the blind publish tokens,
+F1/#84). The design here is a **first cut**: it proves the mechanism
+end-to-end but leaves labeled residuals (below) that ROADMAP Gate 4 replaces
+with the real, memory-hard, multi-machine-proven M0 composition — and that
+composition ships only when an **external** red-team (audit / bounty /
+independent red-team, per B8; the Gate 6 security review) cannot break it, not
+on the author's own say-so.
 
-## What exists (T1a)
+## What exists (the shipped primitive, #78)
 
 - `core/bond`: `Seal(id, size)` builds an identity-bound, Merkle-committed blob
   (proof-of-space-lite). `Answer(nonce)` returns the probed blocks + inclusion
@@ -64,11 +68,12 @@ node that does not hold its bond replies empty ⇒ the challenger records a fail
 `bond.EncodeAnswer`/`DecodeAnswer` (CBOR, the dep the chain already uses) keep
 the wire shape in the `bond` package next to `Answer`.
 
-## The auditor loop (this is T1a's deferred `DecayStale` call-site)
+## The auditor loop (the primitive's deferred `DecayStale` call-site)
 
 A validator runs a periodic sweep (`n.clock.AfterFunc(BondAuditInterval, …)`,
 the pattern the caretaker `repairTick` already uses — there is no other
-standing validator loop, which is why T1a deferred the call-site here):
+standing validator loop, which is why the primitive deferred the call-site
+here):
 
 ```
 bondAuditTick:
@@ -140,7 +145,7 @@ a disk read.
   commits; one that stops answering decays below the bar and **loses its vote** —
   all asserted as outcomes, deterministic and seed-replayable.
 - **e2e:** real daemons over TCP — a validator earns standing via bond
-  challenges and commits a block; a fresh node is refused. This closes T1a's
-  missing e2e tier; the branch does not merge without it. Note this is
-  **single-host** e2e; the multi-machine proof (real NAT/WAN) is Gate 4e (#52),
-  not this pass.
+  challenges and commits a block; a fresh node is refused. This closes the
+  primitive's missing e2e tier; the branch does not merge without it. Note this
+  is **single-host** e2e; the multi-machine proof (real NAT/WAN) is Gate 4e
+  (#52), not this pass.
