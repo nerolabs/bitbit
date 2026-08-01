@@ -144,6 +144,9 @@ type CreditLedger interface {
 	// standing that must be backed by real, challenged, held storage, not
 	// self-reported serving. tick is a monotonic clock for staleness.
 	RecordBondChallenge(prover NodeID, provenBytes int64, passed bool, tick uint64)
+	// DecayStale retires bonded standing not re-proven within maxAge of
+	// now, so consensus standing must be sustained by ongoing challenges.
+	DecayStale(now, maxAge uint64)
 	Balance(n NodeID) int64
 	CanPublish(n NodeID) bool
 	// ChargePublish deducts the publish fee, or returns

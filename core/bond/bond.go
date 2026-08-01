@@ -31,9 +31,22 @@ package bond
 import (
 	"encoding/binary"
 
+	"github.com/fxamacker/cbor/v2"
+
 	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/ports"
 )
+
+// EncodeAnswer / DecodeAnswer serialize a challenge answer for the wire
+// (MsgBondReply carries it in Message.Data). CBOR is the codec the chain
+// already uses.
+func EncodeAnswer(a Answer) ([]byte, error) { return cbor.Marshal(a) }
+
+func DecodeAnswer(b []byte) (Answer, error) {
+	var a Answer
+	err := cbor.Unmarshal(b, &a)
+	return a, err
+}
 
 const (
 	// BlockSize is the granularity of a bond: the unit a challenge probes
