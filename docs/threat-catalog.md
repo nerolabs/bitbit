@@ -56,7 +56,7 @@ limits operator-configurable with sane defaults.
 **Storage (disk)**
 - A9 **Publish/disk-fill spam** ~ — flood placements to consume pledged capacity → per-peer placement quotas + publish credit-cost (exists, but Sybil-farmable).
 - A10 **Small-object / metadata bloat** ~ — many tiny chunks inflate index/registry/per-object overhead (seen in the 300-file run) → min-chunk-size or per-object accounting; per-publisher registry quota.
-- A11 **Dangling-entry registry bloat** ~ — weaponized #60 (register-without-store) → register-after-distribute (#65) + registry write quotas.
+- A11 **Dangling-entry registry bloat** ~ — weaponized #60 (register-without-store). The silent-loss half is FIXED (#60 manifest + #64 data-shard: publish returns no link unless the content is provably reconstructable, else fails loud), so a failed publish no longer hands back a broken link — but a loud-failed publish still leaves a dangling *registry entry* (no link to the user), so register-after-distribute (#65) + registry write quotas remain open.
 - A12 **Targeted capacity-exhaustion as censorship** ✗ — fill the nodes nearest a victim's key so its shards can't be placed/repaired → headroom reservation + detect targeted fills (overlaps eclipse; relates to #64).
 
 **DHT / provider records (outbound bandwidth)**
@@ -67,7 +67,7 @@ limits operator-configurable with sane defaults.
 - A15 **Repair-storm** ✗ — cheap "shard lost" signals trigger expensive whole-stripe reconstruction → **probe-before-repair** (verify loss), debounce/rate-limit triggers, cap concurrent repairs, exponential backoff.
 
 **Relay (the public node)**
-- A16 **Relay slot exhaustion / free-CDN abuse** ~ — hold the 8 per-peer splice slots, or pump bulk NAT↔NAT bytes on someone else's dime → per-identity slot + byte quotas, throughput timeouts, credit-metering (overlaps #65; hole-punching is the structural relief).
+- A16 **Relay slot exhaustion / free-CDN abuse** ~ — hold the per-peer splice slots (default raised 8→16, global 64→128 for #65 fan-out), or pump bulk NAT↔NAT bytes on someone else's dime → per-identity slot + byte quotas, throughput timeouts, credit-metering. **Structural relief now BUILT: hole-punching** (#27) upgrades a relay path to a direct connection through cone NAT (proven, CI-gated), so bulk bytes leave the relay entirely — the relay is demoted to rendezvous. Symmetric-NAT peers still relay; per-identity abuse quotas still open.
 
 ## B. Sybil / eclipse (the taproot — top open weakness)
 - B1 **Bulk identity minting** ✗ — free keypairs → the enabler for most of D, and for eclipse/quorum capture. PoW/stake deferred; lean on earned-reputation + training-wheels meanwhile.

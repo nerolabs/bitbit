@@ -77,8 +77,10 @@ coming from." If the callback lands, the node is public — advertise the
 direct address, done. If it times out, the node is NATed and must fall back
 to a relay. This one check decides everything downstream, and it's a few
 messages over the existing transport. It also yields the node's
-public-facing `host:port` as observed by others (STUN-style), which 2c and
-2d need.
+public-facing `host:port` as observed by others (STUN-style) — **now live:**
+the relay reports it back in the register-ack, the node reads it via
+`relay.Client.Observed()` / `node.ObservedAddr()`, and a peer learns it when
+the relay coordinates a hole-punch. Both 2c and 2d need it.
 
 ### 2c. Relay (the universal fallback)
 When both peers are NATed, neither can accept an inbound connection — but
@@ -108,15 +110,25 @@ daemon running `-relay` somewhere reachable. The *code* is universal; only
 the *placement* (a box with a public IP) is special, and anyone can provide
 that box.
 
-### 2d. Hole-punching (upgrade relay → direct, later)
+### 2d. Hole-punching (upgrade relay → direct) — BUILT, proven
 A relay works but pays bandwidth for the whole transfer. Once two NATed
-peers are talking *through* R, R can coordinate a simultaneous-open: both
-sides fire outbound packets at each other's observed public `host:port` at
-the same instant, and many NATs (full-cone, restricted-cone) let the
-crossing packets establish a direct path — after which R drops out. This is
-DCUtR's trick. It fails on symmetric NAT (fall back to staying on the
-relay). **Deferred to after relay works** — it's an optimization on a
-working system, not a prerequisite.
+peers are talking *through* R, R coordinates a simultaneous-open: both
+sides fire outbound SYNs at each other's observed public `host:port` at
+the same instant (from the same local port their relay registration used,
+via `SO_REUSEPORT`, so the NAT reuses the mapping R observed), and many NATs
+(full-cone, restricted-cone) let the crossing SYNs establish a direct path —
+after which R drops out, demoted to rendezvous. This is DCUtR's trick. It
+fails on symmetric NAT, which stays on the relay. **Implemented and
+end-to-end proven:** the punch primitive establishes a direct connection
+through a real cone NAT and correctly fails on symmetric (relay fallback),
+gated in CI (`nat-holepunch` job over the `integration/nat` Docker harness).
+The make-or-break detail the harness surfaced: a real NAT firewall must
+*drop* unsolicited inbound (stealth), not RST it, or the first crossing SYN
+is refused instead of retransmitted. Code: `adapters/tcpnet/holepunch.go`
+(`HolePunch`, `reuseControl`), relay coordination in `adapters/relay`
+(`punch` op, `coordinatePunch`, `RequestPunch`, `Observed`). (The live
+two-daemon *upgrade* is wired but not yet green end-to-end — blocked on a
+provider-discoverability issue in the minimal harness, not the punch itself.)
 
 ## Where this lives in the code
 
@@ -129,7 +141,7 @@ bytes reach a peer, exactly as it's oblivious to disk vs. memory today.
 | reachability check (2b) | `adapters/discovery` or a new `adapters/reachability` | new |
 | UPnP/NAT-PMP (2a) | new `adapters/portmap` (build-tagged, no cgo) | new |
 | relay transport (2c) | `adapters/tcpnet` as a relayed `Transport`, or a sibling `adapters/relay` | new, the bulk |
-| hole-punching (2d) | extends the relay adapter | later |
+| hole-punching (2d) | `adapters/tcpnet/holepunch.go` + relay coordination in `adapters/relay` | **built, proven (cone → direct; symmetric → relay), CI-gated** |
 | `-relay`, `-mdns`, `-dns-seed` wiring | `cmd/silt/daemon.go` | flags only |
 
 The relay adapter should satisfy the *same* `ports.Transport` the swarm
@@ -213,8 +225,14 @@ Concretely, to keep the accident from happening:
 4. **Stand up the dev node** (separate `deploy/`) — the box to test 3 against.
 5. **Prove it:** Andrew's Mac ↔ wife's Mac, different networks, meeting
    through the dev relay, publishing and retrieving a file.
-6. **UPnP (2a)** and **hole-punching (2d)** — optimizations that reduce
-   relay dependence, once the relay path is solid.
+6. **Hole-punching (2d)** — **done**: the punch primitive is proven end-to-end
+   (cone → direct, symmetric → relay) and CI-gated via the `integration/nat`
+   Docker harness. **UPnP (2a)** — the remaining optimization to reduce relay
+   dependence further (ask the router to open a port).
 7. Community `-dns-seed` guidance in docs; retire/relegate the dev node.
 
-Steps 1–5 are the milestone. 6–7 are polish and hand-off to the community.
+Steps 1–6 are done (hole-punch primitive proven; the live two-daemon upgrade
+is wired but not yet green — a provider-discoverability follow-up). 7 is
+hand-off to the community. Note: cross-network + relay + hole-punch + restart
+are now tested automatically by the Docker harness in CI (`nat-integration`,
+`nat-holepunch`), not the old manual two-Mac rig.

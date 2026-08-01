@@ -1,14 +1,15 @@
-# silt — Tenets (DRAFT for review)
+# silt — Tenets
 
-> Status: **first cut, not canon.** This is one author's exhaustive attempt
-> to distill what we've learned into principles worth ratifying. Argue with
-> every line. Once reviewed and agreed, sections graduate to **canon** and
-> changing them requires a deliberate, reviewed amendment — not a drive-by.
+> Status: **canon (ratified 2026-08-01, #54).** These principles are agreed;
+> changing one now requires a deliberate, reviewed amendment — not a drive-by.
+> The **Immutable** set (Part IX) requires reviewed consensus to touch; the
+> **Evolving** set is expected to change with evidence. The reviewer questions
+> at the end are resolved (see each); they are kept for the record.
 >
 > Format: each tenet is a **stance**, stated plainly. Personas are defined by
 > their **desired outcomes** (what "good" looks like from their seat) and the
 > **promise** silt makes to them. Where two personas' outcomes collide, the
-> tenet is our **stance on the tradeoff** — that is the part worth arguing.
+> tenet is our **stance on the tradeoff**.
 
 ---
 
@@ -326,17 +327,32 @@ security-gated-updates (R4).
 
 **Evolving (current best practice; expected to change with evidence):**
 specific algorithms and parameters (erasure k/n, replication factor, cache
-policy, DHT constants), the exact economic mechanism, which roles ship first,
-and whether the trust plane is a v1 pillar or a later one.
+policy, DHT constants), the exact economic mechanism, and which roles ship
+first. *(The trust-plane-scope question moved out of this bucket — see the
+note below.)*
+
+> **Decided 2026-07-31 (Open Question #3, closed):** the **trust plane is a
+> V1 pillar**, not a later fast-follow. V1 therefore ships a *real,
+> field-proven* proof-of-retrieval economy and chain, not a labeled
+> placeholder — the deliberate, higher-cost path, chosen because the launch
+> must be credible from day one (see `ROADMAP.md` and `launch-plan.md`,
+> harden-first). Publisher privacy (F1) was also decided: **blind-signed
+> publish tokens** (Chaumian-style) unlink a publish from the durable
+> reputation key while preserving the fee/anti-spam economics. These
+> decisions are taken, and the tenets are now **ratified as canon**
+> (2026-08-01, #54 closed).
 
 ---
 
-## Open questions for the reviewer
+## Reviewer questions (resolved at ratification, 2026-08-01)
+
+Kept for the record. #3 is explicitly closed below; the rest were reviewed and
+settled as part of ratification (#54). Reopen via a deliberate amendment.
 
 1. Confirm/rename the **"Aslan"** persona (#1). What is it?
 2. Is **application operator (#12)** a distinct seat from **developer (#11)**, or
    the same person wearing two hats?
-3. Is the **trust plane required for v1**, or is a v1 storage-plane substrate
-   legitimate on its own (with the chain as a fast-follow)?
+3. ~~Is the **trust plane required for v1**...~~ **CLOSED (2026-07-31): yes —
+   the trust plane is a V1 pillar** (see Part IX note above).
 4. Which **tensions in Part VIII** do you want to rule differently?
 5. Anything in **Part IX** you'd move between immutable and evolving?
