@@ -218,7 +218,7 @@ privacy here (risk 14 / catalog F1) — direction: **blind-signed publish
 tokens** (a Chaumian-style token unlinks a publish from the durable
 reputation key while preserving the fee/anti-spam economics).
 
-**Wave 5 — cut v0.1 (complete + signed) & solicit.** A signed/notarized,
+**Wave 5 — cut V1 (complete + signed) & solicit.** A signed/notarized,
 checksummed release; publish the **threat model** (`docs/threat-model.md`) as
 honest disclosure *and* an invitation to break it; multi-process e2e tests
 over real daemons; then narrow, technical outreach ("help us break this").
@@ -234,13 +234,17 @@ pillars both. Everything expensive or irreversible still waits for proof, but
 "proof" now means *we* proved it stands up, not that we shipped it half-built
 and asked the crowd. See `docs/launch-plan.md` and `docs/risk-register.md`.
 
-## Release engineering (v0.1)
-- **Cut the v0.1 release + publish signed binaries** — Phase 3. Not done
-  yet (deliberately). The site's downloads point at build-from-source
-  until then. When ready: move CHANGELOG "Unreleased" into a dated
-  version, `git tag v0.1.0 && git push origin v0.1.0`; the release
-  workflow builds the binaries and publishes a GitHub Release. Add
-  code-signing/notarization (macOS) and a checksums file first.
+## Release engineering (V1)
+- **The target is V1** (harden-first). Any earlier `0.x` tags were learning
+  misfires from before the harden-first decision — not real launches; ignore
+  them and aim straight at V1, updating everything at that point.
+- **Cut the V1 release + publish signed binaries** — not done yet
+  (deliberately: gated on the tenets being field-proven, floors and pillars).
+  The site's downloads point at build-from-source until then. When ready: move
+  CHANGELOG "Unreleased" into a dated version, `git tag v1.0.0 && git push
+  origin v1.0.0`; the release workflow builds the binaries and publishes a
+  GitHub Release. Add code-signing/notarization (macOS) and a checksums file
+  first. See `docs/release-checklist.md`.
 - Website publishing + DNS: see DEPLOYMENT.md (Netlify, apex at Namecheap).
 
 ## Storage-layer hardening (Phase 1 — before launch)

@@ -13,14 +13,18 @@ laptop. Nothing touches the public internet.
 
 ## Get the binary
 
-Download the release for your platform from
-[github.com/nerolabs/silt/releases](https://github.com/nerolabs/silt/releases)
-(and verify it against `SHA256SUMS`), or build from source:
+**Build from source** — no official release is cut yet (the target is V1,
+harden-first; any earlier `0.x` tags were experimental misfires, not releases,
+so don't rely on them):
 
 ```sh
 git clone https://github.com/nerolabs/silt && cd silt
 go build -o silt ./cmd/silt        # one static binary, no cgo
 ```
+
+Signed release binaries (with `SHA256SUMS`) land at
+[github.com/nerolabs/silt/releases](https://github.com/nerolabs/silt/releases)
+when V1 is cut.
 
 For the rest of this doc we assume `silt` is on your path. If you're
 running a downloaded binary, alias it once per terminal:
