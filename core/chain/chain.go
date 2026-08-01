@@ -27,12 +27,14 @@ package chain
 
 import (
 	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
 
+	"github.com/nerolabs/silt/core/publishtoken"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -168,6 +170,8 @@ var (
 	ErrDupRoot        = errors.New("chain: root already registered")
 	ErrUseConsensus   = errors.New("chain: replica is read-only; entries are committed via consensus")
 	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
+	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
+	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -181,6 +185,13 @@ type Chain struct {
 	// ever committed a block — the monotonic decentralization signal the
 	// training wheels shed on (see Mature).
 	validatorsSeen map[ports.NodeID]bool
+	// Publisher-privacy publish tokens (F1): when tokenQuorum > 0 every entry
+	// must carry a PublishToken blind-signed by that many distinct qualified
+	// validators (issuer keys from issuerKey), and spent records each serial so
+	// it can be spent only once (double-spend rejected chain-wide).
+	tokenQuorum int
+	issuerKey   func(ports.NodeID) *rsa.PublicKey
+	spent       map[string]bool
 }
 
 // New starts an empty replica. rep is the local reputation view —
@@ -191,7 +202,18 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 	return &Chain{cfg: cfg, rep: rep,
 		byRoot:         make(map[ports.Hash]ports.Entry),
 		revoked:        make(map[ports.Hash]bool),
-		validatorsSeen: make(map[ports.NodeID]bool)}
+		validatorsSeen: make(map[ports.NodeID]bool),
+		spent:          make(map[string]bool)}
+}
+
+// RequireTokens turns on publisher-privacy publish tokens (F1): every entry
+// must carry a PublishToken blind-signed by `quorum` distinct qualified
+// validators (their issuer keys via issuerKey), and each serial spends exactly
+// once (double-spend rejected across the whole chain). Off by default (quorum
+// 0) — existing behavior is unchanged, so a Publisher-NodeID entry still works.
+func (c *Chain) RequireTokens(quorum int, issuerKey func(ports.NodeID) *rsa.PublicKey) {
+	c.tokenQuorum = quorum
+	c.issuerKey = issuerKey
 }
 
 // Mature reports whether the network has decentralized enough for the
@@ -262,12 +284,27 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		return errors.New("chain: empty block")
 	}
 	seen := make(map[ports.Hash]bool)
+	seenSerial := make(map[string]bool)
 	for _, e := range b.Entries {
 		if _, exists := c.byRoot[e.Root]; exists || seen[e.Root] {
 			return fmt.Errorf("%w: %s", ErrDupRoot, e.Root)
 		}
 		if len(e.ManifestChunks) == 0 {
 			return fmt.Errorf("chain: entry %s has no manifest pointers", e.Root)
+		}
+		if c.tokenQuorum > 0 {
+			if e.Token == nil {
+				return fmt.Errorf("%w: entry %s", ErrTokenRequired, e.Root)
+			}
+			qualified := func(v ports.NodeID) bool { return c.rep(v) >= c.cfg.MinAttesterRep }
+			if err := publishtoken.Verify(*e.Token, c.tokenQuorum, c.issuerKey, qualified); err != nil {
+				return fmt.Errorf("chain: entry %s: %w", e.Root, err)
+			}
+			s := string(e.Token.Serial)
+			if c.spent[s] || seenSerial[s] {
+				return fmt.Errorf("%w: %x", ErrTokenSpent, e.Token.Serial)
+			}
+			seenSerial[s] = true
 		}
 		seen[e.Root] = true
 	}
@@ -360,6 +397,9 @@ func (c *Chain) apply(b Block) {
 	c.blocks = append(c.blocks, b)
 	for _, e := range b.Entries {
 		c.byRoot[e.Root] = e
+		if e.Token != nil {
+			c.spent[string(e.Token.Serial)] = true // serial is now spent chain-wide
+		}
 	}
 	for _, r := range b.Revocations {
 		c.revoked[r] = true

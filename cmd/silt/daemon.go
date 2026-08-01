@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/rsa"
 	"flag"
 	"fmt"
 	"net"
@@ -63,6 +64,7 @@ func cmdDaemon(args []string) error {
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (V1: held in RAM) — a bigger bond earns more standing")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
+	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -211,8 +213,8 @@ func cmdDaemon(args []string) error {
 	// load; reputation judged from this daemon's own ledger observations.
 	var attesterIDs []ports.NodeID
 	var chainPath string
-	ledger := credit.New(50_000, 0)
-	nd0ledger := ledger // wired onto the node below
+	ledger := credit.New(50_000, 500_000) // starter grant so a fresh publisher can pay token fees
+	nd0ledger := ledger                   // wired onto the node below
 	if *validator {
 		anchorSet := map[ports.NodeID]bool{}
 		for _, s := range strings.Split(*anchorList, ",") {
@@ -257,6 +259,19 @@ func cmdDaemon(args []string) error {
 		if sz, perr := parseSize(*bondSize); perr == nil && sz > 0 {
 			nd.EnableBond(sz)
 			fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
+		}
+		// Publisher privacy (T3): this validator issues blind-signed publish
+		// tokens, and (when -require-tokens) the chain accepts only entries that
+		// carry one — no Publisher identity on-chain. Issuer key is in-RAM for
+		// now (persisting it across restart is a tracked follow-up).
+		if issuerKey, kerr := rsa.GenerateKey(rand.Reader, 2048); kerr == nil {
+			nd.EnableTokenIssuer(issuerKey)
+			if *requireTokens > 0 {
+				ch.RequireTokens(*requireTokens, nd.IssuerKeyOf)
+				fmt.Printf("publish tokens: required (%d validator signatures), issuing\n", *requireTokens)
+			}
+		} else {
+			return fmt.Errorf("token issuer key: %w", kerr)
 		}
 		nd.OnCommit(func(b chain.Block) {
 			fmt.Printf("chain: committed block %d (%d entries, %d attestations)\n",
@@ -544,6 +559,11 @@ func cmdDaemon(args []string) error {
 			// standing): consensus writes are gated on earned, held storage.
 			if *validator {
 				nd.StartBondAudit()
+				// Fetch the other validators' token-issuer keys so we can verify
+				// the publish tokens they blind-signed (chain token check).
+				for _, aid := range attesterIDs {
+					nd.FetchIssuerKey(aid, func(error) {})
+				}
 			}
 			nd.AnnounceHeld(func(count int) {
 				if count > 0 {

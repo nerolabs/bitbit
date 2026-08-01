@@ -40,6 +40,11 @@ type Options struct {
 	// Publisher is recorded in the registry entry; required when the
 	// registry is credit-gated, ignored otherwise.
 	Publisher ports.NodeID
+	// Token, when set, is a quorum-issued publish credential that authorizes
+	// the entry WITHOUT a durable Publisher identity (T3, #14/F1). Acquire it
+	// (node.AcquireToken) before calling Add and pass it here; the entry then
+	// carries the token instead of a publisher.
+	Token *ports.PublishToken
 }
 
 // Add ingests r and returns the file's silt link: the Merkle root
@@ -163,6 +168,7 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		ManifestChunks: manifestIDs,
 		FileSize:       m.FileSize,
 		Publisher:      opts.Publisher,
+		Token:          opts.Token,
 	})
 	if err != nil {
 		return link.Handle{}, fmt.Errorf("add: publish: %w", err)
