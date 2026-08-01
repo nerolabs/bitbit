@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/bond"
 	"github.com/nerolabs/silt/core/chain"
 	"github.com/nerolabs/silt/core/denylist"
@@ -187,6 +188,10 @@ type Node struct {
 	// cost real held storage. See bondaudit.go.
 	bond      *bond.Commitment
 	peerBonds map[ports.NodeID]bondInfo
+
+	// tokenIssuer, when set, makes this validator blind-sign publish-token
+	// requests (T3, #14/F1) — the publisher-privacy issuance role.
+	tokenIssuer *blindtoken.Issuer
 
 	// failure-domain gossip: domainID is this node's own domain hash
 	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
@@ -506,6 +511,8 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.reply(from, msg, n.answerChallenge(msg))
 	case ports.MsgBondChallenge:
 		n.reply(from, msg, n.answerBondChallenge(msg))
+	case ports.MsgTokenRequest:
+		n.reply(from, msg, n.answerTokenRequest(from, msg))
 	case ports.MsgCheckReachability:
 		// A peer wants to know if it is publicly reachable. Answering means
 		// dialing it back at its advertised address: if the reply lands, the

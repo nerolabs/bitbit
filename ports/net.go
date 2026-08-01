@@ -71,6 +71,8 @@ const (
 	MsgReachabilityReply // Nonce: the dial-back landed (its arrival is the proof)
 	MsgBondChallenge     // Nonce: prove you still hold the storage bond you advertised
 	MsgBondReply         // Data: CBOR bond.Answer (empty if the bond isn't held)
+	MsgTokenRequest      // Data: a blinded publish-token serial to blind-sign (fee charged to sender)
+	MsgTokenReply        // Data: the blind signature; OK=false if refused
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:
@@ -162,7 +164,7 @@ func (k MsgKind) String() string {
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply, MsgTokenReply:
 		return true
 	}
 	return false
