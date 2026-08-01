@@ -2,7 +2,10 @@
 
 > **One spine.** The single source of truth for *what is done and what is next*
 > is the GitHub **`V1` milestone** and its issues — each issue traces to the
-> tenet or immutable it serves. This file is the *narrative*: why the work is
+> tenet or immutable it serves, and each carries a `gate-N` label. The pinned
+> epic **[#94 "V1 — the gate spine"](https://github.com/nerolabs/silt/issues/94)**
+> is the sequenced, forward-looking checklist (Gate 0→6, critical path 1→4→6)
+> that indexes every gate's issues. This file is the *narrative*: why the work is
 > ordered the way it is. It is not a tracker and does not duplicate issue state.
 >
 > Earlier planning used interim markers during the project's **learning
@@ -22,9 +25,12 @@ the *path*; the open [issues](https://github.com/nerolabs/silt/issues) under the
 - **A tenet gates V1 as a *principle*, never a *mechanism* — with one deliberate
   exception: M0.** "Reward tracks value" is canon, but *which* mechanism
   satisfies it is a sequencing call. The lone exception is the mission itself:
-  **M0's trilemma resolution (token-less, work-backed, unlinkable reputation) is
-  not a feature that satisfies a principle — it *is* the reason silt exists**, so
-  its *real* mechanism is in V1 by definition (see `docs/TENETS.md` Part IX).
+  **M0 — *holding* the trilemma (token-less, work-backed, unlinkable reputation)
+  without trading a corner away — is not a feature that satisfies a principle, it
+  *is* the reason silt exists**, so its *real* mechanism is in V1 by definition
+  (see `docs/TENETS.md` Part 0/IX). M0 is *held* only when an **external**
+  red-team suite (V3) denies all three failure modes — self-graded does not
+  count.
 - **Release is gated by proof (R1).** A tenet is "met" only when field-proven
   multi-machine, not sim- or single-host-only.
 
@@ -70,9 +76,9 @@ Retire the M/Wave/Tier prose (history → buildlog). *Done-is-done matches
 reality.*
 
 **Gate 1 — Floors (cheap; blocks everything).** Panic-recover + fuzz the
-decoders (A5); bound declared manifest chunk count/size (A6); lock the local
-UI/JSON API with Origin/Host allow-listing + a per-daemon token (I1 — CORS is
-`*` today). You cannot field-test a chain on a daemon that crashes on a
+decoders (A5, #87); bound declared manifest chunk count/size (A6, #88); lock the
+local UI/JSON API with Origin/Host allow-listing + a per-daemon token (I1, #89 —
+CORS is `*` today). You cannot field-test a chain on a daemon that crashes on a
 malformed frame, and a crash surface kills the "impressive" claim on contact.
 
 **Gate 2 — Durability under load.** Post-cap relay throughput, fetch-side retry,
@@ -85,33 +91,55 @@ from every-byte to rendezvous. Design in `docs/design/cross-network.md`.
 **Gate 4 — The car: the mission mechanism, real and multi-machine (the long
 pole).** Replace the labeled placeholders with the genuine M0 composition, built
 from best-in-class components (B8), and prove it:
-- **4a — Real proof-of-retrieval / proof-of-storage.** Adopt a published,
+- **4a (#90) — Real proof-of-retrieval / proof-of-storage.** Adopt a published,
   peer-reviewed scheme (the compact-PoR / PDP / proof-of-space family); the
   novelty is not the primitive but the binding.
-- **4b — Real work-backed bond (the hardest piece).** Replace the space-lite
-  iterated-SHA seal with a genuine, memory-hard / proof-of-space construction:
-  cheap for a challenger to verify, expensive to fake, identity-bound.
-- **4c — Identity-bound, time-integrated, *unlinkable* standing.** Bind 4a/4b to
+- **4b (#91) — Real work-backed bond (the hardest piece).** Replace the
+  space-lite iterated-SHA seal with a genuine, memory-hard / proof-of-space
+  construction: cheap for a challenger to verify, expensive to fake,
+  identity-bound.
+- **4c (#92) — Identity-bound, time-integrated, *unlinkable* standing.** Bind 4a/4b to
   identity and time so standing = the integral of sustained proof (cheap for one
   honest node, N× ruinous for a Sybil farm, no coin/stake), while the blind
   publish token keeps publishing cryptographically unlinkable from that standing.
-  *This is M0. It ships specified + adversarially proven (V3), or it does not
-  ship.*
-- **4d — Persistence + issuer distribution.** Bond and RSA issuer key persist
-  across restart; on-chain issuer registration.
+  *This is M0. It ships specified + adversarially proven by an **external**
+  red-team (V3/B8), or it does not ship.*
+- **4d (#93) — Persistence + issuer distribution.** Bond and RSA issuer key
+  persist across restart; on-chain issuer registration.
 - **4e — Multi-machine field test of the whole trust plane (#52).** The R1 gate:
   bonds, tokens, and consensus across real machines and real NAT. Sim + one host
   is not "done."
 
-**Gate 5 — Economics & registry cheapness (#47/#48).** Co-designed with Gate 4:
+> **The binding is the hard part, not the primitives.** "Adopt best-in-class,
+> don't invent" (B8) does *not* make Gate 4 easy — it *relocates* the research
+> to the **binding**: identity-bound, time-integrated, cheaply-verifiable
+> standing with unlinkable publishing on top. No drop-in library gives that
+> composition; Chia/Filecoin spent years on the "cheap-to-verify,
+> expensive-to-fake, identity-bound" corner alone, and we want that *and*
+> hobbyist-cheap (S6) *and* unlinkable publishing. Gate 4 therefore owns a design
+> doc + threat model *before* code — it is the mission, not a sprint.
+
+**Gate 5 — Economics & registry cheapness (#47/#48), incl. durability that pays
+for itself (S7).** *Designed alongside Gate 4, not after it* — Gate 4's
+reputation buys *presence*, but S7 (the repair loop funded in equilibrium under
+churn) is what decides whether files still exist in three years. This is the
+wound Freenet/GNUnet died of — reputation without funded durability, one genre
+before us; our closest ancestors are **Tahoe-LAFS** (convergent encryption +
+erasure, no incentive layer) and **Freenet/GNUnet** (reputation, no funded
+repair), and Gate 5 is where we refuse to repeat their hole. Scope:
 registry-only mode, costless public rendezvous, denylist distribution/
-subscription, the pull-cache tier.
+subscription, the pull-cache tier (#47/#48), and the durability economics (S7,
+#95) that make repair a service a publisher buys and a caretaker is paid to sell
+— funded in equilibrium, not charity.
 
 **Gate 6 — Cut V1.** Full docs-drift reconcile as the release gate (R2);
 signed/notarized, checksummed binaries; publish `docs/threat-model.md` as honest
-disclosure *and* an invitation to break it; **independent security + legal
-review** (top of `docs/risk-register.md`); decide legal posture; then narrow,
-technical outreach ("help us break this").
+disclosure *and* an invitation to break it; decide legal posture; then narrow,
+technical outreach ("help us break this"). **The independent security review
+here is not a formality — it *is* the external adversary that certifies M0 and
+B8** (top of `docs/risk-register.md`): the party that writes the attacks against
+the Gate 4 composition must be someone other than its author (audit / bounty /
+separate red-team). Until that suite runs and holds, M0 is claimed, not proven.
 
 ## The resolver layer ("Aslan" — separate product)
 

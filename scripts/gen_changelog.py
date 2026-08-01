@@ -15,18 +15,31 @@ SRC = ROOT / "CHANGELOG.md"
 OUT = ROOT / "website" / "changelog.html"
 
 
+GH_BLOB = "https://github.com/nerolabs/silt/blob/main/"
+
+
+def _href(url: str) -> str:
+    """Keep absolute / anchor / root links as-is; map repo-relative paths
+    (docs/…, ROADMAP.md) to their GitHub blob URL so they resolve on the
+    published site and pass the internal link-check, which skips externals."""
+    if url.startswith(("http://", "https://", "//", "#", "mailto:", "/")):
+        return url
+    return GH_BLOB + url
+
+
 def inline(s: str) -> str:
     """Minimal inline markdown → HTML: escape, then code/bold/links."""
     s = html.escape(s)
     s = re.sub(r"`([^`]+)`", r'<span class="mono">\1</span>', s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)  # bold first, may wrap inner *italics*
     s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)  # single-asterisk italics
-    s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
+               lambda m: f'<a href="{_href(m.group(2))}">{m.group(1)}</a>', s)
     return s
 
 
 def render(md: str) -> str:
-    body, para = [], []
+    body, para, quote = [], [], []
     in_list, intro_done, lead_used = False, False, False
 
     def flush_para():
@@ -39,6 +52,13 @@ def render(md: str) -> str:
             lead_used = True
         body.append(f'<p class="{cls}">{text}</p>' if cls else f"<p>{text}</p>")
         para = []
+
+    def flush_quote():
+        nonlocal quote
+        if not quote:
+            return
+        body.append(f"<blockquote>{inline(' '.join(quote))}</blockquote>")
+        quote = []
 
     def close_list():
         nonlocal in_list
@@ -59,8 +79,11 @@ def render(md: str) -> str:
         line = raw.rstrip()
         if re.match(r"^\[[^\]]+\]:\s+https?://", line) or line.startswith("# "):
             continue
-        if line.startswith("## "):
-            flush_para(); close_list(); intro_done = True
+        if line.startswith("> ") or line == ">":
+            flush_para(); close_list()
+            quote.append(line[2:] if len(line) > 1 else "")
+        elif line.startswith("## "):
+            flush_para(); flush_quote(); close_list(); intro_done = True
             m = re.match(r"^##\s+\[?([^\]\s]+)\]?\s*(?:—|-)?\s*(.*)$", line)
             ver = m.group(1) if m else line[3:]
             date = (m.group(2) or "").strip() if m else ""
@@ -70,19 +93,19 @@ def render(md: str) -> str:
                 + (f'<span class="d">{inline(date)}</span>' if date else "")
                 + "</h2>")
         elif line.startswith("### "):
-            flush_para(); close_list()
+            flush_para(); flush_quote(); close_list()
             body.append(f"<h3>{inline(line[4:])}</h3>")
         elif line.startswith("- "):
-            flush_para()
+            flush_para(); flush_quote()
             if not in_list:
                 body.append("<ul>"); in_list = True
             body.append(f"<li>{inline(line[2:])}</li>")
         elif line.strip() == "":
-            flush_para(); close_list()
+            flush_para(); flush_quote(); close_list()
         else:
-            close_list()
+            flush_quote(); close_list()
             para.append(line.strip())
-    flush_para(); close_list()
+    flush_para(); flush_quote(); close_list()
     return "\n".join(body)
 
 
@@ -104,6 +127,8 @@ TEMPLATE = """<!doctype html>
   .doc h2.rel .d {{ font-family:var(--mono); font-size:0.8rem; color:var(--drab); letter-spacing:0.04em; }}
   .doc h2.rel.unreleased .v::after {{ content:" ·"; color:var(--ochre); }}
   .doc h2.rel.unreleased {{ color:var(--ochre); }}
+  .doc blockquote {{ margin:1.4rem 0; padding:0.1rem 0 0.1rem 1.1rem; border-left:2px solid var(--ochre); color:var(--drab); }}
+  .doc blockquote b {{ color:var(--bone); }}
 </style>
 </head>
 <body>

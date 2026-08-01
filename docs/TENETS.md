@@ -16,9 +16,10 @@
 
 ## Part 0 — Why silt exists (the mission-immutable)
 
-**M0 — silt exists to resolve the privacy × accountability × Sybil trilemma.**
-Three properties every prior system in this space has been forced to trade off
-against each other, held together at once:
+**M0 — silt exists to *hold* the privacy × accountability × Sybil trilemma —
+to refuse to trade any corner away.** Three properties every prior system in
+this space has been forced to trade off against each other, held together
+without sacrificing one for the other two:
 
 - **Privacy** — publishing is *unlinkable* to a durable identity; who fetches
   what is *unsurveilled*.
@@ -30,8 +31,34 @@ against each other, held together at once:
 
 The incumbents each pick two corners and surrender the third. **silt's reason to
 exist is to hold all three** — and **abandoning any corner is abandoning the
-project.** Everything below is either a corner made structural, or the
-discipline that keeps the composition honest.
+project.**
+
+**This is "hold," not "resolve."** It is not a claim to have *solved* a research
+problem all at once; it is the refusal to trade a corner away, and a design in
+which the corners *co-mature* rather than arriving finished. Precisely:
+
+- **Privacy is architectural from day one** — convergent encryption, opaque
+  ciphertext, unsurveilled access, blind-signed publish tokens. It does not wait
+  for the network to grow.
+- **Accountability is content-level and reactive from day one** — takedown acts
+  on a *hash*, pluralistically and after the fact; it is never identity-level,
+  never pre-emptive, never a global switch.
+- **Sybil-resistance is the corner that bootstraps.** It is the *weakest on a
+  young network* — a small network is cheapest to flood — and it *strengthens as
+  real, sustained work accrues*. During the launch window, anchor validators are
+  explicit, time-boxed training wheels that shed on measured decentralization
+  (see immutable #3: *no permanent center*). This is the live edge where the
+  novel contribution concentrates.
+
+**M0 is falsifiable, not a slogan.** It is *held* if and only if the adversarial
+red-team suite (V3), written by a party *other than the author* (see B8),
+**denies all three failure modes**: publish→identity linkage (privacy),
+identity-level or global takedown (accountability), and cheap Sybil-farm
+standing (Sybil-resistance). "Did we hold M0?" therefore has a yes/no answer, on
+the board, that an outsider can check — not a victory declared by the builder.
+
+Everything below is either a corner made structural, or the discipline that
+keeps the composition honest.
 
 **The bet, stated without a slogan.** Two of the three edges are dissolved by
 architecture silt already has: privacy-vs-accountability dissolves because we
@@ -64,7 +91,11 @@ plane is opt-in and secures governance. Neither is the product — silt is the
 
 **T1 — Capabilities, not infrastructure.** Every role (store, relay, registry,
 validate, caretake) is a *capability any node can offer*, never a special node
-baked into the binary. No node is load-bearing; none is irreplaceable.
+baked into the binary. No node is *permanently* load-bearing; none is
+irreplaceable. A young network may lean on explicit, time-boxed scaffolding
+(launch-window anchors), but that scaffolding is designed to shed on measured
+decentralization — the forbidden thing is a *standing* dependency on any one
+node, not the honest scaffolding that retires itself (immutable #3).
 
 **T2 — The link is the primitive.** A `silt:` link is the whole product surface
 for a user: content-addressed identity + the key to read it. Durability,
@@ -140,8 +171,13 @@ one and treat rolling our own as the amateur tell it is. Novelty is reserved
 for the **composition and incentive design**, where the hard problems (M0)
 actually live — and that novelty must be **specified and adversarially proven**
 (a spec a skeptic can read and a red-team suite they can't break), never
-hand-waved. Boring parts; a novel car. Novel-and-unproven is worse than
-me-too — it ships insecurity to the exact audience we need to convince.
+hand-waved. **The adversary must be external.** Self-marked homework is not
+adversarial proof: the attacks that certify a novel composition must be written
+by a party *other than its author* — an independent audit, a public bounty, or a
+separate red-team — because single-author crypto graded by its own author is the
+exact failure mode this tenet exists to forbid. Boring parts; a novel car.
+Novel-and-unproven is worse than me-too — it ships insecurity to the exact
+audience we need to convince.
 
 ---
 
@@ -177,6 +213,19 @@ design defect, not a fact of life. *(This is also the constraint that makes M0's
 Sybil corner hard: cheap for the honest, ruinous for the liar — without a
 capital lockup that would price out the hobbyist.)*
 
+**S7 — Durability must pay for itself.** The repair loop that keeps content
+alive under churn must be **funded in equilibrium, not run on charity.**
+Reputation buys *presence*; it does not, by itself, buy *sustained repair
+bandwidth* when nodes are leaving faster than they arrive. An economy where
+storing and repairing is a net cost with no matching reward decays to zero the
+moment altruism runs out — this is the wound that killed Freenet and GNUnet, one
+genre earlier. So durability is not "solved" until the caretaker who repairs a
+stripe they neither own nor can read is **paid by the demand that content
+serves** (ties to caretakers #44 and the economics gates). If we cannot state
+the equilibrium in which repair funds itself, we have not decided durability —
+and it is durability that decides whether files exist in three years, not
+whether they exist today.
+
 ---
 
 ## Part IV — How we test
@@ -193,7 +242,11 @@ implementations, one contract."
 **V3 — Test the adversary.** We write the attacker's desired outcome as a test
 that must fail for them: forgery, tamper, equivocation, freeload, Sybil,
 censorship. Security is validated by denial, not assertion. For M0's novel
-mechanisms this is the *primary* proof: the red-team suite is the deliverable.
+mechanisms this is the *primary* proof: the red-team suite is the deliverable,
+and the M0 verdict is exactly its result (Part 0). The suite that *certifies*
+M0 must be written by an **external** party (audit / bounty / independent
+red-team, per B8) — we may write our own attacks to develop against, but the
+proof that ships is the one an outsider could not break.
 
 **V4 — Evidence, not vibes.** A change clears the success bar (Part III) with
 observed evidence — a checksum match, a survived kill, a green Byzantine
@@ -387,15 +440,22 @@ validators + curators + authorities            →  keep the loop honest and law
 **Immutable — amending is close to redefining the project; requires deliberate,
 reviewed consensus.**
 
-- **M0 — the mission:** resolve the privacy × accountability × Sybil trilemma;
-  abandoning any corner abandons the project (Part 0).
+- **M0 — the mission:** *hold* the privacy × accountability × Sybil trilemma —
+  refuse to trade any corner away; abandoning any corner abandons the project.
+  Held **iff** the external V3 red-team suite denies all three failure modes
+  (Part 0). Not a victory claim — a refusal, bound to a falsifiable test.
 - The six corners made structural:
   1. **Content-blind by construction** (B4) — hosts store ciphertext they cannot
      read or choose.
   2. **The bytes are the truth** (S1/B3) — content-addressed, re-verified,
      bit-perfect or an explicit failure; never silently wrong.
-  3. **No center** (T1/S4) — nothing load-bearing; no machine or operator can
-     take content down globally.
+  3. **No *permanent* center** (T1/S4) — nothing *permanently* load-bearing; no
+     machine or operator can take content down globally. Bootstrap
+     centralization is allowed but must be **explicit, time-boxed, and shed on
+     measured decentralization**: the launch-window anchor validators are
+     training wheels, not a center, and the decentralized path exists from day
+     one. What is forbidden is a *standing* dependency on any node — not the
+     honest admission that a young network leans on scaffolding while it matures.
   4. **Access is unsurveilled** (Don't #3) — who fetches what is never
      observable.
   5. **No silent or global censorship** (Don't #2) — takedown is transparent,
@@ -441,3 +501,16 @@ parameters (erasure k/n, replication factor, cache policy, DHT constants), the
   not project identity); added **B8** (best components, novel composition);
   stated the load-bearing novel claim and the principle-not-mechanism exception
   explicitly.
+- **2026-08-02 (intention review)** — Acted on the fresh-eyes *intent* review
+  (`docs/reviews/fresh-eyes-2026-08-02-intention.md`). **Requalified M0** from
+  "resolve the trilemma" to "*hold* it — refuse to trade any corner away," named
+  which corner bootstraps (Sybil-resistance is weakest early and co-matures;
+  privacy and accountability hold from day one), and **bound M0 to a falsifiable
+  test** (held iff the external V3 red-team suite denies all three failure
+  modes). **Reconciled "no center" with the training wheels**: immutable #3 and
+  T1 now say "no *permanent* center — bootstrap scaffolding is explicit,
+  time-boxed, and sheds on measured decentralization." **Added S7 — durability
+  must pay for itself** (the repair loop funded in equilibrium, not charity; the
+  Freenet/GNUnet wound). **Named the external adversary** in B8 and V3: the suite
+  that certifies a novel composition (and M0) must be written by an outside party
+  (audit / bounty / independent red-team), not self-graded.

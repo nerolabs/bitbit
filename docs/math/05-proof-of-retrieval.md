@@ -56,17 +56,21 @@ nonce lands), and it does not prove *unique* storage (three names can
 front one copy). It is a placeholder, useful for catching the outright
 liar in the audit sim, not the real thing.
 
-The V1 target (tenet **M0** — resolving the privacy × accountability ×
-Sybil trilemma — and **ROADMAP** Gate 4) is a *real*
-proof-of-retrieval/storage: a published, peer-reviewed scheme from the
-compact-PoR / PDP / proof-of-space family, used as-is. Per build tenet
-**B8** (best-in-class proven components, novelty only in composition),
-silt does not invent the cryptography. What is novel is how a proven
-scheme is *bound to identity and to time* — so that standing becomes
-token-less, work-backed, and Sybil-hard (an identity's weight costs
-real, sustained, challenged storage) while publishing stays unlinkable.
-The real scheme does not exist in the code yet; this section frames it
-as the V1 target, against which the mechanism above is the current toy.
+The V1 target (tenet **M0** — *holding* the privacy × accountability ×
+Sybil trilemma, refusing to trade any corner away — and **ROADMAP**
+Gate 4, issue #90) is a *real* proof-of-retrieval/storage: a published,
+peer-reviewed scheme from the compact-PoR / PDP / proof-of-space family,
+used as-is. Per build tenet **B8** (best-in-class proven components,
+novelty only in composition), silt does not invent the cryptography.
+What is novel is how a proven scheme is *bound to identity and to time*
+— so that standing becomes token-less, work-backed, and Sybil-hard (an
+identity's weight costs real, sustained, challenged storage) while
+publishing stays unlinkable. That novel binding is not self-graded: it
+holds only when an **external** red-team suite (an independent audit,
+bounty, or separate red-team per B8) fails to break it — the Gate 6
+independent security review is that adversary. The real scheme does not
+exist in the code yet; this section frames it as the V1 target, against
+which the mechanism above is the current toy.
 
 To *grade* a tag today, our auditor fetches the chunk itself and
 recomputes the truth. That works — content addressing makes ground

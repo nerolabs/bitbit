@@ -93,12 +93,15 @@ communities.
 
 **Mitigations.** Target self-hosters, data-hoarders, and
 distributed-systems / cryptography practitioners; lead with the honest
-headline differentiator — the **privacy × accountability × Sybil trilemma
-resolved all at once**: work-backed, identity-bound reputation with
-**no token, no coin, no speculation**, and publishing that stays
+headline differentiator — silt is built to **hold the privacy ×
+accountability × Sybil trilemma**, refusing to trade any corner away where
+every prior system surrendered one: work-backed, identity-bound reputation
+with **no token, no coin, no speculation**, and publishing that stays
 cryptographically unlinkable from the standing that earns it. That claim
 separates Silt cleanly from storage-coin projects and from tools that read
-as built for wrongdoing. Details in [launch-plan.md](launch-plan.md).
+as built for wrongdoing. It is a claim we bind to a falsifiable test — held
+only if an *external* red-team can't achieve any of the three failure modes —
+not a victory we declare. Details in [launch-plan.md](launch-plan.md).
 
 ## Governance & operations
 

@@ -33,9 +33,9 @@ the final gate before any outreach.
 
 ## Positioning
 
-**Lead with the trilemma.** silt exists to resolve the
-privacy × accountability × Sybil trilemma — all three at once, where prior
-systems bought any two by sacrificing the third. The headline differentiator
+**Lead with the trilemma.** silt exists to *hold* the
+privacy × accountability × Sybil trilemma — to refuse to trade any corner away,
+where prior systems bought any two by sacrificing the third. The headline differentiator
 is **token-less, work-backed, identity-bound reputation that publishing stays
 cryptographically unlinkable from** — no coin, no stake, no speculation;
 standing is *earned*, and the act of publishing can't be tied back to the
@@ -50,10 +50,11 @@ tool for wrongdoing — that framing attracts the wrong users and paints a
 target.
 
 The honest one-line differentiators:
-- **The trilemma, resolved.** Privacy *and* accountability *and* Sybil
-  resistance together — not two of three. No token, no coin, no
-  speculation; standing is earned reputation, and publishing is unlinkable
-  from it.
+- **The trilemma, held — no corner traded away.** Privacy *and*
+  accountability *and* Sybil resistance together — not two of three. No token,
+  no coin, no speculation; standing is earned reputation, and publishing is
+  unlinkable from it. (A refusal to sacrifice a corner, proven by an external
+  red-team — not a "solved it" boast.)
 - **No token, no coin, no ICO.** Access is *earned* (reputation from
   audits + serving), not bought. This separates Silt from the
   storage-coin field (Filecoin/Storj/Sia) and from speculation entirely.
@@ -79,7 +80,7 @@ The honest one-line differentiators:
    (content-addressed + erasure + encrypted capability links +
    work-backed identity-bound reputation with unlinkable publishing +
    decryption-free takedown). A short paper or talk earns credible,
-   technical coverage — the trilemma resolution is the hook.
+   technical coverage — holding the trilemma is the hook.
 
 Deliberately **not** a launch beachhead: crypto-token communities and
 infringement-oriented communities. Wrong audience, wrong signal, real downside.
