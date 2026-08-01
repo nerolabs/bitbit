@@ -25,10 +25,16 @@ probabilistic finality; Silt's registry needs cheap, immediate
 finality among parties who already maintain measurable relationships.
 
 Because Silt nodes already EARN measurable reputations — passed
-storage audits (note 05), bytes served, all attached to unforgeable
-key-hashed identities (M10) — the network has something Bitcoin's
-anonymous miners never had: a native notion of standing. So the rule is
-reputation-weighted quorum:
+storage audits (note 05), attached to unforgeable key-hashed
+identities — the network has something Bitcoin's anonymous miners never
+had: a native notion of standing. Crucially, that standing now **costs
+challenged, held storage**: a validator seals an identity-bound storage
+bond, and validators challenge each other's bonds over the wire,
+verifying against only the committed Merkle root. Serving alone no
+longer buys standing (two colluding nodes could wash-mint served-bytes
+for free); standing is bond-gated, must be *sustained* (it decays if a
+bond stops being re-proven), so N Sybil identities cost N distinct bonds
+on N disks. So the rule is reputation-weighted quorum:
 
 ```
 a block commits iff:
@@ -47,11 +53,11 @@ Forge any byte and every signature dies at once (the tamper test in
 
 - **You can't manufacture standing.** Reputation attaches to
   NodeID = SHA-256(pubkey). A Sybil flood of fresh keys is a flood of
-  zeros: each new identity must pass real audits (which cost real
-  storage and real serving) before its signature counts. The rate
-  limit on writing history is the rate at which strangers can earn
-  trust — exactly Andrew's rule that "no single node agrees until
-  reputation is highly established."
+  zeros: each new identity must seal and sustain a challenged storage
+  bond (which costs real, held storage on a real disk) before its
+  signature counts. The rate limit on writing history is the rate at
+  which strangers can earn trust — exactly Andrew's rule that "no single
+  node agrees until reputation is highly established."
 - **Validators don't trust each other's arithmetic.** Every replica
   re-validates everything: latecomers syncing the chain re-check every
   signature, reputation, and quorum themselves. A lying peer can waste
@@ -70,13 +76,22 @@ reorganizations: the first valid block at a height wins, and
 simultaneous proposals race (one gets `ErrWrongParent` and retries on
 the new head). A colluding quorum of high-reputation validators could
 write bad entries — the design bets that entities who spent months
-earning audit-backed reputations have more to lose than to gain, the
+earning bond-backed reputations have more to lose than to gain, the
 same wager proof-of-stake makes with capital. What the chain buys over
-M8's hosted registry is concrete: no single owner, replicated history,
+a hosted registry is concrete: no single owner, replicated history,
 tamper-evidence, and gatekeeping by earned standing rather than by
 whoever runs the server.
 
+One more piece of honest fine print: the bond that backs standing is a
+*first cut*. The bond is currently held in RAM and its seal is
+proof-of-*space*-lite — not yet memory-hard, so it is a labeled
+placeholder, not the finished cost function. Hardening it (a
+memory-hard seal, disk-persisted bonds) is a V1 target; the interface
+and the outcome — standing costs sustained, challenged storage — are in
+place today.
+
 Code: `core/chain` (blocks, rules), `core/node/chainrole.go` (propose /
-attest / commit / sync), `credit.Reputation` (the standing formula).
+attest / commit / sync), `credit.Reputation` (the standing formula),
+`core/bond` (the challenged storage bond that gates standing).
 Run `silt sim run consensus` for the deterministic version, or three
 `silt daemon -validator` processes for the real one.

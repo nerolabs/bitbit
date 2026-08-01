@@ -10,12 +10,14 @@ safety control as much as a growth lever (see the
 We are **harden-first** (Andrew, 2026-07-31 — a re-sequencing of the earlier
 "community-feedback-first" plan; see [ROADMAP.md](../ROADMAP.md)). The
 reasoning: a half-baked experimental drop on a project this ambitious —
-content-addressed storage plus a reputation-quorum chain, in a space thick
-with "AI/web3 storage" noise — reads as a *poser build* and burns the one
-first impression we get with the exact technical audience we need. So the
-tenets are **field-proven — floors and pillars both — before we launch**:
-the durability floors, the DoS resistance, cross-network hole-punching, and a
-*real* (non-toy) proof-of-retrieval economy on a **field-tested chain**.
+content-addressed storage plus a work-backed, identity-bound reputation
+plane, in a space thick with "AI/web3 storage" noise — reads as a *poser
+build* and burns the one first impression we get with the exact technical
+audience we need. So the tenets are **field-proven — floors and pillars
+both — before we launch**: the durability floors, the DoS resistance,
+cross-network hole-punching, and a *real* (non-toy) proof-of-retrieval and
+memory-hard bond behind the trust plane, with publishing that stays
+cryptographically unlinkable from the reputation that earns it.
 
 Feedback is still the point of the first release — market for technical
 people to **break it and tell us what's wrong**, especially the weaknesses
@@ -25,22 +27,40 @@ the *bar for what we hand them*: something that already stands up, not a
 request to finish our hardening for us. Legal posture and any entity are
 still decided later, informed by the engagement — nothing formal is committed
 on spec — but now *after* a credible artifact exists, not instead of one.
-The pre-launch waves are in [ROADMAP.md](../ROADMAP.md); Andrew's personal
-review + hardening pass is the final gate before any outreach.
+The pre-launch work is tracked on the [ROADMAP.md](../ROADMAP.md) `V1`
+milestone and its issue spine; Andrew's personal review + hardening pass is
+the final gate before any outreach.
 
 ## Positioning
 
-**Silt is resilient, private-by-architecture, neutral storage
-infrastructure — owned by none, run by its participants, funded by no
+**Lead with the trilemma.** silt exists to resolve the
+privacy × accountability × Sybil trilemma — all three at once, where prior
+systems bought any two by sacrificing the third. The headline differentiator
+is **token-less, work-backed, identity-bound reputation that publishing stays
+cryptographically unlinkable from** — no coin, no stake, no speculation;
+standing is *earned*, and the act of publishing can't be tied back to the
+identity that earned the standing. That is the novel claim, and positioning
+should open on it.
+
+Under that headline: **Silt is resilient, private-by-architecture, neutral
+storage infrastructure — owned by none, run by its participants, funded by no
 token.** Lead with the engineering and the privacy-by-design story.
 Never lead with "uncensorable," "anonymous," or anything that reads as a
 tool for wrongdoing — that framing attracts the wrong users and paints a
 target.
 
 The honest one-line differentiators:
+- **The trilemma, resolved.** Privacy *and* accountability *and* Sybil
+  resistance together — not two of three. No token, no coin, no
+  speculation; standing is earned reputation, and publishing is unlinkable
+  from it.
 - **No token, no coin, no ICO.** Access is *earned* (reputation from
   audits + serving), not bought. This separates Silt from the
   storage-coin field (Filecoin/Storj/Sia) and from speculation entirely.
+- **Boring parts, novel car.** The primitives are best-in-class and
+  *proven* — Reed-Solomon, Kademlia, convergent encryption, memory-hard
+  work — and the novelty is the *composition*, backed by spec and a
+  red-team suite. Said plainly, this reads as credibility, not hype.
 - **The infrastructure is not the content.** A daemon can't read what it
   holds; meaning lives in a separate layer. Neutral carrier, by design.
 - **It heals itself.** Erasure coding + a repair loop mean files survive
@@ -57,11 +77,12 @@ The honest one-line differentiators:
    hook: this is a codebase you can *learn from*.
 3. **Researchers & press** — the design is genuinely interesting
    (content-addressed + erasure + encrypted capability links +
-   reputation-quorum chain + decryption-free takedown). A short paper or
-   talk earns credible, technical coverage.
+   work-backed identity-bound reputation with unlinkable publishing +
+   decryption-free takedown). A short paper or talk earns credible,
+   technical coverage — the trilemma resolution is the hook.
 
 Deliberately **not** a launch beachhead: crypto-token communities and
-piracy communities. Wrong audience, wrong signal, real downside.
+infringement-oriented communities. Wrong audience, wrong signal, real downside.
 
 ## Messaging pillars → proof
 
@@ -70,15 +91,17 @@ piracy communities. Wrong audience, wrong signal, real downside.
 | Survives failure | `silt sim run churn` — a third of the network dies, the file comes back bit-perfect |
 | Private by architecture | encrypted chunks + sealed manifests + care-links that repair without decrypting |
 | Neutral but governable | `silt sim run takedown` + [safety-denylist.md](safety-denylist.md) |
-| Earned, not bought | `silt sim run economy` / `consensus` — reputation gates writes; no token |
+| Earned, not bought | `silt sim run economy` / `consensus` — work-backed, identity-bound reputation gates writes; no token, and publishing stays unlinkable from the standing that earns it |
 | Runs anywhere, contributes by default | `silt client` — one binary, consumes and serves at once |
 
 ## Actions, phased
 
 **Phase 0 — before any announcement (gate).**
-The technical bar comes first (harden-first): the pre-launch waves in
-[ROADMAP.md](../ROADMAP.md) field-proven, an independent security review, a
-signed v0.1 with checksums, and `CONTRIBUTING.md`. A *legal read* (understand
+The technical bar comes first (harden-first): the `V1`-milestone issue spine
+in [ROADMAP.md](../ROADMAP.md) field-proven, an independent security review, a
+signed, checksummed release (an early **0.x experimental/learning** build —
+feature-complete lands at 0.9.0/RC, true V1 at 1.0.0), and `CONTRIBUTING.md`.
+A *legal read* (understand
 the exposure) is prudent here, but **standing up the entity is not a
 pre-launch gate** — the legal posture (entity, jurisdiction, or stay a pure
 code-publishing project) is still decided *after* the engagement reveals

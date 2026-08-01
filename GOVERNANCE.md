@@ -5,6 +5,13 @@ document states the stance that shapes the architecture; the details of
 safety and policy live in [docs/safety-denylist.md](docs/safety-denylist.md)
 and the [fresh-eyes council](docs/fresh-eyes-council.md).
 
+Silt is **use-agnostic**: it takes zero position on what the network is
+used for. It is neutral, content-blind storage — the code cannot know or
+attach meaning to what it carries. Any application built *on top* of Silt
+(named "Aslan" — a resolver that maps human meaning to opaque roots) is a
+separate product in a separate codebase; Silt ships none of it. See
+[docs/aslan-boundary.md](docs/aslan-boundary.md).
+
 ## The project publishes software. It does not run the network.
 
 The organization behind Silt writes and publishes source code and
@@ -40,8 +47,17 @@ in particular:
   operator chooses which blocklists to run. The project supplies none of
   these lists.
 
+## Updates are operator-autonomous and security-gated
+
+The software **never silently auto-updates** (R4). An operator chooses if
+and when to upgrade; the project pushes nothing to a running node. The one
+concession is *security-gated*: a release that fixes a security-critical
+flaw is labeled as such so operators can prioritize it — but the decision,
+and the act, remain the operator's. There is no override, no phone-home,
+no channel by which the project reaches a node it does not run.
+
 ## Contributing
 
 Anyone may contribute. Nothing reaches `main` or a release without a
 pull request, green CI, and review — the branch is protected to enforce
-it. See `CONTRIBUTING.md` (planned) for the flow.
+it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the flow.

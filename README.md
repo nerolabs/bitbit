@@ -15,76 +15,34 @@ a hands-on, end-to-end walkthrough: run the whole swarm in one command, then
 stand up a real multi-node network on your laptop, publish a file, and watch it
 survive a node death.
 
-## Status: feature-complete core; durability + scale backbone done
+## Status: storage plane field-proven; trust plane a first cut
 
-The milestones below (M1–M14) are done, plus the Phase 1 durability
-backbone: column-based placement, failure-domain-aware spreading, a
-caretaker dispersion audit, and demand-responsive replication (see
-[`ROADMAP.md`](ROADMAP.md) and [`docs/design/column-placement.md`](docs/design/column-placement.md)).
-It has **not** had an independent security review — the
-[threat model](docs/threat-model.md) is the honest account of what's
-weak.
+silt has two planes. The **storage plane** — content-addressed,
+erasure-coded, peer-served chunks with NAT traversal — is
+**field-proven at scale**: bit-perfect retrieval under churn, the
+silent-loss failure shapes fixed (#46/#60/#64), and cross-network
+publish/fetch proven through cone NAT via TCP hole-punching (CI Docker
+harness). The **trust plane** — consensus-secured registry, reputation,
+and revocation — is a **first cut on honestly-labeled placeholders**
+(an in-RAM space-lite bond, a toy proof-of-retrieval), proven in
+simulation and single-host end-to-end only. V1 ships the real trilemma
+mechanism (real proof-of-retrieval, a memory-hard bond, unlinkable
+standing) proven multi-machine — it is not done yet.
 
-- ✅ M1 — chunk → encrypt → hash → manifest → Merkle root, and back;
-  CLI `add`/`get` against a content-addressed disk store
-- ✅ M2 — Reed-Solomon stripes: delete any n−k shards per stripe and
-  `get` reconstructs bit-perfectly; one more and it fails loudly
-- ✅ M3 — Kademlia over a deterministic in-process network: `add` on
-  node A, `get` on node Z, chunks scattered across 50 nodes, A keeps
-  nothing; survives packet loss and dead nodes
-- ✅ M4 — churn & repair: 30% of the swarm killed in waves, caretaker
-  repair loops rebuild lost shards from parity and re-seed them; the
-  live view shows redundancy draining and recovering, and the file
-  comes back bit-perfect
-- ✅ M5 — economics observatory: credit-gated registry (1 credit = 1
-  byte served, publishing costs a fee); watch the Gini coefficient
-  climb as hosts earn, and freeloaders lose the ability to publish
+The 0.x releases are **experimental learning releases**, not steps to
+V1: the cadence is learning phase → feature-complete = 0.9.0 (RC line)
+→ 1.0.0 = V1, field-proven multi-machine. The build so far grew through
+a series of learning-phase milestones (the chunk/erasure/DHT/repair
+core, real TCP transport, daemon mode, capacity pledging, identity/TLS,
+encrypted manifests and care links, the reputation-quorum chain, the
+web UI and desktop client) — that history and its marker system live in
+[`docs/buildlog/`](docs/buildlog/). silt has **not** had an independent
+security review — the [threat model](docs/threat-model.md) is the
+honest account of what's weak.
 
-Beyond the original handoff:
-
-- ✅ M6 — real TCP transport: the identical core scatters and retrieves
-  over actual sockets; only adapters changed (the hexagonal bet, won)
-- ✅ M7 — toy proof-of-retrieval: chunks travel with Merkle proofs,
-  audits challenge providers with nonce tags, and nodes that kept the
-  proof but ditched the data get slashed into debt
-- ✅ M8 — daemon mode: separate OS processes form a real swarm (disk
-  stores, registry over HTTP, ephemeral add/get clients); daemons
-  re-announce their held chunks on restart
-- ✅ M9 — capacity: `daemon -capacity 2G` pledges bounded storage;
-  placement spills over when nodes fill and spreads stripes for
-  availability; every node estimates total network storage from local
-  knowledge alone (`sim run capacity`)
-- ✅ M10 — identity, TLS, discovery: NodeID = SHA-256(public key),
-  every connection is mutual TLS pinned to the key (no CA — the
-  identity IS the key, and reputation can't be shed without it);
-  registry over pinned HTTPS; Bitcoin-style discovery (bootstrap
-  flags → DNS seeds → peer exchange, address book persisted for
-  flagless warm restarts)
-- ✅ M11 — encrypted manifests: manifests are ciphertext twice over;
-  the share handle is a silt link (root + key), and a one-way key
-  hierarchy yields CARE LINKS — repair and audit rights with no
-  ability to decrypt. Infrastructure now hosts noise describing noise
-- ✅ M12 — the chain: the registry is an append-only block chain kept
-  by the daemons; blocks commit only with a quorum of attestations
-  from validators with EARNED reputation (audits + serving), fresh
-  identities can't write, every replica re-validates everything
-  (`sim run consensus`, or three `daemon -validator` processes)
-- ✅ M13 — web UI: `daemon -ui 127.0.0.1:8081` serves an embedded
-  dashboard (pledge, chunks, network estimate, chain, held roots), a
-  drag-and-drop publish page (→ silt link + care link), a
-  paste-a-link fetch page, and a network observatory that aggregates
-  many daemons — capacity, serving bandwidth, per-file shard spread.
-  One Go binary, `go:embed`, zero extra runtime
-- ✅ M14 — desktop client: `silt client` consumes AND serves in one
-  process (pledges disk by default), keeps a link-book library (files
-  you hold keys for — the rest of the network is opaque to you by
-  design), and opens a browser UI. `build.sh` cross-compiles Mac /
-  Windows / Linux from one source tree (see docs/desktop-client.md)
-
-Where this is all going: [`ROADMAP.md`](ROADMAP.md) — identity/TLS,
-encrypted manifests, the reputation-quorum chain, web frontends, and
-the desktop client. The resolver layer that maps meaning onto opaque
-identifiers is a deliberately separate product:
+Where this is all going: [`ROADMAP.md`](ROADMAP.md), tracked as a single
+`V1` GitHub milestone and its issue spine. The resolver layer that maps
+meaning onto opaque identifiers is a deliberately separate product:
 [`docs/aslan-boundary.md`](docs/aslan-boundary.md).
 
 ## Try it
@@ -177,8 +135,8 @@ from its seed. Failing scenarios print the seed that kills them.
 
 Core packages import no adapters, no `os`/`net`/`time`/ambient
 randomness — enforced by `go test ./internal/depcheck`. Every effect
-arrives through an interface in `ports`, which is what will make the
-M3/M4 network simulation deterministic and seed-replayable.
+arrives through an interface in `ports`, which is what makes the
+network simulation deterministic and seed-replayable.
 
 ## Test
 

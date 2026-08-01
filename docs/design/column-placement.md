@@ -1,11 +1,12 @@
 # Design: column-based placement
 
-**Status:** implemented (Phase 1). Placement, provider records, retrieval,
-repair, and audit all operate on columns; the manifest is unchanged. See
-[BACKLOG.md](../../BACKLOG.md) and [ROADMAP.md](../../ROADMAP.md). Two
-follow-ups remain and are called out below: failure-domain-aware placement
-(bounding *cross-column* co-residence) and demand-responsive dispersion
-(handling hot files at scale).
+**Status:** implemented and field-proven. Placement, provider records,
+retrieval, repair, and audit all operate on columns; the manifest is unchanged.
+See [BACKLOG.md](../../BACKLOG.md) and [ROADMAP.md](../../ROADMAP.md). The two
+follow-ups noted below have since landed: **failure-domain-aware placement**
+(bounding *cross-column* co-residence) and the **dispersion audit** are done,
+and the **push half** of demand-responsive dispersion (fan-out on heat) is
+implemented — the pull-cache tier remains a noted follow-up.
 
 ## The problem
 
@@ -168,10 +169,12 @@ compose with it:
    little as possible. Best-effort (spreads across the peer domains a
    placer has learned), which also bounds the cross-column co-residence
    noted above.
-2. **Repair preserves anti-affinity** — a verified gap today (repair
-   re-places on raw closest nodes without the `preferAvoiding` ordering).
-   Column placement subsumes it, but if column placement is deferred, fix
-   repair directly first.
+2. **Repair preserves anti-affinity** — *done.* Repair re-places
+   domain-aware (`repairStripe` takes an `avoidDomain`, and
+   `preferFreshDomain` steers rebuilt shards into domains the survivors
+   aren't using), so the earlier gap (re-placing on raw closest nodes) is
+   closed. Column placement subsumes it structurally too, since columns are
+   one-per-stripe by construction.
 3. **Dispersion audit** — *done.* The caretaker sweep tallies the domains
    that actually hold each stripe's columns (HasChunk-confirmed, so a stale
    record can't fake spread) and re-spreads any stripe that a single domain

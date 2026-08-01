@@ -1,24 +1,36 @@
 # The Aslan Boundary: why Silt must never know what it carries
 
-(Aslan = working codename for the separate resolver product. This doc
-lives in the Silt repo only to define the BOUNDARY — Aslan itself is
-a different codebase, different repo, different deployment, on purpose.)
+**silt is use-agnostic.** Core carries zero meaning and takes zero
+position on *use*. We do not enumerate, endorse, or concern ourselves
+with what flows through it — file-sharing, archival, a library of
+record, or anything else users choose is unenumerated and not silt's
+business. silt's only ambition is to be the most trusted, private,
+secure, scalable, and efficient distributed file store ever built,
+chosen for its feature set.
 
-## The legal architecture
+**"Aslan" names the boundary — and everything above it.** Aslan is the
+name for *any* client or application built ON TOP of silt: the
+application layer, expected to be richly diverse, is where use lives.
+silt below it neither knows nor cares. This doc lives in the silt repo
+only to define the BOUNDARY; anything above it is a different codebase,
+different repo, different deployment, on purpose. The resolver sketched
+below is one such thing built on top — an illustration of the layer,
+not the whole of it.
 
-Silt's stance is the common-carrier stance, engineered rather than
-argued:
+## Content-blind by construction
+
+silt's stance is engineered, not argued: the network cannot act on what
+it cannot identify.
 
 - A **chunk** is ciphertext. Without a manifest key it is
   indistinguishable from random bytes. No daemon can decrypt what it
   stores, even in principle — it never receives key material.
-- A **manifest** is itself encrypted chunks (M11). A daemon hosting
-  manifest chunks hosts noise that happens to describe other noise.
+- A **manifest** is itself encrypted chunks. A daemon hosting manifest
+  chunks hosts noise that happens to describe other noise.
 - A **top-level identifier** is a 32-byte Merkle root: no filename, no
   size hint beyond the chain entry, no MIME type, no description.
-  Nothing about it distinguishes a home movie from a leak from a
-  blockbuster.
-- The **chain** (M12) records identifiers and manifest pointers —
+  Nothing about it distinguishes one file from another.
+- The **chain** records identifiers and manifest pointers —
   content-free bookkeeping, like a ledger of tracking numbers.
 
 The network cannot moderate what it cannot identify, the same way
@@ -26,11 +38,12 @@ TCP/IP cannot. That is not a loophole; it is the design. Every duty of
 identification lives ABOVE this layer, with whoever holds keys and
 publishes meaning.
 
-## What Aslan is
+## An example: a resolver on top
 
-Aslan is to Silt what DNS is to IP: a resolver from human meaning to
-opaque identifiers. It is a *separate product* with its own chain (or
-other distributed store) whose records are, at minimum:
+The clearest thing to build above the boundary is a resolver — to silt
+what DNS is to IP: a map from human meaning to opaque identifiers. It is
+a *separate product* with its own chain (or other distributed store)
+whose records are, at minimum:
 
 ```
 { name/title, description, tags, preview…,        ← meaning (Aslan's business)
@@ -65,15 +78,15 @@ Design notes for whoever builds it (possibly us, in a different repo):
 
 Storage without serving is another freeloader shape: a daemon that
 hoards chunks but serves at a trickle contributes nothing at retrieval
-time. The reputation inputs (M12) therefore include both:
+time. The reputation inputs therefore include both:
 
-- storage honesty — M7 audit pass rate (already measured), and
+- storage honesty — proof-of-retrieval audit pass rate, and
 - **serving throughput** — bytes served over time (`Stats.BytesServed`
-  already counts it; the M9 gossip pattern extends to carry a served-
-  bytes rate, giving the network a self-computed total bandwidth the
-  same way it computes total storage).
+  already counts it; the capacity-gossip pattern extends to carry a
+  served-bytes rate, giving the network a self-computed total bandwidth
+  the same way it computes total storage).
 
-Endgame: every client is also a node. The desktop client (M14) pledges
-a slice of disk and uplink by default — you download through the same
+Endgame: every client is also a node. The desktop client pledges a
+slice of disk and uplink by default — you download through the same
 daemon you contribute with, BitTorrent's lesson built into the
 architecture instead of bolted on.

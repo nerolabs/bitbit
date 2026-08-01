@@ -44,7 +44,7 @@ strict liability and won't fully immunize node operators.
 ## Trust & Safety
 
 **Biggest concern — Silt becoming known as a haven** for CSAM, malware,
-or bulk piracy. That is an ethical failure first and an existential
+or large-scale infringement. That is an ethical failure first and an existential
 reputational/legal event second.
 
 **Mitigations.** Abuse-reporting from day one; make it easy for
@@ -57,17 +57,20 @@ wrongdoing and actively supports takedown.
 ## Security
 
 **Biggest concern — this is unaudited, largely single-author
-cryptographic and consensus code**, with an explicitly *toy*
-proof-of-retrieval, a quorum-not-BFT chain (no reorg handling), and a
-reputation signal that is gameable (self-reported serving). Any of these
-could fail badly at real scale.
+cryptographic and trust-plane code.** The *design* target for V1 is the
+real mechanism — real proof-of-retrieval, a memory-hard bond, and
+unlinkable standing — but the **current code is an explicit first cut on
+labeled placeholders**: a space-lite in-RAM bond, a toy proof-of-retrieval,
+and a reputation signal that is still gameable (self-reported serving),
+proven only sim + e2e on a single host. Any of these could fail badly at
+real scale if shipped as-is.
 
 **Mitigations.** An **independent security audit and a written threat
-model before any "production" claim**; keep the "not production-hardened"
-labeling honest until then; a coordinated-disclosure policy and a
-bug-bounty; harden the DHT against Sybil/eclipse attacks; strengthen the
-reputation and proof-of-retrieval schemes before real economic value
-rides on them.
+model before any "production" claim**; keep the "first cut / not
+production-hardened" labeling honest until then; a coordinated-disclosure
+policy and a bug-bounty; harden the DHT against Sybil/eclipse attacks;
+land and multi-machine-prove the *real* proof-of-retrieval, bond, and
+unlinkable-standing mechanisms before real economic value rides on them.
 
 ## PR
 
@@ -90,9 +93,12 @@ communities.
 
 **Mitigations.** Target self-hosters, data-hoarders, and
 distributed-systems / cryptography practitioners; lead with the honest
-differentiator — **no token, no coin, no speculation**, just earned
-reputation — which separates Silt cleanly from storage-coin projects and
-from piracy tooling. Details in [launch-plan.md](launch-plan.md).
+headline differentiator — the **privacy × accountability × Sybil trilemma
+resolved all at once**: work-backed, identity-bound reputation with
+**no token, no coin, no speculation**, and publishing that stays
+cryptographically unlinkable from the standing that earns it. That claim
+separates Silt cleanly from storage-coin projects and from tools that read
+as built for wrongdoing. Details in [launch-plan.md](launch-plan.md).
 
 ## Governance & operations
 

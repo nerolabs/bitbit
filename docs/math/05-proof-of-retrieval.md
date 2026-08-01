@@ -2,7 +2,7 @@
 
 ## The problem
 
-The credit economy (M5) pays nodes for serving chunks. But serving is
+The credit economy pays nodes for serving chunks. But serving is
 observable only when someone happens to fetch. Storage — the promise
 that the chunk will *be there* when needed — is invisible. A rational
 cheater accepts every chunk placement, throws the bytes away, and
@@ -46,14 +46,33 @@ Our liar answers challenges with a perfectly valid Merkle proof and a
 tag it cannot make true. The audit slashes it into negative balance;
 honest hosts earn audit rent from the identical challenge.
 
-## The toy part (what real PoR fixes)
+## The toy part (what the V1 target fixes)
 
-To *grade* a tag, our auditor fetches the chunk itself and recomputes
-the truth. That works — content addressing makes ground truth cheap to
-recognize — but it means auditing costs as much bandwidth as
-downloading, which defeats the purpose at scale.
+Be honest about what the mechanism above *is*: a challenge-time
+possession check. It proves the prover could produce the bytes at the
+instant it was asked — nothing more. It does not prove the bytes are
+stored *durably* (they could be fetched from a neighbour the moment the
+nonce lands), and it does not prove *unique* storage (three names can
+front one copy). It is a placeholder, useful for catching the outright
+liar in the audit sim, not the real thing.
 
-Real proof-of-retrieval schemes exist precisely to delete that fetch:
+The V1 target (tenet **M0** — resolving the privacy × accountability ×
+Sybil trilemma — and **ROADMAP** Gate 4) is a *real*
+proof-of-retrieval/storage: a published, peer-reviewed scheme from the
+compact-PoR / PDP / proof-of-space family, used as-is. Per build tenet
+**B8** (best-in-class proven components, novelty only in composition),
+silt does not invent the cryptography. What is novel is how a proven
+scheme is *bound to identity and to time* — so that standing becomes
+token-less, work-backed, and Sybil-hard (an identity's weight costs
+real, sustained, challenged storage) while publishing stays unlinkable.
+The real scheme does not exist in the code yet; this section frames it
+as the V1 target, against which the mechanism above is the current toy.
+
+To *grade* a tag today, our auditor fetches the chunk itself and
+recomputes the truth. That works — content addressing makes ground
+truth cheap to recognize — but it means auditing costs as much
+bandwidth as downloading, which defeats the purpose at scale. The
+published schemes exist precisely to delete that fetch:
 
 - **Precomputed challenges**: at upload time, generate many
   (nonce, expected-tag) pairs and store only those; each is a one-shot
@@ -74,7 +93,7 @@ per-replica or sealing (Filecoin again). All of this slots in behind
 `ports.CreditLedger.RecordAudit` — the interface doesn't change, the
 cryptography behind it does.
 
-## What silt does (M7)
+## What silt does today
 
 - `Distribute` and repair ship every shard with its `StorageProof`;
   hosts refuse chunks whose proofs don't verify (never hold what you
@@ -92,5 +111,5 @@ A bonus lesson this milestone taught us: the liars exposed a real
 retrieval fragility. Provider resolution used to stop at the first
 record found — fine when every provider is honest, fatal when the
 first one is a fake. The walk now runs to convergence and collects
-every record. Adversarial thinking found an availability bug that four
-milestones of honest-node testing never could.
+every record. Adversarial thinking found an availability bug that a
+long run of honest-node testing never could.

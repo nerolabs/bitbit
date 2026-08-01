@@ -1,4 +1,4 @@
-# The Desktop Client (M14)
+# The Desktop Client
 
 `silt client` is the end-user face of Silt: a single binary that
 **consumes and serves in the same process**. Downloading and
@@ -22,7 +22,7 @@ Defaults chosen for a person, not an operator:
 - `-ui 127.0.0.1:8090` and `-open` — the library opens in your browser
   on start.
 
-On launch it mints or loads its keypair (identity = the key, M10),
+On launch it mints or loads its keypair (identity = the key),
 opens a capacity-bounded disk store, joins the swarm via discovery
 (persisting peers for flagless restarts), announces what it holds, and
 serves the local UI.
@@ -71,5 +71,5 @@ network" and "the users" dissolves — every downloader is a host, the
 way BitTorrent works, but with erasure coding, encryption at every
 level, earned-reputation consensus, and the infrastructure/meaning
 split all underneath. That was the whole arc: `silt add file.txt` on
-one laptop in M1, to a self-serving desktop app over an encrypted,
-audited, chain-governed swarm here in M14.
+one laptop, to a self-serving desktop app over an encrypted, audited,
+chain-governed swarm.

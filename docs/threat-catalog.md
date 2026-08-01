@@ -13,9 +13,15 @@ A few structural through-lines, stated once:
 
 - **Free identity (Sybil) is the taproot.** Node IDs are `SHA-256(pubkey)`
   and minting a keypair is free, so most of the worst items below reduce to
-  "an attacker with many cheap identities." Proof-of-work / stake is
-  **deliberately deferred** (see decisions), so these downstream risks stay
-  open and we say so loudly.
+  "an attacker with many cheap identities." Minting stays free, but consensus
+  **standing** now costs token-less, work-backed, identity-bound storage
+  (the challenged bond — T1/#82), so the downstream reputation risks (D1/D3)
+  are priced rather than free. This is a **first cut on honestly-labeled
+  placeholders** (bond seal is space-lite/in-RAM, not memory-hard; proof-of-
+  retrieval is challenge-time toy; single-host only, multi-machine #52 not
+  done) — the V1 target replaces these with the real, proven mechanism. A
+  hard proof-of-work / space primitive on *minting* stays deferred; we say so
+  loudly.
 - **Day one is a security parameter.** Nearly every attack is easiest on a
   tiny network — eclipse, quorum capture, version-floor evasion all peak at
   launch, the worst possible moment. The launch strategy is a control, not
@@ -165,17 +171,24 @@ Most items are cheaper to *detect* than *prevent*. The observatory (Gini,
 capacity, serving, provider maps) should grow an **anomaly-detection layer**
 — identity influx (Sybil), reputation-farming graphs (wash-serving),
 repair-storm spikes, provider-record floods. Detection + reputation-slashing
-+ the version-floor recall is the pragmatic triad while prevention
-(PoW/stake) is deferred.
++ the version-floor recall is the pragmatic triad, now backstopped by the
+work-backed standing bond (T1/#82) pricing the identities these attacks need
+— while a hard PoW/proof-of-space prevention primitive on minting stays
+deferred.
 
 ## Decisions taken (2026-07-31 conversation)
 - **Hole-punching is V1.** Public-relay economics require it (NAT↔NAT
   today relays every byte through the public node — expensive; see
   [`network-protection.md`](network-protection.md)).
 - **Rate limits: yes, operator-configurable from the start.**
-- **Proof-of-work / stake: deferred.** Sybil (B) and its downstream (D3,
-  D1) stay open; we say so loudly and lean on earned-reputation +
-  training-wheels.
+- **Sybil answer: token-less, work-backed, identity-bound reputation.**
+  Standing costs a challenged storage bond (T1/#82); a young network also
+  gates commits behind maturity-scaled anchor sign-off (T2/#83 training
+  wheels). This landed as a **first cut on placeholders** (space-lite/in-RAM
+  bond, toy PoR, single-host), so Sybil (B) and its downstream (D1/D3) are
+  *priced, not closed* — hardening to the real, multi-machine mechanism is
+  V1 work. A hard PoW / proof-of-space primitive on identity minting stays
+  deferred.
 - **Update enforcement: criticality-graded, signed, recallable** (see
   [`network-protection.md`](network-protection.md) and TENETS).
 - **The Aslan boundary is immutable; core carries zero meaning** (TENETS).
