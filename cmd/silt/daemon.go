@@ -56,6 +56,9 @@ func cmdDaemon(args []string) error {
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
 	uiAddr := fs.String("ui", "", "serve the web UI at this address (e.g. 127.0.0.1:8081)")
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
+	anchorList := fs.String("anchors", "", "launch-window training wheels: comma-separated anchor validator IDs whose sign-off an immature-network commit also requires (empty = no training wheels)")
+	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
+	matureValidators := fs.Int("mature-validators", 0, "distinct non-anchor validators after which the anchor requirement sheds automatically (0 = never require anchors)")
 	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (V1: held in RAM) — a bigger bond earns more standing")
@@ -211,8 +214,24 @@ func cmdDaemon(args []string) error {
 	ledger := credit.New(50_000, 0)
 	nd0ledger := ledger // wired onto the node below
 	if *validator {
+		anchorSet := map[ports.NodeID]bool{}
+		for _, s := range strings.Split(*anchorList, ",") {
+			if strings.TrimSpace(s) == "" {
+				continue
+			}
+			aid, err := ports.ParseHash(strings.TrimSpace(s))
+			if err != nil {
+				return fmt.Errorf("anchor %q: %w", s, err)
+			}
+			anchorSet[aid] = true
+		}
+		if len(anchorSet) > 0 && *anchorQuorum > 0 {
+			fmt.Printf("training wheels: %d anchor(s), %d required, shed at %d independent validators\n",
+				len(anchorSet), *anchorQuorum, *matureValidators)
+		}
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
+			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
 		}, ledger.Reputation)
 		chainPath = filepath.Join(*storeDir, "chain.cbor")
 		if n, err := chainstore.Replay(chainPath, ch); err != nil {

@@ -43,6 +43,20 @@ type Config struct {
 	MinProposerRep int64
 	MinAttesterRep int64
 	Quorum         int // attestations required, excluding the proposer
+	// Launch-window "training wheels" (risk 15): while the network is
+	// immature — fewer than MatureValidators DISTINCT non-anchor qualified
+	// validators have ever attested a committed block — a commit ALSO needs
+	// AnchorQuorum attestations from Anchors (a declared seed set), so a
+	// Sybil quorum can't capture a young network before it decentralizes.
+	// The wheels shed MECHANICALLY on that measured decentralization, never a
+	// flag day. Anchors are plural and require a threshold, so no single
+	// anchor is load-bearing (cf. R4) — and while they can gate publication
+	// on the young network (a transparent, on-chain, time-limited power),
+	// they can never do so once mature. Empty Anchors / zero AnchorQuorum =
+	// no training wheels (the default; trusted/sim deployments).
+	Anchors          map[ports.NodeID]bool
+	AnchorQuorum     int
+	MatureValidators int
 }
 
 func DefaultConfig() Config {
@@ -147,12 +161,13 @@ func DecodeBlocks(raw []byte) ([]Block, error) {
 }
 
 var (
-	ErrLowReputation = errors.New("chain: reputation below threshold")
-	ErrNoQuorum      = errors.New("chain: insufficient valid attestations")
-	ErrBadSignature  = errors.New("chain: bad signature")
-	ErrWrongParent   = errors.New("chain: block does not extend the local head")
-	ErrDupRoot       = errors.New("chain: root already registered")
-	ErrUseConsensus  = errors.New("chain: replica is read-only; entries are committed via consensus")
+	ErrLowReputation  = errors.New("chain: reputation below threshold")
+	ErrNoQuorum       = errors.New("chain: insufficient valid attestations")
+	ErrBadSignature   = errors.New("chain: bad signature")
+	ErrWrongParent    = errors.New("chain: block does not extend the local head")
+	ErrDupRoot        = errors.New("chain: root already registered")
+	ErrUseConsensus   = errors.New("chain: replica is read-only; entries are committed via consensus")
+	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -162,6 +177,10 @@ type Chain struct {
 	blocks  []Block
 	byRoot  map[ports.Hash]ports.Entry
 	revoked map[ports.Hash]bool
+	// validatorsSeen is the set of distinct qualified attesters that have
+	// ever committed a block — the monotonic decentralization signal the
+	// training wheels shed on (see Mature).
+	validatorsSeen map[ports.NodeID]bool
 }
 
 // New starts an empty replica. rep is the local reputation view —
@@ -170,8 +189,27 @@ type Chain struct {
 // declared.
 func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 	return &Chain{cfg: cfg, rep: rep,
-		byRoot:  make(map[ports.Hash]ports.Entry),
-		revoked: make(map[ports.Hash]bool)}
+		byRoot:         make(map[ports.Hash]ports.Entry),
+		revoked:        make(map[ports.Hash]bool),
+		validatorsSeen: make(map[ports.NodeID]bool)}
+}
+
+// Mature reports whether the network has decentralized enough for the
+// launch-window anchors to no longer be required: at least MatureValidators
+// DISTINCT non-anchor qualified validators have attested a committed block.
+// Because attesting requires earned standing (a storage bond, #78), this
+// count can't be cheaply inflated by Sybils — maturing early costs real bonds.
+func (c *Chain) Mature() bool {
+	if c.cfg.MatureValidators <= 0 {
+		return true
+	}
+	n := 0
+	for id := range c.validatorsSeen {
+		if !c.cfg.Anchors[id] {
+			n++
+		}
+	}
+	return n >= c.cfg.MatureValidators
 }
 
 // Revoked reports whether root has been taken down by a committed
@@ -265,6 +303,20 @@ func (c *Chain) ValidateCommit(b *Block) error {
 	if valid < c.cfg.Quorum {
 		return fmt.Errorf("%w: %d qualified, need %d", ErrNoQuorum, valid, c.cfg.Quorum)
 	}
+	// Training wheels: while immature, the quorum must ALSO carry anchor
+	// sign-off, so a Sybil quorum can't capture a young network before it has
+	// decentralized. Sheds automatically once the network is Mature.
+	if len(c.cfg.Anchors) > 0 && c.cfg.AnchorQuorum > 0 && !c.Mature() {
+		anchors := 0
+		for id := range seen { // seen = the distinct qualified attesters
+			if c.cfg.Anchors[id] {
+				anchors++
+			}
+		}
+		if anchors < c.cfg.AnchorQuorum {
+			return fmt.Errorf("%w: %d of required %d", ErrAnchorRequired, anchors, c.cfg.AnchorQuorum)
+		}
+	}
 	return nil
 }
 
@@ -311,6 +363,14 @@ func (c *Chain) apply(b Block) {
 	}
 	for _, r := range b.Revocations {
 		c.revoked[r] = true
+	}
+	// Track distinct qualified validators for the maturity metric — a
+	// monotonic, chain-internal, auditable measure of decentralization.
+	for _, a := range b.Atts {
+		id := a.AttesterID()
+		if id != b.ProposerID() && c.rep(id) >= c.cfg.MinAttesterRep {
+			c.validatorsSeen[id] = true
+		}
 	}
 }
 
