@@ -125,16 +125,13 @@ func cmdDaemon(args []string) error {
 		used, total := capped.Capacity()
 		fmt.Printf("pledge: %d / %d bytes used\n", used, total)
 	}
-	nd := node.New(id, node.Config{
-		K: 8, Alpha: 3,
-		RequestTimeout:      ports.Duration(2 * time.Second),
-		Replication:         3,
-		RepairInterval:      ports.Duration(60 * time.Second),
-		RepairSlack:         2,
-		ReachabilityTimeout: ports.Duration(3 * time.Second),
-		FetchAttempts:       3, // re-sweep providers on transient relay-at-capacity refusals (#65)
-		FetchBackoff:        ports.Duration(200 * time.Millisecond),
-	}, walltime.New(loop), tr, store)
+	// Base on DefaultConfig so new fields are inherited, not silently
+	// dropped to their zero value (#71 — this is how demand-dispersion was
+	// off in the daemon and the #65 fetch-retry shipped inert). Override
+	// only what the daemon genuinely needs to differ on.
+	cfg := node.DefaultConfig()
+	cfg.RequestTimeout = ports.Duration(2 * time.Second) // patient vs the 500ms default (real WAN)
+	nd := node.New(id, cfg, walltime.New(loop), tr, store)
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
 	// bootstrap) to the same artifact the node and transport narrate to.
@@ -650,13 +647,12 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	nd := node.New(ident.NodeID(), node.Config{
-		K: 8, Alpha: 3,
-		RequestTimeout: ports.Duration(2 * time.Second),
-		Replication:    3,
-		FetchAttempts:  3, // this is the actual fetcher (swarm get) — retry transient relay refusals (#65)
-		FetchBackoff:   ports.Duration(200 * time.Millisecond),
-	}, walltime.New(loop), tr, memstore.New())
+	// Same DefaultConfig base as the daemon (#71). This is the actual swarm
+	// add/get fetcher, so it inherits the #65 retry; it stages and leaves,
+	// so the repair/demand fields are harmless (it never caretakes).
+	cfg := node.DefaultConfig()
+	cfg.RequestTimeout = ports.Duration(2 * time.Second)
+	nd := node.New(ident.NodeID(), cfg, walltime.New(loop), tr, memstore.New())
 	nd.SetEphemeral(true) // a publish/fetch client that keeps nothing — peers must not route to it (#43)
 
 	ps, err := discovery.ParseList(peers)
