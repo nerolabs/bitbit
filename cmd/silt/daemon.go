@@ -16,6 +16,7 @@ import (
 	"github.com/nerolabs/silt/adapters/chainhost"
 	"github.com/nerolabs/silt/adapters/chainstore"
 	"github.com/nerolabs/silt/adapters/discovery"
+	"github.com/nerolabs/silt/adapters/diskplot"
 	"github.com/nerolabs/silt/adapters/diskproofs"
 	"github.com/nerolabs/silt/adapters/diskstore"
 	"github.com/nerolabs/silt/adapters/eventloop"
@@ -171,6 +172,14 @@ func cmdDaemon(args []string) error {
 	} else {
 		nd.SetProofStore(pf)
 		nd.LoadProofs()
+	}
+	// #93: persist the bond plot so a restart reloads (and re-verifies) it
+	// instead of re-plotting the deliberately-expensive dataset. Attach before
+	// EnableBond, below, which loads-or-plots through it.
+	if pl, perr := diskplot.Open(filepath.Join(*storeDir, "plot")); perr != nil {
+		return perr
+	} else {
+		nd.SetPlotStore(pl)
 	}
 	// obs is lg as a nullable interface (a typed-nil *Sink would pass
 	// the adapters' nil checks and then explode).

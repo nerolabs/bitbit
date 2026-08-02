@@ -12,6 +12,33 @@ import (
 // enough for a unit test (the security floor is a deployment tuning knob).
 const stDelay = 300
 
+// A plot reloaded from persisted bytes rebuilds the same commitment (root
+// re-derived, not trusted — B7) and answers challenges — the restart path.
+func TestReconstructRoundTrip(t *testing.T) {
+	orig := Seal(nodeID(5), 1<<20)
+	got, err := Reconstruct(nodeID(5), orig.Size, orig.Blocks())
+	if err != nil {
+		t.Fatalf("reconstruct: %v", err)
+	}
+	if got.Root != orig.Root {
+		t.Fatal("reconstructed root differs — reload would advertise the wrong bond")
+	}
+	ans, ok := got.Answer(42)
+	if !ok || !Verify(got.Root, got.Size, 42, ans) {
+		t.Fatal("reconstructed bond cannot answer its own challenge")
+	}
+	// A wrong size (block count mismatch) or a corrupt block length is rejected
+	// so the caller re-plots rather than trusting a bad plot.
+	if _, err := Reconstruct(nodeID(5), (1<<20)+BlockSize, orig.Blocks()); err == nil {
+		t.Fatal("reconstruct accepted a block count that disagrees with size")
+	}
+	short := append([][]byte(nil), orig.Blocks()...)
+	short[0] = short[0][:BlockSize-1]
+	if _, err := Reconstruct(nodeID(5), orig.Size, short); err == nil {
+		t.Fatal("reconstruct accepted a wrong-length block")
+	}
+}
+
 // A held bond answers its own space-TIME challenge: the VDF binds elapsed
 // sequential work, the derived blocks are held, and the cheap verify passes.
 func TestSpaceTimeHeldBondAnswers(t *testing.T) {

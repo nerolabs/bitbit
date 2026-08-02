@@ -198,6 +198,9 @@ type Node struct {
 	// cost real held storage. See bondaudit.go.
 	bond      *bond.Commitment
 	peerBonds map[ports.NodeID]bondInfo
+	// plotStore persists the bond plot so a restart reloads it instead of
+	// re-plotting (#93); nil = memory-only (re-plots each start).
+	plotStore ports.PlotStore
 
 	// tokenIssuer, when set, makes this validator blind-sign publish-token
 	// requests (T3, #14/F1) — the publisher-privacy issuance role.
@@ -272,6 +275,11 @@ func (n *Node) ObservedAddr() string { return n.observedAddr }
 // SetProofStore attaches durable proof persistence (#69); call before
 // LoadProofs and bootstrap. nil keeps proofs memory-only (sims, clients).
 func (n *Node) SetProofStore(ps ports.ProofStore) { n.proofStore = ps }
+
+// SetPlotStore attaches durable bond-plot persistence (#93); call before
+// EnableBond so a restart reloads the plot instead of re-plotting. nil keeps
+// the plot memory-only (re-plotted each start; fine for sims/tests).
+func (n *Node) SetPlotStore(ps ports.PlotStore) { n.plotStore = ps }
 
 // LoadProofs repopulates the in-memory proof map from the proof store, so a
 // restarted node re-announces its held coded shards under the correct column

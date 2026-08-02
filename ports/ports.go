@@ -104,6 +104,20 @@ type ProofStore interface {
 	Delete(id ChunkID) error
 }
 
+// PlotStore persists a node's identity-bound storage-bond plot (core/bond) —
+// the large space-time dataset behind its consensus standing. Plotting is
+// deliberately expensive (that is the Sybil cost), so a restart must RELOAD
+// the plot and re-verify it against its committed root (B7: persisted state is
+// re-verified, not trusted) rather than re-plotting from scratch (#93). A nil
+// PlotStore means memory-only — the node re-plots on every start, fine for
+// sims and tests.
+type PlotStore interface {
+	// Save writes this identity's plot: its committed root and blocks.
+	Save(id NodeID, root Hash, blocks [][]byte) error
+	// Load returns the persisted root and blocks; ok is false if none exists.
+	Load(id NodeID) (root Hash, blocks [][]byte, ok bool, err error)
+}
+
 // Entry is what gets published to the global registry: the Merkle root
 // that names a file, plus enough metadata to begin retrieval. The chunk
 // IDs of the serialized manifest are included because the root alone
