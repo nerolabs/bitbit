@@ -51,7 +51,7 @@ func newWorld(cfg Config) *world {
 
 func (w *world) block(entries ...ports.Entry) *Block {
 	prev, height := w.c.Head()
-	b := &Block{Height: height, Prev: prev, Entries: entries}
+	b := &Block{Version: BlockVersion, Height: height, Prev: prev, Entries: entries}
 	Sign(b, w.prop)
 	return b
 }
@@ -172,7 +172,7 @@ func TestDupRootAndWrongParent(t *testing.T) {
 	if err := w.c.ValidateProposal(dup); !errors.Is(err, ErrDupRoot) {
 		t.Fatalf("want ErrDupRoot, got %v", err)
 	}
-	stale := &Block{Height: 0, Prev: ports.Hash{}, Entries: []ports.Entry{entry(2)}}
+	stale := &Block{Version: BlockVersion, Height: 0, Prev: ports.Hash{}, Entries: []ports.Entry{entry(2)}}
 	Sign(stale, w.prop)
 	if err := w.c.ValidateProposal(stale); !errors.Is(err, ErrWrongParent) {
 		t.Fatalf("want ErrWrongParent, got %v", err)
@@ -196,6 +196,41 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 	}
 }
 
+// The hard-fork guard (#98): a block minted under a different rule era must
+// be refused at decode, not silently decoded and mis-validated under this
+// era's rules. This is the whole point of the version field.
+func TestDecodeRefusesForeignBlockVersion(t *testing.T) {
+	w := newWorld(DefaultConfig())
+	b := w.block(entry(1))
+	w.attestAll(b)
+
+	// A block from a future era (same bytes otherwise) round-trips through
+	// Encode but must be rejected by Decode.
+	future := *b
+	future.Version = BlockVersion + 1
+	if _, err := Decode(Encode(&future)); !errors.Is(err, ErrBlockVersion) {
+		t.Fatalf("Decode accepted a foreign version, want ErrBlockVersion, got %v", err)
+	}
+	// A pre-version block (Version 0, as legacy bytes would decode) is
+	// equally refused — absence is not "current".
+	legacy := *b
+	legacy.Version = 0
+	if _, err := Decode(Encode(&legacy)); !errors.Is(err, ErrBlockVersion) {
+		t.Fatalf("Decode accepted a version-0 block, want ErrBlockVersion, got %v", err)
+	}
+	// DecodeBlocks refuses a batch if any block is a foreign version.
+	if _, err := DecodeBlocks(EncodeBlocks([]Block{*b, future})); !errors.Is(err, ErrBlockVersion) {
+		t.Fatalf("DecodeBlocks accepted a batch with a foreign version, got %v", err)
+	}
+
+	// Version is committed by Hash: two blocks differing only in Version
+	// have different hashes, so an attacker can't swap the era under a
+	// valid signature.
+	if b.Hash() == future.Hash() {
+		t.Fatal("Hash does not cover Version — the era could be swapped under a signature")
+	}
+}
+
 // A committed revocation is append-only takedown: it commits only by
 // quorum (like any block), marks the root revoked, and makes the chain's
 // registry no-op on it — while the immutable record of the original
@@ -213,7 +248,7 @@ func TestRevocationByQuorum(t *testing.T) {
 
 	// A revocation-only block at the next height takes down entry(1).
 	prev, height := w.c.Head()
-	rev := &Block{Height: height, Prev: prev, Revocations: []ports.Hash{entry(1).Root}}
+	rev := &Block{Version: BlockVersion, Height: height, Prev: prev, Revocations: []ports.Hash{entry(1).Root}}
 	Sign(rev, w.prop)
 
 	// Too few attestations: a lone actor cannot take content down.

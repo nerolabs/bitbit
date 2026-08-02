@@ -64,7 +64,7 @@ func TestPublishTokensGateAndPreventDoubleSpend(t *testing.T) {
 	}
 	commit := func(e ports.Entry) error {
 		prev, height := c.Head()
-		blk := &Block{Height: height, Prev: prev, Entries: []ports.Entry{e}}
+		blk := &Block{Version: BlockVersion, Height: height, Prev: prev, Entries: []ports.Entry{e}}
 		Sign(blk, prop)
 		blk.Atts = append(blk.Atts, Attest(blk, vals[0]), Attest(blk, vals[1]))
 		return c.Append(*blk)

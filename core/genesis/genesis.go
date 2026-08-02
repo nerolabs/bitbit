@@ -76,7 +76,7 @@ func Build(store ports.ChunkStore) (chain.Block, link.Handle, ports.Entry, error
 	if err != nil {
 		return chain.Block{}, link.Handle{}, ports.Entry{}, err
 	}
-	b := chain.Block{Height: 0, Entries: []ports.Entry{entry}}
+	b := chain.Block{Version: chain.BlockVersion, Height: 0, Entries: []ports.Entry{entry}}
 	chain.Sign(&b, Key())
 	return b, h, entry, nil
 }

@@ -61,6 +61,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   (`/?token=…`). Reads keep their no-token localhost ergonomics. CORS `*` is
   gone. Traces to Don't #3 (access-unsurveilled), B4 (privacy by construction),
   and S4 (no seizable single point). Closes #89.
+### Security
+- **Chain permanence: version the Block schema before any Gate-4 record change**
+  (2026-08-02) — `Block` carried no version, so any future change to *what the
+  block hash commits to* or to *validation semantics* (real-bond commitments,
+  mandatory tokens) would be a hard fork with nothing to gate the eras:
+  `Decode`/`DecodeBlocks` would happily decode an old block and mis-validate it
+  under new rules. Blocks now carry a `Version` (era) that `Hash` commits to and
+  `Decode`/`DecodeBlocks` require — a version mismatch is an explicit
+  `ErrBlockVersion`, never silent mis-validation, and because the hash covers it
+  the era can't be swapped under a valid signature. Landed while the chain is
+  still throwaway, so it costs nothing now and prevents a flag-day later; it is
+  the prerequisite for the Gate-4 record-format changes (#90/#91/#92). Entry
+  versioning is deliberately deferred: entries are always validated within a
+  block whose version gates their rules, and standalone-registry entry
+  semantics are what the tokened-publish design turn (#97) will settle. Closes
+  #98.
 
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
