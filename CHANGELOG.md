@@ -9,6 +9,29 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Gate 4b (#91): verifiable delay function primitive (`core/vdf`)** (2026-08-02)
+  — the sequential-work core of the proof-of-space-*time* bond, and the first
+  4b construction piece. A VDF evaluates in a prescribed number of *inherently
+  sequential* steps (you cannot parallelise your way to the answer) yet emits a
+  short proof anyone verifies almost instantly — exactly what a bond needs to
+  bind a fresh epoch challenge to real elapsed, non-parallelisable time, so a
+  Sybil can neither retroactively fake having held its pledged space across the
+  epoch nor buy its way out of the wall clock with more cores. The construction
+  is Wesolowski's VDF (EUROCRYPT 2019), adopted not invented (B8): over a group
+  of unknown order (`Z_N^*` for an RSA modulus `N`), `y = x^(2^T) mod N` by `T`
+  sequential squarings, with `π = x^(⌊2^T/ℓ⌋)` for a Fiat–Shamir prime `ℓ`
+  computed in `T` steps via long division (never materialising the `T`-bit
+  exponent), and verify `π^ℓ·x^r ≟ y` for `r = 2^T mod ℓ` in O(log ℓ + log T) —
+  cheap enough to stay on the core loop. Security rests on `N`'s factorisation
+  being unknown (a documented trust anchor; the class-group variant removes it
+  and is the noted upgrade path). Pure package (big integers and bytes only).
+  Adversarially tested: relabelling a shorter computation as a longer one, a
+  trivial `π=1`, tampered `y`/`π`, wrong-challenge, wrong-`T`, and non-canonical
+  elements all fail; the delay loop is pinned against a direct `x^(2^T)`
+  reference. Wiring the plot + epoch proof off-loop behind the existing
+  `bond.Verify` seam is the next 4b change. Traces to **M0** (the Sybil corner:
+  space-time held, not asserted), **D1**, and **B2** (the heavy work runs off
+  the core loop). See `docs/design/gate4-m0-mechanism.md` §3b.
 - **Gate 4a (#90): wire the real proof-of-retrieval into the live audit path**
   (2026-08-02) — the `core/por` primitive now *replaces* the toy scheme in the
   running node. An auditor verifies that a peer still holds a shard **without
