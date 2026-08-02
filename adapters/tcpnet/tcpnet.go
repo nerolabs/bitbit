@@ -50,6 +50,7 @@ import (
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/relay"
+	"github.com/nerolabs/silt/internal/safe"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -534,6 +535,16 @@ func (t *Transport) acceptLoop() {
 }
 
 func (t *Transport) readLoop(conn *tls.Conn) {
+	// A malformed frame from a peer must fail this conversation, not the
+	// node (Gate 1 / anti-persona #14). The decoders below are panic-free
+	// by construction — the fuzz targets prove it — but this guard is the
+	// net underneath: a panic anywhere in the read path drops the conn
+	// instead of unwinding into the runtime and killing every other peer's
+	// session too.
+	defer safe.Guard(func(r any) {
+		t.logf(ports.LogWarn, "recovered panic in read loop", "remote", conn.RemoteAddr(), "panic", r)
+		conn.Close()
+	})
 	if err := conn.Handshake(); err != nil {
 		t.logf(ports.LogDebug, "inbound handshake failed", "remote", conn.RemoteAddr(), "err", err)
 		conn.Close()

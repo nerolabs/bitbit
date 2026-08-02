@@ -175,6 +175,12 @@ func cmdDaemon(args []string) error {
 	if lg != nil {
 		obs = lg
 	}
+	// A task that panics on the node's thread (e.g. handling a malformed
+	// frame that reaches a decoder) fails that task, not the daemon — and
+	// says so, loudly. Any such panic is a top-severity bug until fixed.
+	loop.OnPanic = func(r any) {
+		ports.LogIf(obs, ports.LogError, "recovered panic on node thread", "panic", r)
+	}
 
 	// -relay: this daemon offers to forward ciphertext between NATed
 	// peers. A capability, not infrastructure: any reachable node can do

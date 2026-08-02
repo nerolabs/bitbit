@@ -8,6 +8,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **Gate 1 (A5): panic-recover + fuzz the decode surface** (2026-08-02) — a
+  daemon that crashes on a malformed frame can't be field-tested and can't
+  carry the "credible from day one" claim, so every untrusted-input decoder is
+  now proven not to panic and is caught if it ever does. New Go fuzz targets
+  cover the whole decode surface — the manifest CBOR decoder, the chunk-frame
+  length header (plus a Split/Join round-trip), `silt:`/`siltcare:` link
+  parsing, chain block/blocks decoders, the tcpnet wire envelope, and the relay
+  control frame; their seed corpora run as a smoke test on every push/PR and a
+  new nightly workflow mutates each for a real time budget (millions of execs,
+  zero panics found). Underneath that proof sits a defence-in-depth recovery
+  net (`internal/safe`): the tcpnet read loop and the relay client/server frame
+  loops drop the *connection* on any panic, and the node's event loop contains
+  a panicking task so one bad frame fails the *request*, not the *process* — an
+  event-loop panic is logged at error level (a top-severity bug until fixed),
+  never silent. Traces to tenets S1/S3 and anti-persona #14. Closes #87.
+
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or

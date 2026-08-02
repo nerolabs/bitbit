@@ -1,0 +1,53 @@
+name: Fuzz — decode surface
+
+# Gate 1 (A5): the decoders parse hostile input (network frames, user
+# links). A malformed input that panics is a top-severity bug. The seed
+# corpus of every fuzz target already runs as ordinary subtests in the CI
+# "go test" job on each push/PR — the short smoke run. This workflow is the
+# longer nightly run: it mutates each decoder for a real time budget to
+# find inputs the seeds don't. A found panic fails the job and drops a
+# reproducer under testdata/fuzz/ for a regression seed.
+on:
+  schedule:
+    - cron: "0 7 * * *" # nightly ~07:00 UTC
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: "Per-target fuzz budget (Go duration, e.g. 3m)"
+        default: "3m"
+
+jobs:
+  fuzz:
+    name: Fuzz each decoder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Fuzz the decode surface
+        env:
+          FUZZTIME: ${{ github.event.inputs.fuzztime || '3m' }}
+        run: |
+          set -e
+          run() {
+            echo "::group::fuzz $1 $2 (${FUZZTIME})"
+            go test "./$1/" -run '^$' -fuzz "^$2$" -fuzztime "${FUZZTIME}"
+            echo "::endgroup::"
+          }
+          run core/manifest FuzzUnmarshal
+          run core/chunk FuzzJoin
+          run core/chunk FuzzRoundTrip
+          run core/link FuzzParse
+          run core/chain FuzzDecode
+          run core/chain FuzzDecodeBlocks
+          run adapters/tcpnet FuzzEnvelopeDecode
+          run adapters/relay FuzzCtrlDecode
+      - name: Upload any crashers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
