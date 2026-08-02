@@ -88,6 +88,51 @@ type Key struct {
 	alpha  []*big.Int // len == params.SectorsPerBlock
 }
 
+// DeriveKey derives the secret verification key DETERMINISTICALLY from a
+// seed — so the publisher (which tags at Stage/Distribute time) and the
+// auditor (which verifies later) independently arrive at the SAME key
+// without transmitting it. In silt the seed is bound to a file's layout
+// key (see core/node), so a care-link holder can derive the key and audit,
+// while a storage node — holding only chunk bytes and tags, never the
+// layout key — cannot, which is what keeps a prover from forging.
+//
+// The derivation is a fixed protocol constant: it expands the seed into a
+// deterministic byte stream (HMAC-SHA256 in counter mode) and feeds that to
+// the same key-construction Keygen uses, so a derived key is drawn from the
+// identical distribution as a random one. Changing this function or Keygen's
+// read pattern would change every derived key, so both are frozen.
+func DeriveKey(seed []byte, params Params) (*Key, error) {
+	if params.SectorsPerBlock <= 0 {
+		return nil, errors.New("por: SectorsPerBlock must be positive")
+	}
+	return Keygen(&detReader{seed: seed}, params)
+}
+
+// detReader is an infinite deterministic byte stream keyed by a seed:
+// HMAC-SHA256(seed, "silt/por/v1/derive" ‖ counter) blocks concatenated.
+// Keygen reads exactly what it needs from it, so the same seed always
+// yields the same key.
+type detReader struct {
+	seed []byte
+	ctr  uint32
+	buf  []byte
+}
+
+func (r *detReader) Read(p []byte) (int, error) {
+	for len(r.buf) < len(p) {
+		mac := hmac.New(sha256.New, r.seed)
+		mac.Write([]byte("silt/por/v1/derive"))
+		var cb [4]byte
+		binary.BigEndian.PutUint32(cb[:], r.ctr)
+		mac.Write(cb[:])
+		r.ctr++
+		r.buf = mac.Sum(r.buf)
+	}
+	n := copy(p, r.buf)
+	r.buf = r.buf[n:]
+	return n, nil
+}
+
 // Keygen draws a fresh secret key for the given params.
 func Keygen(rng io.Reader, params Params) (*Key, error) {
 	if params.SectorsPerBlock <= 0 {

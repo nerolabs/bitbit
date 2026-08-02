@@ -108,7 +108,7 @@ func cmdNet(args []string) error {
 			done()
 			return
 		}
-		a.nd.Distribute(entry, m, false, func(placed int, derr error) {
+		a.nd.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(placed int, derr error) {
 			if derr != nil {
 				fmt.Println("distribute:", derr)
 				done()

@@ -9,6 +9,34 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Gate 4a (#90): wire the real proof-of-retrieval into the live audit path**
+  (2026-08-02) — the `core/por` primitive now *replaces* the toy scheme in the
+  running node. An auditor verifies that a peer still holds a shard **without
+  fetching the bytes**: at distribute time the publisher computes each shard's
+  per-block authenticators under a key derived from the file's layout key
+  (`node.DerivePorKey`, mirroring the link key hierarchy) and ships them beside
+  the Merkle proof (`StorageProof.PorTags`); the storage node keeps them with
+  the chunk; on challenge the prover aggregates its bytes + tags into a compact
+  `(μ, σ)` response; the auditor derives the *same* key from its care-link and
+  checks the response touching no data. `gradeAnswers` **loses its ground-truth
+  fetch entirely** — a `liar` node that kept its tags but dropped the bytes now
+  fails an audit that never fetches, and is slashed via `credit.RecordAudit`.
+  The auditor recomputes each full shard's expected block count from the layout
+  `ChunkSize` and rejects any prover under-reporting it (soundness against
+  partial deletion for every full shard; the single short tail shard is the one
+  documented residue for the V3 red-team). The key never crosses the wire and a
+  storage node — lacking the layout key — cannot forge. Two hand-rolled codecs
+  were extended so the tags don't vanish in the field (a #65-class trap): the
+  TCP wire codec (`adapters/tcpnet`) and the on-disk proof store
+  (`adapters/diskproofs`, so a restarted host can still prove what it
+  re-announces, #69). Repaired/re-seeded shards are re-tagged from the
+  caretaker's care-link. Coverage (V5): unit (deterministic key derivation +
+  cross-capability agreement, GCM-overhead guard, wire + persistence
+  round-trips), sim (liars slashed with **zero** ground-truth fetches during the
+  sweep — proven by a per-kind message counter), and the real-daemon TCP + cross
+  -NAT (incl. full-swarm restart) harnesses stay green carrying the enlarged
+  proofs. Traces to **M0** (presence proven, not asserted), **B8**, and
+  **B7/V3**. See `docs/design/gate4-m0-mechanism.md` §3a.
 - **Gate 4a (#90): real proof-of-retrieval primitive (`core/por`)** (2026-08-02)
   — the first Gate-4 construction piece. A verifier holding a small secret key
   can now check that a prover still holds a chunk's bytes *without fetching

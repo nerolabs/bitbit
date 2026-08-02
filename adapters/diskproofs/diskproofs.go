@@ -35,11 +35,12 @@ func Open(dir string) (*Store, error) {
 // diskProof is the on-disk shape: hashes as byte strings (compact), fields
 // keyed by int so the encoding is stable and small.
 type diskProof struct {
-	Root   []byte   `cbor:"1,keyasint"`
-	Index  int      `cbor:"2,keyasint"`
-	Total  int      `cbor:"3,keyasint"`
-	Path   [][]byte `cbor:"4,keyasint"`
-	Column int      `cbor:"5,keyasint"`
+	Root    []byte   `cbor:"1,keyasint"`
+	Index   int      `cbor:"2,keyasint"`
+	Total   int      `cbor:"3,keyasint"`
+	Path    [][]byte `cbor:"4,keyasint"`
+	Column  int      `cbor:"5,keyasint"`
+	PorTags [][]byte `cbor:"6,keyasint,omitempty"`
 }
 
 func (s *Store) path(id ports.ChunkID) string {
@@ -56,6 +57,12 @@ func (s *Store) Put(id ports.ChunkID, p ports.StorageProof) error {
 	}
 	for _, h := range p.Path {
 		dp.Path = append(dp.Path, append([]byte(nil), h[:]...))
+	}
+	// PoR authenticators must survive a restart: without them a re-announced
+	// shard can't answer an audit and its honest host is wrongly slashed (#69
+	// / Gate 4a). One 32-byte tag per por-block.
+	for _, tag := range p.PorTags {
+		dp.PorTags = append(dp.PorTags, append([]byte(nil), tag...))
 	}
 	b, err := cbor.Marshal(dp)
 	if err != nil {
@@ -124,6 +131,9 @@ func (s *Store) Load() (map[ports.ChunkID]ports.StorageProof, error) {
 			var h ports.Hash
 			copy(h[:], hb)
 			p.Path = append(p.Path, h)
+		}
+		for _, tag := range dp.PorTags {
+			p.PorTags = append(p.PorTags, append([]byte(nil), tag...))
 		}
 		out[id] = p
 		return nil

@@ -130,7 +130,7 @@ func Capacity(seed int64, o CapacityOpts) (CapacityResult, error) {
 			return res, err
 		}
 		placed := -1
-		pub.Distribute(entry, m, false, func(p int, _ error) { placed = p })
+		pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(p int, _ error) { placed = p })
 		cl.Sched.Run()
 		if perFileTarget == 0 {
 			perFileTarget = placed // first file on an empty network = the ideal

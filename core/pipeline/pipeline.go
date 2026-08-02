@@ -207,7 +207,7 @@ func Stage(ctx context.Context, store ports.ChunkStore, r io.Reader, opts Option
 // publish (swarm add, the daemon UI) runs from its Distribute callback,
 // passing the placement count and error Distribute reported:
 //
-//	nd.Distribute(entry, m, false, func(placed int, derr error) {
+//	nd.Distribute(entry, m, false, porKey, func(placed int, derr error) {
 //	    n, err := pipeline.RegisterAfterDistribute(ctx, reg, entry, placed, derr)
 //	    ...
 //	})

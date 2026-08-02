@@ -19,6 +19,7 @@ import (
 	"github.com/nerolabs/silt/core/link"
 	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/por"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -38,19 +39,19 @@ import (
 // erasure STRIPE left with fewer placed shards than reconstruction needs
 // (#64). A link is unretrievable in all three cases, so the caller must NOT
 // register/return one for it.
-func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int, err error)) {
-	n.distributeFrom(n.store, entry, m, keepLocal, done)
+func (n *Node) Distribute(entry ports.Entry, m *manifest.Manifest, keepLocal bool, porKey *por.Key, done func(placed int, err error)) {
+	n.distributeFrom(n.store, entry, m, keepLocal, porKey, done)
 }
 
 // DistributeFrom scatters a file staged in an external scratch store —
 // how the daemon's UI publishes without the staging ever touching the
 // node's storage pledge (the M9 rule: pledges bound hosting, not
 // staging). The scratch copies are deleted as they ship.
-func (n *Node) DistributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, done func(placed int, err error)) {
-	n.distributeFrom(src, entry, m, false, done)
+func (n *Node) DistributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, porKey *por.Key, done func(placed int, err error)) {
+	n.distributeFrom(src, entry, m, false, porKey, done)
 }
 
-func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, keepLocal bool, done func(placed int, err error)) {
+func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manifest.Manifest, keepLocal bool, porKey *por.Key, done func(placed int, err error)) {
 	leaves := m.Leaves()
 	root := m.Root()
 	manifestN := len(entry.ManifestChunks)
@@ -180,13 +181,18 @@ func (n *Node) distributeFrom(src ports.ChunkStore, entry ports.Entry, m *manife
 					return
 				}
 				// Shards travel with their Merkle inclusion proof (so hosts
-				// can answer storage challenges) tagged with their column;
-				// manifest chunks aren't tree leaves and go bare.
+				// can answer storage challenges) tagged with their column,
+				// plus per-block PoR authenticators so an auditor can later
+				// verify possession WITHOUT fetching the bytes; manifest
+				// chunks aren't tree leaves, go bare, and aren't audited.
 				var proof *ports.StorageProof
 				if li := grp.members[k] - manifestN; li >= 0 {
 					if p, perr := manifest.Prove(leaves, li); perr == nil {
 						proof = &ports.StorageProof{Root: root, Index: p.Index,
 							Total: p.Total, Path: p.Path, Column: columnOfLeaf(m, li)}
+						if porKey != nil {
+							proof.PorTags = porKey.Tags(id[:], c.Data)
+						}
 					}
 				}
 				n.placeAt(id, c.Data, proof, candidates, n.cfg.Replication,

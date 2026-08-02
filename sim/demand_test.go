@@ -46,7 +46,7 @@ func TestDemandFanoutAndCooldown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.Distribute(entry, m, false, func(int, error) {})
+	a.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(int, error) {})
 	cl.Sched.Run()
 
 	if got := cl.leasedTotal(); got != 0 {

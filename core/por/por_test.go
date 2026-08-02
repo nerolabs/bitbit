@@ -272,3 +272,75 @@ func TestPaddingAgrees(t *testing.T) {
 		t.Fatal("ragged (zero-padded) final block did not round-trip")
 	}
 }
+
+// The whole point of DeriveKey: the publisher (tagging) and the auditor
+// (verifying) derive the SAME key from the same seed, with no key on the
+// wire — a different seed derives an unrelated key.
+func TestDeriveKeyDeterministic(t *testing.T) {
+	seed := []byte("silt/por/v1 test seed material")
+	a, err := DeriveKey(seed, testParams)
+	if err != nil {
+		t.Fatalf("derive a: %v", err)
+	}
+	b, err := DeriveKey(seed, testParams)
+	if err != nil {
+		t.Fatalf("derive b: %v", err)
+	}
+	if a.prf != b.prf {
+		t.Fatal("same seed produced different PRF keys")
+	}
+	if len(a.alpha) != len(b.alpha) {
+		t.Fatalf("alpha length mismatch: %d vs %d", len(a.alpha), len(b.alpha))
+	}
+	for j := range a.alpha {
+		if a.alpha[j].Cmp(b.alpha[j]) != 0 {
+			t.Fatalf("same seed produced different alpha[%d]", j)
+		}
+	}
+	other, err := DeriveKey([]byte("a different seed"), testParams)
+	if err != nil {
+		t.Fatalf("derive other: %v", err)
+	}
+	if a.prf == other.prf {
+		t.Fatal("different seeds produced the same PRF key")
+	}
+}
+
+// A derived key is a real key: it tags, proves, and verifies end to end,
+// and a prover holding the data + tags passes while the verifier — holding
+// only the independently-derived key — touches no data.
+func TestDeriveKeyRoundTrip(t *testing.T) {
+	seed := []byte("layout-key-bound seed")
+	pubKey, err := DeriveKey(seed, DefaultParams)
+	if err != nil {
+		t.Fatalf("publisher derive: %v", err)
+	}
+	unitID := []byte("chunk-id-bytes")
+	data := make([]byte, 3*DefaultParams.blockBytes()-7) // ragged tail
+	if _, err := rand.Read(data); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+	tags := pubKey.Tags(unitID, data)
+
+	// The auditor derives the key from the same seed, never seeing pubKey.
+	audKey, err := DeriveKey(seed, DefaultParams)
+	if err != nil {
+		t.Fatalf("auditor derive: %v", err)
+	}
+	c, err := NewChallenge(rand.Reader, len(tags), len(tags))
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	proof, err := Prove(DefaultParams, data, tags, c)
+	if err != nil {
+		t.Fatalf("prove: %v", err)
+	}
+	if !audKey.Verify(unitID, c, proof) {
+		t.Fatal("independently-derived auditor key rejected an honest proof")
+	}
+	// A prover that dropped the bytes (kept only tags) cannot answer.
+	liar, _ := Prove(DefaultParams, nil, tags, c)
+	if audKey.Verify(unitID, c, liar) {
+		t.Fatal("a prover with tags but no data forged a passing proof")
+	}
+}

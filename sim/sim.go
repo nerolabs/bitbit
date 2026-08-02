@@ -154,7 +154,7 @@ func Scatter(seed int64, o ScatterOpts) (ScatterResult, error) {
 		return res, err
 	}
 	distributed := false
-	a.Distribute(entry, m, false, func(placed int, _ error) {
+	a.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(placed int, _ error) {
 		res.Placed = placed
 		distributed = true
 	})
