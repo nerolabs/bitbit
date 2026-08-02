@@ -1,11 +1,25 @@
-> ⚠️ **HISTORICAL — the genesis handoff (project inception).** This is the
-> original greenfield brief from the project's learning phase; the project is
-> now called **silt** and is substantially built. The milestone/wave/tier
-> markers used during that phase are **retired** — do not read them as current.
-> For the **current** state, the single source of truth is the GitHub **`V1`
-> milestone** and its issues, narrated in `ROADMAP.md`; canon lives in
-> `docs/TENETS.md`. See also `CHANGELOG.md`. Kept only for the record of how it
-> started (that history detail lives in `docs/buildlog/`).
+> ⚠️ **HISTORICAL — the genesis handoff (project inception). FROZEN, NOT A SPEC.**
+> This is the original greenfield brief from the project's learning phase, kept
+> verbatim as the record of how silt started. The project is now called **silt**
+> and is substantially built; the milestone/wave/tier markers here are
+> **retired**. **Do not mine this document for current design** — for that, the
+> single source of truth is the GitHub **`V1`** milestone and its issues, narrated
+> in [`ROADMAP.md`](../../ROADMAP.md), with canon in [`docs/TENETS.md`](../TENETS.md)
+> and shipped history in [`CHANGELOG.md`](../../CHANGELOG.md).
+>
+> **Two fragments below now *contradict* immutables — they are archaeology, not
+> guidance:**
+> - The `Registry`/`Entry` sketch (§4) lists an **"optional name"** field. Core
+>   now **carries zero meaning, forever** (the Aslan boundary, TENETS T3 /
+>   immutable #6) — no name/description/tag ever enters core. The name field was
+>   never built and must never be.
+> - The `CreditLedger.RecordServe(server, **requester**, id, bytes)` sketch (§4)
+>   threads *who fetched what* together. **Access is unsurveilled** (immutable #4):
+>   the shipped ledger discards the requester/chunk pair, and the build-vs-intention
+>   audit (2026-08-02) flags dropping that argument so the surveillance-shaped tuple
+>   can't be reintroduced. Do not treat this signature as a target.
+>
+> Everything else is preserved as-written for the record.
 
 # Project Handoff: `shardnet` (working name — rename freely)
 

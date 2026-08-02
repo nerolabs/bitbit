@@ -2,8 +2,10 @@
 
 A content-addressed, erasure-coded, distributed file store — built as a
 real product from day one, simulated in-process until it needs real
-sockets. See `HANDOFF.md` for the full design brief and
-`docs/math/` for friendly explanations of the math.
+sockets. The design canon is [`docs/TENETS.md`](docs/TENETS.md) and the
+path to V1 is [`ROADMAP.md`](ROADMAP.md); `docs/math/` has friendly
+explanations of the math, and the original genesis brief is archived at
+[`docs/buildlog/genesis-handoff.md`](docs/buildlog/genesis-handoff.md).
 
 > **Early & experimental — 0.x, unaudited.** Silt is published to get
 > technical feedback, not to be trusted with data you can't afford to
