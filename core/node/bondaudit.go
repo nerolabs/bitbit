@@ -8,6 +8,7 @@ package node
 
 import (
 	"github.com/nerolabs/silt/core/bond"
+	"github.com/nerolabs/silt/core/vdf"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -99,7 +100,7 @@ func (n *Node) bondAuditOnce(now uint64) {
 					return // unreachable this round; DecayStale handles sustained absence
 				}
 				ans, derr := bond.DecodeAnswer(resp.Data)
-				ok := derr == nil && bond.Verify(info.root, info.size, nonce, ans)
+				ok := derr == nil && bond.VerifySpaceTime(info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay)
 				// Replied-but-can't-prove is a FAIL (a liar advertising a bond
 				// it doesn't hold) → standing zeroed; a valid answer earns it.
 				n.ledger.RecordBondChallenge(id, info.size, ok, now)
@@ -116,7 +117,7 @@ func (n *Node) answerBondChallenge(msg ports.Message) ports.Message {
 	if n.bond == nil {
 		return reply
 	}
-	ans, ok := n.bond.Answer(msg.Nonce)
+	ans, ok := n.bond.AnswerSpaceTime(msg.Nonce, vdf.Default(), n.cfg.BondVDFDelay)
 	if !ok {
 		return reply
 	}

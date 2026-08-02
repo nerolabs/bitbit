@@ -72,6 +72,14 @@ type Config struct {
 	// standing must be backed by *sustained* held storage (T1b, #78).
 	BondAuditInterval ports.Duration
 	BondMaxAge        ports.Duration
+	// BondVDFDelay is the number of sequential squarings a bond proof must
+	// bind (core/vdf) — the "time" in proof-of-space-time: a prover cannot
+	// answer until it has done this much non-parallelisable work over the
+	// fresh challenge, so it cannot have released the pledged space and
+	// re-plotted just-in-time. A tuning knob (Evolving): raise it in a real
+	// deployment for a stronger elapsed-time floor; the modest default keeps
+	// the deterministic sim fast. 0 disables the time binding (space-only).
+	BondVDFDelay uint64
 }
 
 func DefaultConfig() Config {
@@ -92,6 +100,7 @@ func DefaultConfig() Config {
 
 		BondAuditInterval: 60 * ports.Second,
 		BondMaxAge:        300 * ports.Second, // ~5 audit intervals unproven → standing lapses
+		BondVDFDelay:      1000,               // modest; a real deployment raises it for a stronger time floor
 	}
 }
 
