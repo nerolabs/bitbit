@@ -179,6 +179,45 @@ func TestDupRootAndWrongParent(t *testing.T) {
 	}
 }
 
+// M0 privacy (#97): a default chain refuses an entry that carries a durable
+// Publisher — a permanent Publisher→root link on an append-only chain is the
+// privacy corner silently surrendered. An unlinkable entry (no Publisher)
+// commits; only an explicitly trusted deployment (AllowPublisher) accepts
+// Publisher-bearing entries.
+func TestDefaultChainRefusesPublisherEntry(t *testing.T) {
+	w := newWorld(DefaultConfig())
+
+	linked := entry(1)
+	linked.Publisher = ports.NodeID{9, 9, 9} // a durable identity
+	b := w.block(linked)
+	w.attestAll(b)
+	if err := w.c.ValidateCommit(b); !errors.Is(err, ErrPublisherEntry) {
+		t.Fatalf("default chain accepted a Publisher-bearing entry, want ErrPublisherEntry, got %v", err)
+	}
+
+	// The unlinkable entry (no Publisher) commits on the same default chain.
+	clean := w.block(entry(2))
+	w.attestAll(clean)
+	if err := w.c.Append(*clean); err != nil {
+		t.Fatalf("default chain refused an unlinkable entry: %v", err)
+	}
+}
+
+// A trusted deployment may opt back into Publisher entries.
+func TestTrustedChainAllowsPublisherEntry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.AllowPublisher = true
+	w := newWorld(cfg)
+
+	linked := entry(1)
+	linked.Publisher = ports.NodeID{9, 9, 9}
+	b := w.block(linked)
+	w.attestAll(b)
+	if err := w.c.Append(*b); err != nil {
+		t.Fatalf("trusted chain refused a Publisher entry it should allow: %v", err)
+	}
+}
+
 func TestEncodeDecodeRoundtrip(t *testing.T) {
 	w := newWorld(DefaultConfig())
 	b := w.block(entry(1), entry(2))

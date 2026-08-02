@@ -60,6 +60,7 @@ func swarmAdd(args []string) error {
 	mode := fs.String("mode", "convergent", "encryption mode")
 	chunkSize := fs.Int("chunk-size", pipeline.DefaultChunkSize, "chunk size in bytes")
 	tokenQuorum := fs.Int("token-quorum", 0, "publisher privacy: acquire a publish token from this many of the -peers (validators) so the publish carries no Publisher identity (0 = off)")
+	allowPublisher := fs.Bool("allow-publisher", false, "record this node's durable Publisher identity on the entry (permanent linkage; off by default for privacy — prefer -token-quorum or an ungated publish)")
 	pos := parseFlexible(fs, args)
 	if len(pos) != 1 || *peers == "" || *regURL == "" {
 		return fmt.Errorf("usage: silt swarm add <file> -peers ID@ADDR -registry URL [flags]")
@@ -97,11 +98,15 @@ func swarmAdd(args []string) error {
 	if rerr := run(func(done func()) {
 		publish := func(tok *ports.PublishToken) {
 			opts := pipeline.Options{ChunkSize: *chunkSize, Mode: m}
-			if tok != nil {
+			switch {
+			case tok != nil:
 				opts.Token = tok // unlinkable: no Publisher identity
-			} else {
-				opts.Publisher = e.nd.ID()
+			case *allowPublisher:
+				opts.Publisher = e.nd.ID() // opt-in: records permanent linkage
 			}
+			// Default (neither): publish carries no durable identity — M0-safe
+			// on the chain; a credit-gated registry will refuse it, which is
+			// the signal to pass -token-quorum or -allow-publisher.
 			var aerr error
 			h, aerr = pipeline.Add(context.Background(), e.nd.Store(), reg, f, opts)
 			if aerr != nil {
