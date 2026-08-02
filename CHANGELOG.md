@@ -8,6 +8,20 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **Gate 1 (A6): bound the declared manifest chunk count + size** (2026-08-02) —
+  a manifest arrives as reassembled chunk data and *declares* its own chunk
+  count and sizes; a declared number is a claim, not a fact (tenet B7), so a
+  tiny manifest that declares a huge chunk array was a cheap memory-exhaustion
+  vector (anti-persona #14). The manifest CBOR decoder is now bounded
+  (`MaxArrayElements = MaxChunks`) so an over-declared array is refused as its
+  header is read — *before* the slice is allocated — across both the plain and
+  the sealed (layout/secrets) decode paths. `Validate` and `OpenLayout` add
+  semantic checks that reject an oversize declared chunk size or count cleanly,
+  per request, with the node still up. Bounds are exported and documented
+  (`MaxChunks`, `MaxChunkSize`), sized with headroom over the 64 MiB production
+  chunk. Traces to tenets B7 and S1/S3. Closes #88.
+
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or

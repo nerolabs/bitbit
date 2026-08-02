@@ -21,6 +21,33 @@ import (
 
 const Version = 1
 
+// Decode-time bounds (Gate 1 / A6, #88). A manifest arrives as reassembled
+// chunk data — attacker-controlled bytes — and *declares* its own chunk
+// count and sizes. A declared number is a claim, not a fact (tenet B7), so
+// the node must never allocate against it before checking it, or a tiny
+// manifest becomes a memory-exhaustion vector (anti-persona #14). These
+// bounds are the check; they are exported so the limit is visible and
+// referenceable rather than a buried magic number.
+const (
+	// MaxChunkSize bounds a declared per-chunk frame size. A chunk is one
+	// frame of one file; 128 MiB sits well above the 64 MiB production
+	// chunk size (pipeline.DefaultChunkSize) with headroom.
+	//
+	// NOTE: the live transport imposes its own, tighter frame cap
+	// (adapters/tcpnet maxFrame, currently 32 MiB) — that is the
+	// operational ceiling for a chunk that must cross the wire. This is the
+	// manifest-layer sanity bound against a declared number, not the
+	// transport limit.
+	MaxChunkSize = 128 << 20
+
+	// MaxChunks bounds the declared data-chunk count (and, independently,
+	// the parity-shard count). At the 64 MiB production chunk size this is
+	// a ~64 TiB file — far beyond any V1 need — while capping manifest-
+	// decode allocation to a few hundred MB in the worst case instead of
+	// letting a declared count drive it unbounded (S1/S3, B7, #14).
+	MaxChunks = 1 << 20
+)
+
 // Manifest describes one stored file.
 //
 // Erasure-coding fields (K, N, stripe layout) land in M2 — K=N=0 means
@@ -54,11 +81,23 @@ type Manifest struct {
 	Parity [][]byte `cbor:"11,keyasint,omitempty"`
 }
 
-var encMode cbor.EncMode
+var (
+	encMode cbor.EncMode
+	decMode cbor.DecMode
+)
 
 func init() {
 	var err error
 	encMode, err = cbor.CanonicalEncOptions().EncMode()
+	if err != nil {
+		panic(err)
+	}
+	// Bound the decoder against a manifest that *declares* a huge array:
+	// the element count is refused as the array header is read, before the
+	// slice is allocated — the "before allocation" half of #88. MaxChunks
+	// covers Chunks, ChunkSecrets, and Parity alike (each is one CBOR
+	// array). Other limits keep the library defaults.
+	decMode, err = cbor.DecOptions{MaxArrayElements: MaxChunks}.DecMode()
 	if err != nil {
 		panic(err)
 	}
@@ -75,7 +114,7 @@ func (m *Manifest) Marshal() ([]byte, error) {
 // Unmarshal parses and validates manifest bytes.
 func Unmarshal(b []byte) (*Manifest, error) {
 	var m Manifest
-	if err := cbor.Unmarshal(b, &m); err != nil {
+	if err := decMode.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("manifest: decode: %w", err)
 	}
 	if err := m.Validate(); err != nil {
@@ -84,7 +123,7 @@ func Unmarshal(b []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-func cborUnmarshal(b []byte, v any) error { return cbor.Unmarshal(b, v) }
+func cborUnmarshal(b []byte, v any) error { return decMode.Unmarshal(b, v) }
 
 // Validate enforces internal consistency; every load and store path runs
 // through it so a malformed manifest fails loudly, early.
@@ -98,6 +137,12 @@ func (m *Manifest) Validate() error {
 	}
 	if m.ChunkSize <= 0 {
 		return fmt.Errorf("manifest: non-positive chunk size %d", m.ChunkSize)
+	}
+	if m.ChunkSize > MaxChunkSize {
+		return fmt.Errorf("manifest: chunk size %d exceeds max %d", m.ChunkSize, MaxChunkSize)
+	}
+	if len(m.Chunks) > MaxChunks {
+		return fmt.Errorf("manifest: %d chunks exceeds max %d", len(m.Chunks), MaxChunks)
 	}
 	if m.FileSize < 0 {
 		return fmt.Errorf("manifest: negative file size")
