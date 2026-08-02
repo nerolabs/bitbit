@@ -126,13 +126,9 @@ func swarmAdd(args []string) error {
 				return
 			}
 			e.nd.Distribute(entry, mf, false, func(p int, derr error) {
-				placed = p
-				if derr != nil {
-					err = derr // failed scatter → leave the registry untouched
-					done()
-					return
-				}
-				err = reg.Publish(context.Background(), entry) // register only now
+				// Publish only on a confirmed scatter; a failed one leaves the
+				// registry untouched so no dangling entry survives (#65).
+				placed, err = pipeline.RegisterAfterDistribute(context.Background(), reg, entry, p, derr)
 				done()
 			})
 		}

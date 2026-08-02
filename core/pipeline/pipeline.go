@@ -202,6 +202,30 @@ func Stage(ctx context.Context, store ports.ChunkStore, r io.Reader, opts Option
 	return h, entry, nil
 }
 
+// RegisterAfterDistribute publishes a staged entry to reg only when the
+// scatter it names actually succeeded. It is the single gate every networked
+// publish (swarm add, the daemon UI) runs from its Distribute callback,
+// passing the placement count and error Distribute reported:
+//
+//	nd.Distribute(entry, m, false, func(placed int, derr error) {
+//	    n, err := pipeline.RegisterAfterDistribute(ctx, reg, entry, placed, derr)
+//	    ...
+//	})
+//
+// On a failed scatter (derr != nil) the registry is left untouched and the
+// scatter error is returned, so a loud placement failure never leaves a
+// dangling entry that names content the swarm can't actually serve
+// (register-after-distribute, #65 / tenet S5). Only on a confirmed scatter is
+// the entry published — and any publish error is surfaced too, never
+// swallowed. Extracting the gate here means both call sites share one tested
+// decision instead of duplicating "publish iff derr == nil" by hand.
+func RegisterAfterDistribute(ctx context.Context, reg ports.Registry, entry ports.Entry, placed int, derr error) (int, error) {
+	if derr != nil {
+		return placed, derr // failed scatter → registry untouched
+	}
+	return placed, reg.Publish(ctx, entry) // confirmed scatter → register now
+}
+
 // Get retrieves the file named by root and writes it to w. Every chunk
 // is hash-verified on receipt, and the manifest's chunk list is verified
 // against the root before any data is fetched — the registry entry

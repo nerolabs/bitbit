@@ -10,6 +10,17 @@
 // A peer string is self-authenticating: "ID@host:port", where the TLS
 // handshake must present a key hashing to ID (see adapters/identity).
 // A DNS server can therefore direct you but never impersonate anyone.
+//
+// The DNS-seed mechanism ships with NO default domain, and that empty
+// default is deliberate, not an unfinished hole (#27 Part A). Baking in a
+// well-known seed domain would make joining depend on infrastructure the
+// project operates — squarely against the neutral-infrastructure stance
+// ("SiltHQ operates nothing"; seeds and relays are community-run). So a
+// stranger bootstraps with an explicit -bootstrap peer or an override
+// -dns-seed <domain> they were handed; a community can stand up a seed
+// domain and share it without any node trusting a name the binary chose.
+// The wiring (FromDNS/ParseTXT below) is complete and tested — only the
+// default is intentionally blank.
 package discovery
 
 import (

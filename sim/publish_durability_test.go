@@ -89,6 +89,60 @@ func TestPublishFailsLoudWhenManifestUnplaceable(t *testing.T) {
 	}
 }
 
+// TestRegisterAfterDistributeLeavesNoDanglingEntry is the #65
+// register-after-distribute regression at the integration-within-a-peer tier:
+// it drives the REAL node.Distribute failure (every storage node refuses)
+// through the exact gate the swarm/UI publish paths run — Stage (no publish),
+// then pipeline.RegisterAfterDistribute in the Distribute callback — and
+// asserts the registry is left empty. TestPublishFailsLoudWhenManifestUnplaceable
+// above proves Distribute fails LOUDLY, but it uses the old Add path (which
+// publishes up front) so it can't catch a dangling entry; this proves the
+// outcome the fix actually promises: no link is registered for content the
+// swarm never took (tenet S5).
+func TestRegisterAfterDistributeLeavesNoDanglingEntry(t *testing.T) {
+	// Same shape as the unplaceable test: node 0 publishes with roomy scratch;
+	// nodes 1..3 have a ZERO pledge, so every Put is refused.
+	cl := NewClusterWithStores(1, 4, simnet.DefaultConfig(), node.DefaultConfig(),
+		func(i int) ports.ChunkStore {
+			if i == 0 {
+				return memstore.New()
+			}
+			s, err := capstore.Open(memstore.New(), 0)
+			if err != nil {
+				t.Fatalf("capstore: %v", err)
+			}
+			return s
+		})
+	pub := cl.Nodes[0]
+
+	data := make([]byte, 4096)
+	cl.rng.Read(data)
+
+	// Stage stores the content but does NOT publish — the networked path.
+	h, entry, err := pipeline.Stage(bgCtx, pub.Store(), bytes.NewReader(data),
+		pipeline.Options{ChunkSize: 1024, Mode: crypto.Convergent})
+	if err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	m, err := pipeline.LoadFull(bgCtx, pub.Store(), entry, h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	var gotErr error
+	pub.Distribute(entry, m, false, func(p int, derr error) {
+		_, gotErr = pipeline.RegisterAfterDistribute(bgCtx, cl.Registry, entry, p, derr)
+	})
+	cl.Sched.Run()
+
+	if gotErr == nil {
+		t.Fatal("expected a loud scatter failure when no node can hold the manifest chunk")
+	}
+	if _, ok, _ := cl.Registry.Lookup(bgCtx, h.Root); ok {
+		t.Fatal("a failed scatter left a dangling registry entry — register-after-distribute (#65) regressed")
+	}
+}
+
 // TestManifestPlacementRetriesTransientFailure proves the availability half
 // of the #60 fix: a manifest chunk whose first placement fails transiently
 // is retried (with a fresh lookup) and succeeds, so the publish completes

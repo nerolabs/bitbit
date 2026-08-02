@@ -51,6 +51,8 @@ func cmdDaemon(args []string) error {
 	idSeed := fs.Int64("id-seed", 0, "derive the identity from a seed (default: persistent keyfile) — for scripted demos")
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
 	capacity := fs.String("capacity", "5G", "storage pledge, e.g. 2G, 500M (matches the client's default so the node contributes measurable, countable storage; \"\" = unlimited but doesn't count toward network storage)")
+	// Empty default is deliberate: no built-in seed domain (neutral infra,
+	// community-run) — see the discovery package doc (#27 Part A).
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
 	mdns := fs.Bool("mdns", true, "announce and discover peers on the local network (LAN multicast); needs a non-loopback -listen")
 	denylistPath := fs.String("denylist", "", "operator takedown list: a file of denied root hashes to refuse to store/serve (you choose which lists to honor)")

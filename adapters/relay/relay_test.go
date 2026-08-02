@@ -296,6 +296,59 @@ func TestSessionCap(t *testing.T) {
 	}
 }
 
+// TestPerPeerSessionCap proves the per-target limit in isolation of the
+// global one (server.go:261 is an OR of the two). PerPeerSessions=1 with a
+// roomy MaxSessions: a second concurrent splice to the SAME target is refused
+// while the global cap is nowhere near, but a splice to a DIFFERENT target
+// still succeeds. This is the #65 knob that stops one NATed target's fan-out
+// from being throttled by — or monopolising — another's; TestSessionCap only
+// exercises the global MaxSessions branch.
+func TestPerPeerSessionCap(t *testing.T) {
+	identR := identity.FromSeed(20)
+	identB, identC := identity.FromSeed(21), identity.FromSeed(22)
+	identS := identity.FromSeed(23)
+	// PerPeerSessions=1, but MaxSessions high enough that it can't be the
+	// thing that refuses — so a refusal proves the per-peer branch fired.
+	srv, err := Serve("127.0.0.1:0", identR, Config{MaxSessions: 64, PerPeerSessions: 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	hold := make(chan struct{})
+	defer close(hold)
+	// Two registered targets, each holding its accepted session open.
+	for _, id := range []*identity.Identity{identB, identC} {
+		cl, err := NewClient(id, identR.NodeID(), srv.Addr(), func(conn net.Conn) {
+			<-hold
+			conn.Close()
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		startClient(t, cl)
+	}
+
+	certS, _ := identS.Certificate()
+	// One splice to B — fills B's single per-peer slot.
+	first, err := DialThrough(certS, identR.NodeID(), srv.Addr(), identB.NodeID())
+	if err != nil {
+		t.Fatalf("first splice to B should succeed: %v", err)
+	}
+	defer first.Close()
+	// A second splice to B is refused — per-peer cap, not the global one
+	// (sessions=1 ≪ MaxSessions=64).
+	if _, err := DialThrough(certS, identR.NodeID(), srv.Addr(), identB.NodeID()); err == nil {
+		t.Fatal("second splice to the SAME target should exceed PerPeerSessions=1")
+	}
+	// But a different target has its own slot free — the cap is per-peer.
+	second, err := DialThrough(certS, identR.NodeID(), srv.Addr(), identC.NodeID())
+	if err != nil {
+		t.Fatalf("a splice to a DIFFERENT target must still succeed (cap is per-peer): %v", err)
+	}
+	defer second.Close()
+}
+
 func TestAddrRoundTrip(t *testing.T) {
 	id := identity.FromSeed(13).NodeID()
 	s := Addr(id, "203.0.113.7:4002")
