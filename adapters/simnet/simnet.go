@@ -36,6 +36,11 @@ type Stats struct {
 	Delivered int
 	Dropped   int // loss + partitions + dead endpoints + unsolicited-into-NAT
 	Relayed   int // delivered the long way, spliced through the relay (#27)
+	// Kinds counts attempted sends per MsgKind, so a test can assert a
+	// message type never crossed the wire (e.g. an audit that must verify
+	// WITHOUT fetching ground truth sends zero MsgFetchChunk). Indexed by
+	// MsgKind; an array keeps Stats value-copyable.
+	Kinds [64]int
 }
 
 type Network struct {
@@ -102,6 +107,9 @@ func (e *Endpoint) SetHandler(h func(from ports.NodeID, msg ports.Message)) {
 func (e *Endpoint) Send(to ports.NodeID, msg ports.Message) error {
 	n := e.net
 	n.Stats.Sent++
+	if int(msg.Kind) < len(n.Stats.Kinds) {
+		n.Stats.Kinds[msg.Kind]++
+	}
 	dst, ok := n.endpoints[to]
 	if !ok {
 		return fmt.Errorf("simnet: unknown node %s", to)

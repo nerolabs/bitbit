@@ -433,7 +433,7 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 			done()
 			return
 		}
-		e.nd.DistributeFrom(e.nd.Store(), entry, m, func(p int, derr error) {
+		e.nd.DistributeFrom(e.nd.Store(), entry, m, node.DerivePorKey(h.LayoutKey()), func(p int, derr error) {
 			// Publish only on a confirmed scatter; a failed one leaves the
 			// registry untouched so no dangling entry survives (#65).
 			placed, opErr = pipeline.RegisterAfterDistribute(context.Background(), s.reg, entry, p, derr)

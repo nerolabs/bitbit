@@ -11,6 +11,7 @@ import (
 	"github.com/nerolabs/silt/adapters/memstore"
 	"github.com/nerolabs/silt/adapters/simnet"
 	"github.com/nerolabs/silt/core/crypto"
+	"github.com/nerolabs/silt/core/link"
 	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/core/node"
 	"github.com/nerolabs/silt/core/pipeline"
@@ -77,7 +78,7 @@ func TestPublishFailsLoudWhenManifestUnplaceable(t *testing.T) {
 
 	var derr error
 	placed := -1
-	pub.Distribute(entry, m, false, func(p int, e error) { placed = p; derr = e })
+	pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(p int, e error) { placed = p; derr = e })
 	cl.Sched.Run()
 
 	if derr == nil {
@@ -130,7 +131,7 @@ func TestRegisterAfterDistributeLeavesNoDanglingEntry(t *testing.T) {
 	}
 
 	var gotErr error
-	pub.Distribute(entry, m, false, func(p int, derr error) {
+	pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(p int, derr error) {
 		_, gotErr = pipeline.RegisterAfterDistribute(bgCtx, cl.Registry, entry, p, derr)
 	})
 	cl.Sched.Run()
@@ -174,7 +175,7 @@ func TestManifestPlacementRetriesTransientFailure(t *testing.T) {
 	}
 
 	var derr error
-	pub.Distribute(entry, m, false, func(_ int, e error) { derr = e })
+	pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(_ int, e error) { derr = e })
 	cl.Sched.Run()
 
 	if derr != nil {
@@ -207,7 +208,7 @@ func (s *selectiveStore) Put(ctx context.Context, c ports.Chunk) error {
 // codedFile stages a small erasure-coded file on pub and returns its entry
 // and manifest. With DefaultParams (k=10,n=16) and a handful of data chunks
 // it is a single short stripe: a few real data shards plus 6 parity.
-func codedFile(t *testing.T, cl *Cluster, pub *node.Node, size, chunkSize int) (ports.Entry, *manifest.Manifest) {
+func codedFile(t *testing.T, cl *Cluster, pub *node.Node, size, chunkSize int) (ports.Entry, *manifest.Manifest, link.Handle) {
 	t.Helper()
 	data := make([]byte, size)
 	cl.rng.Read(data)
@@ -224,7 +225,7 @@ func codedFile(t *testing.T, cl *Cluster, pub *node.Node, size, chunkSize int) (
 	if m.K == 0 {
 		t.Fatalf("test needs an erasure-coded file, got k=0")
 	}
-	return entry, m
+	return entry, m, h
 }
 
 // TestPublishFailsLoudWhenStripeUnrecoverable is the B7 / #64 regression, the
@@ -245,7 +246,7 @@ func TestPublishFailsLoudWhenStripeUnrecoverable(t *testing.T) {
 			return &selectiveStore{ChunkStore: memstore.New(), refuse: refuse}
 		})
 	pub := cl.Nodes[0]
-	entry, m := codedFile(t, cl, pub, 4096, 1024)
+	entry, m, h := codedFile(t, cl, pub, 4096, 1024)
 
 	// Refuse every data + parity leaf on the storage nodes; leave the manifest
 	// chunk placeable so the failure is unambiguously the data stripe, not #60.
@@ -255,7 +256,7 @@ func TestPublishFailsLoudWhenStripeUnrecoverable(t *testing.T) {
 
 	var derr error
 	placed := -1
-	pub.Distribute(entry, m, false, func(p int, e error) { placed = p; derr = e })
+	pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(p int, e error) { placed = p; derr = e })
 	cl.Sched.Run()
 
 	if derr == nil {
@@ -282,7 +283,7 @@ func TestPublishSucceedsWhenStripeStillRecoverable(t *testing.T) {
 			return &selectiveStore{ChunkStore: memstore.New(), refuse: refuse}
 		})
 	pub := cl.Nodes[0]
-	entry, m := codedFile(t, cl, pub, 4096, 1024)
+	entry, m, h := codedFile(t, cl, pub, 4096, 1024)
 
 	// Refuse only the parity shards; the real data shards still place, so the
 	// stripe keeps >= its real-data-shard count and stays recoverable.
@@ -291,7 +292,7 @@ func TestPublishSucceedsWhenStripeStillRecoverable(t *testing.T) {
 	}
 
 	var derr error
-	pub.Distribute(entry, m, false, func(_ int, e error) { derr = e })
+	pub.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(_ int, e error) { derr = e })
 	cl.Sched.Run()
 
 	if derr != nil {

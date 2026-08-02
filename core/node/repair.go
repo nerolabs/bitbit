@@ -15,6 +15,7 @@ import (
 	"github.com/nerolabs/silt/core/link"
 	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/core/pipeline"
+	"github.com/nerolabs/silt/core/por"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -186,7 +187,7 @@ func (n *Node) repairRootWithLayout(entry ports.Entry, ch link.CareHandle, done 
 		var probeNext func(i int)
 		probeNext = func(i int) {
 			if i == len(refs) {
-				n.repairStripes(m, p, refs, reachable, shardDoms, 0, done)
+				n.repairStripes(m, p, refs, reachable, shardDoms, 0, DerivePorKey(ch.LayoutKey), done)
 				return
 			}
 			n.probeShard(refs[i].id, colKey(m.Root(), refs[i].pos), true, func(ok bool, domains map[uint64]bool) {
@@ -303,7 +304,7 @@ func (n *Node) probeShard(id ports.ChunkID, key ports.Hash, includeLocal bool, d
 // that losing that domain would drop it below k (the same n-k budget that
 // guards shard loss, applied to domain loss).
 func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardRef,
-	reachable map[ports.ChunkID]bool, shardDoms map[ports.ChunkID]map[uint64]bool, stripe int, done func()) {
+	reachable map[ports.ChunkID]bool, shardDoms map[ports.ChunkID]map[uint64]bool, stripe int, porKey *por.Key, done func()) {
 
 	numStripes := p.Stripes(len(m.Chunks))
 	if stripe == numStripes {
@@ -346,13 +347,13 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 		}
 	}
 
-	next := func() { n.repairStripes(m, p, refs, reachable, shardDoms, stripe+1, done) }
+	next := func() { n.repairStripes(m, p, refs, reachable, shardDoms, stripe+1, porKey, done) }
 	if missing > n.cfg.RepairSlack || len(disperseShards) > 0 {
 		if len(disperseShards) > 0 && missing <= n.cfg.RepairSlack {
 			n.Stats.Dispersals++
 			n.logf(ports.LogInfo, "dispersion re-spread", "root", m.Root(), "overexposed", len(disperseShards))
 		}
-		n.repairStripe(m, p, stripeRefs, disperseShards, dominant, next)
+		n.repairStripe(m, p, stripeRefs, disperseShards, dominant, porKey, next)
 		return
 	}
 	next()
@@ -365,7 +366,7 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 // fresh nodes. The caretaker keeps nothing afterward — it's a
 // paramedic, not a hoarder. A failed attempt (below k fetchable) is
 // counted and simply retried on the next sweep.
-func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, disperseShards map[ports.ChunkID]bool, avoidDomain uint64, done func()) {
+func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []shardRef, disperseShards map[ports.ChunkID]bool, avoidDomain uint64, porKey *por.Key, done func()) {
 	leaves := m.Leaves()
 	root := m.Root()
 	realData := 0
@@ -461,6 +462,9 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 			var proof *ports.StorageProof
 			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
+				if porKey != nil {
+					proof.PorTags = porKey.Tags(r.id[:], shards[r.pos])
+				}
 			}
 			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
 				// Steer the extra copy AWAY from the crowded domain specifically,
@@ -481,6 +485,9 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 			var proof *ports.StorageProof
 			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
+				if porKey != nil {
+					proof.PorTags = porKey.Tags(r.id[:], shards[r.pos])
+				}
 			}
 			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
 				candidates := n.preferFreshDomain(closest, usedDomains)

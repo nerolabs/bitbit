@@ -124,7 +124,7 @@ func Economy(seed int64, o EconomyOpts) (EconomyResult, error) {
 			if err != nil {
 				return res, err
 			}
-			nd.Distribute(entry, m, false, func(int, error) {})
+			nd.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(int, error) {})
 			cl.Sched.Run()
 		}
 	}

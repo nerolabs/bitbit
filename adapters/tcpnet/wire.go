@@ -25,17 +25,17 @@ type envelope struct {
 // serialization concerns out of ports; a production transport would
 // version this.
 type wireMsg struct {
-	Kind      uint8      `cbor:"1,keyasint"`
-	RID       uint64     `cbor:"2,keyasint"`
-	Target    []byte     `cbor:"3,keyasint,omitempty"`
-	Nodes     [][]byte   `cbor:"4,keyasint,omitempty"`
-	Providers [][]byte   `cbor:"5,keyasint,omitempty"`
-	ChunkID   []byte     `cbor:"6,keyasint,omitempty"`
-	Data      []byte     `cbor:"7,keyasint,omitempty"`
-	Found     bool       `cbor:"8,keyasint,omitempty"`
-	OK        bool       `cbor:"9,keyasint,omitempty"`
-	Nonce     uint64     `cbor:"10,keyasint,omitempty"`
-	Tag       []byte     `cbor:"11,keyasint,omitempty"`
+	Kind      uint8    `cbor:"1,keyasint"`
+	RID       uint64   `cbor:"2,keyasint"`
+	Target    []byte   `cbor:"3,keyasint,omitempty"`
+	Nodes     [][]byte `cbor:"4,keyasint,omitempty"`
+	Providers [][]byte `cbor:"5,keyasint,omitempty"`
+	ChunkID   []byte   `cbor:"6,keyasint,omitempty"`
+	Data      []byte   `cbor:"7,keyasint,omitempty"`
+	Found     bool     `cbor:"8,keyasint,omitempty"`
+	OK        bool     `cbor:"9,keyasint,omitempty"`
+	Nonce     uint64   `cbor:"10,keyasint,omitempty"`
+	// slot 11 retired (toy PoR possession tag; replaced by PoR fields 21-25)
 	Proof     *wireProof `cbor:"12,keyasint,omitempty"`
 	CapUsed   int64      `cbor:"13,keyasint,omitempty"`
 	CapTotal  int64      `cbor:"14,keyasint,omitempty"`
@@ -45,14 +45,21 @@ type wireMsg struct {
 	Ephemeral bool       `cbor:"18,keyasint,omitempty"`
 	BondRoot  []byte     `cbor:"19,keyasint,omitempty"`
 	BondSize  int64      `cbor:"20,keyasint,omitempty"`
+	// PoR challenge/proof (core/por), carried as opaque bytes.
+	PorSeed   []byte   `cbor:"21,keyasint,omitempty"`
+	PorCount  int      `cbor:"22,keyasint,omitempty"`
+	PorMu     [][]byte `cbor:"23,keyasint,omitempty"`
+	PorSigma  []byte   `cbor:"24,keyasint,omitempty"`
+	PorBlocks int      `cbor:"25,keyasint,omitempty"`
 }
 
 type wireProof struct {
-	Root   []byte   `cbor:"1,keyasint"`
-	Index  int      `cbor:"2,keyasint"`
-	Total  int      `cbor:"3,keyasint"`
-	Path   [][]byte `cbor:"4,keyasint,omitempty"`
-	Column int      `cbor:"5,keyasint,omitempty"`
+	Root    []byte   `cbor:"1,keyasint"`
+	Index   int      `cbor:"2,keyasint"`
+	Total   int      `cbor:"3,keyasint"`
+	Path    [][]byte `cbor:"4,keyasint,omitempty"`
+	Column  int      `cbor:"5,keyasint,omitempty"`
+	PorTags [][]byte `cbor:"6,keyasint,omitempty"`
 }
 
 var encMode cbor.EncMode
@@ -93,19 +100,35 @@ func toWire(m ports.Message) wireMsg {
 	if m.BondRoot != (ports.Hash{}) {
 		w.BondRoot = append([]byte(nil), m.BondRoot[:]...)
 	}
-	if len(m.Tag) > 0 {
-		w.Tag = append([]byte(nil), m.Tag...)
-	}
+	w.PorSeed = m.PorSeed
+	w.PorCount = m.PorCount
+	w.PorMu = cloneChunks(m.PorMu)
+	w.PorSigma = m.PorSigma
+	w.PorBlocks = m.PorBlocks
 	if m.Proof != nil {
 		w.Proof = &wireProof{
-			Root:   append([]byte(nil), m.Proof.Root[:]...),
-			Index:  m.Proof.Index,
-			Total:  m.Proof.Total,
-			Path:   idsToBytes(m.Proof.Path),
-			Column: m.Proof.Column,
+			Root:    append([]byte(nil), m.Proof.Root[:]...),
+			Index:   m.Proof.Index,
+			Total:   m.Proof.Total,
+			Path:    idsToBytes(m.Proof.Path),
+			Column:  m.Proof.Column,
+			PorTags: cloneChunks(m.Proof.PorTags),
 		}
 	}
 	return w
+}
+
+// cloneChunks deep-copies a slice of byte slices (PoR tags / mu vectors)
+// so the wire form never aliases the caller's buffers.
+func cloneChunks(in [][]byte) [][]byte {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([][]byte, len(in))
+	for i, b := range in {
+		out[i] = append([]byte(nil), b...)
+	}
+	return out
 }
 
 func fromWire(w wireMsg) ports.Message {
@@ -128,9 +151,13 @@ func fromWire(w wireMsg) ports.Message {
 	m.Ephemeral = w.Ephemeral
 	m.BondSize = w.BondSize
 	copy(m.BondRoot[:], w.BondRoot)
-	m.Tag = w.Tag
+	m.PorSeed = w.PorSeed
+	m.PorCount = w.PorCount
+	m.PorMu = cloneChunks(w.PorMu)
+	m.PorSigma = w.PorSigma
+	m.PorBlocks = w.PorBlocks
 	if w.Proof != nil {
-		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column}
+		p := ports.StorageProof{Index: w.Proof.Index, Total: w.Proof.Total, Path: bytesToIDs(w.Proof.Path), Column: w.Proof.Column, PorTags: cloneChunks(w.Proof.PorTags)}
 		copy(p.Root[:], w.Proof.Root)
 		m.Proof = &p
 	}

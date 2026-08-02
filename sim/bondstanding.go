@@ -156,7 +156,7 @@ func BondStanding(seed int64, o BondStandingOpts) (BondStandingResult, error) {
 		return res, err
 	}
 	distributed := false
-	publisher.Distribute(entry, m, false, func(int, error) { distributed = true })
+	publisher.Distribute(entry, m, false, node.DerivePorKey(h.LayoutKey()), func(int, error) { distributed = true })
 	sched.Run()
 	if !distributed {
 		return res, fmt.Errorf("bondstanding(seed=%d): distribution never completed", seed)

@@ -59,8 +59,8 @@ const (
 	MsgFetchChunkReply   // Found + Data
 	MsgHasChunk          // ChunkID: cheap availability probe (repair loop)
 	MsgHasChunkReply     // Found
-	MsgChallenge         // ChunkID + Nonce: prove you hold this shard of Proof.Root
-	MsgChallengeReply    // Found + Proof + Tag
+	MsgChallenge         // ChunkID + PorSeed/PorCount: prove you hold this shard of Proof.Root
+	MsgChallengeReply    // Found + Proof + PoR proof (PorMu/PorSigma/PorBlocks)
 	MsgProposeBlock      // Data: CBOR block awaiting attestation
 	MsgAttestReply       // OK + Data: CBOR attestation (or OK=false refusal)
 	MsgCommitBlock       // Data: CBOR block with quorum attached
@@ -92,6 +92,14 @@ type StorageProof struct {
 	// so a whole column co-locates and is discovered together. -1 means
 	// "no column" (manifest chunks and uncoded files), keyed by chunk id.
 	Column int
+	// PorTags are the per-block proof-of-retrievability authenticators for
+	// this shard (core/por), computed by the publisher under a key derived
+	// from the file's layout key. They travel with the chunk at store time
+	// and are kept by the host (like the Merkle Path) so it can later PROVE
+	// possession without the auditor fetching the bytes. One 32-byte tag per
+	// por-block; len(PorTags) is the shard's block count. Nil for chunks
+	// shipped without PoR (e.g. manifest chunks, which audits don't sample).
+	PorTags [][]byte
 }
 
 // Message is the single wire envelope. RID correlates requests with
@@ -106,12 +114,25 @@ type Message struct {
 	Data      []byte
 	Found     bool
 	OK        bool
-	// Proof-of-retrieval fields: Proof rides on StoreChunk (so hosts
-	// can later prove possession) and ChallengeReply; Nonce freshens a
-	// challenge; Tag is the prover's SHA-256(nonce ‖ chunk bytes).
+	// Proof-of-retrieval fields: Proof (the Merkle inclusion proof, now
+	// carrying PorTags) rides on StoreChunk so hosts can later prove
+	// possession, and comes back on ChallengeReply. Nonce freshens a bond
+	// challenge (MsgBondChallenge).
 	Proof *StorageProof
 	Nonce uint64
-	Tag   []byte
+	// PoR challenge (MsgChallenge → auditor): PorSeed expands to the sampled
+	// block indices and coefficients; PorCount is how many blocks to sample.
+	// The block count itself is len(the host's stored PorTags), echoed back
+	// as PorBlocks so the auditor can reconstruct the identical challenge.
+	PorSeed  []byte
+	PorCount int
+	// PoR proof (MsgChallengeReply → prover): the aggregated response.
+	// PorMu is one field element per sector, PorSigma the aggregated tag,
+	// PorBlocks the prover's block count. These are core/por wire bytes; the
+	// ports layer stays crypto-agnostic and never imports core/por.
+	PorMu     [][]byte
+	PorSigma  []byte
+	PorBlocks int
 	// Capacity gossip: every message from a capacity-pledging node
 	// carries its current used/total, so peers accumulate a sample of
 	// the network's storage for the M9 capacity estimate.
