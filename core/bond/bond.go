@@ -45,6 +45,7 @@ package bond
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
 
@@ -111,6 +112,31 @@ func Seal(id ports.NodeID, size int64) *Commitment {
 		leaves[i] = ports.HashBytes(b)
 	}
 	return &Commitment{ID: id, Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}
+}
+
+// Blocks exposes the plot blocks so the owner can persist them (ports.
+// PlotStore) and reload on restart instead of re-plotting (#93).
+func (c *Commitment) Blocks() [][]byte { return c.blocks }
+
+// Reconstruct rebuilds a Commitment from persisted plot blocks, RE-DERIVING
+// the leaves and Merkle root from the bytes rather than trusting a stored
+// root (B7). It errors if the block count doesn't match size or any block is
+// the wrong length — a corrupt or stale plot the caller should discard and
+// re-plot. The caller should additionally check the returned Root equals the
+// root it persisted, catching silent on-disk corruption.
+func Reconstruct(id ports.NodeID, size int64, blocks [][]byte) (*Commitment, error) {
+	n := NumBlocks(size)
+	if len(blocks) != n {
+		return nil, fmt.Errorf("bond: plot has %d blocks, want %d for size %d", len(blocks), n, size)
+	}
+	leaves := make([]ports.Hash, n)
+	for i, b := range blocks {
+		if len(b) != BlockSize {
+			return nil, fmt.Errorf("bond: plot block %d is %d bytes, want %d", i, len(b), BlockSize)
+		}
+		leaves[i] = ports.HashBytes(b)
+	}
+	return &Commitment{ID: id, Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}, nil
 }
 
 // Answer is a prover's response to a challenge: the probed blocks plus

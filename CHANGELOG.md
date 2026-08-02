@@ -61,6 +61,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   (Sybil corner), **D1**. See `docs/design/gate4-m0-mechanism.md` §3b.
 
 ### Added
+- **Gate 4b (#93): the bond plot persists — a restart reloads it, never
+  re-plots** (2026-08-03) — plotting the identity bond is deliberately expensive
+  (that expense is the Sybil cost), so paying it again on every daemon restart
+  would be wasteful and, for a large pledge, a long stall before a validator can
+  prove standing. A new `adapters/diskplot` store persists the plot (one atomic
+  file per identity: a small header with the block geometry and committed root,
+  then the raw blocks), and `EnableBond` now **loads-or-plots**: if a persisted
+  plot exists it is reloaded and its Merkle root **re-derived from the bytes and
+  checked against the committed root** (B7 — persisted state is re-verified, not
+  trusted), so a restart skips plotting entirely; a corrupt, truncated, or stale
+  plot is detected and cleanly re-plotted. `core/bond` gains `Reconstruct` (rebuild
+  a commitment from persisted blocks) and `Blocks()`; a new `ports.PlotStore`
+  seam keeps the node pure (nil = memory-only, fine for sims). The daemon wires
+  it alongside the proof store (inheriting the #69/#93 restart discipline).
+  Tested (V5): the adapter round-trips and flags truncated/foreign files; a
+  reloaded bond answers a space-time challenge; and the node-level restart
+  outcome is pinned — a second start with the same identity **reloads instead of
+  re-plotting** (asserted via plot/reload counters), while a corrupted plot
+  re-plots to the correct identity-bound root. Traces to **M0**, **D1**, **B7**.
+  See `docs/design/gate4-m0-mechanism.md` §3b/§3d.
 - **Gate 4b (#91): verifiable delay function primitive (`core/vdf`)** (2026-08-02)
   — the sequential-work core of the proof-of-space-*time* bond, and the first
   4b construction piece. A VDF evaluates in a prescribed number of *inherently

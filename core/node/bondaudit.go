@@ -19,14 +19,33 @@ type bondInfo struct {
 	size int64
 }
 
-// EnableBond seals this node's identity-bound storage bond of size bytes and
-// starts advertising its root on outgoing messages, so peers can challenge it.
-// Holding the sealed blob is the cost; a validator must EnableBond to build
-// consensus standing. (V1: the bond is held in memory; persisting it to
-// pledged disk + a memory-hard seal are the recorded hardening follow-ups —
-// see docs/design/bond-audit.md and the core/bond package doc.)
+// EnableBond makes this node hold an identity-bound storage bond of size bytes
+// and starts advertising its root on outgoing messages, so peers can challenge
+// it. Holding the plot is the cost; a validator must EnableBond to build
+// consensus standing. If a plot store is attached (SetPlotStore) and already
+// holds this identity's plot, it is RELOADED and re-verified against its
+// committed root (B7) — a restart never re-plots (#93); otherwise the plot is
+// generated once and persisted. (The plot is still held in memory; a
+// disk-backed lazy commitment and moving plotting off the core loop are the
+// recorded hardening follow-ups — see the core/bond package doc.)
 func (n *Node) EnableBond(size int64) {
+	if n.plotStore != nil {
+		if root, blocks, ok, err := n.plotStore.Load(n.id); ok && err == nil {
+			if c, rerr := bond.Reconstruct(n.id, size, blocks); rerr == nil && c.Root == root {
+				n.bond = c // reloaded from disk, re-verified — no re-plot (#93)
+				return
+			}
+			n.logf(ports.LogWarn, "bond plot reload failed; re-plotting", "id", n.id)
+		} else if err != nil {
+			n.logf(ports.LogWarn, "bond plot load error; re-plotting", "err", err)
+		}
+	}
 	n.bond = bond.Seal(n.id, size)
+	if n.plotStore != nil {
+		if err := n.plotStore.Save(n.id, n.bond.Root, n.bond.Blocks()); err != nil {
+			n.logf(ports.LogWarn, "bond plot persist failed", "err", err)
+		}
+	}
 }
 
 // StartBondAudit begins the periodic sweep in which this validator challenges
