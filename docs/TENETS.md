@@ -252,6 +252,20 @@ proof that ships is the one an outsider could not break.
 observed evidence — a checksum match, a survived kill, a green Byzantine
 suite — reported faithfully, including what was skipped.
 
+**V5 — A bug fixed once stays fixed, and breaks are caught locally.** Every
+defect we discover ships in the *same change* as a test that **fails before
+the fix and passes after**, added at the tier(s) where the bug actually lives
+(unit for pure logic; integration/sim for components-in-a-peer and multi-node;
+e2e / the local NAT harness for real daemons over real sockets). A fix without
+its regression test is not done. And the regression must be catchable by the
+**local** suite — `go test ./...` plus the local integration harness
+(`integration/nat`, which any contributor can run on one machine with Docker) —
+so a re-break surfaces on the developer's machine in seconds, not at merge or in
+CI. CI is the backstop that enforces this for everyone; it is never the *first*
+place a regression is allowed to appear. This is how a growing codebase stays
+fast to change: the bigger silt gets, the more we rely on knowing instantly
+when we broke something we already fixed.
+
 ---
 
 ## Part V — How we release
@@ -462,6 +476,20 @@ reviewed consensus.**
      consensual, and plural; never one switch.
   6. **Core carries zero meaning, forever** (T3) — the Aslan boundary.
 
+**Build-immutables — held at the same amendment bar, but about *how we build*,
+not *what silt is*.** The corners above are **product-immutables**: change one
+and it is a different project. These are **build-immutables**: change one and
+the project silently rots as it grows. They are distinct in kind but equal in
+standing — amended only by the same deliberate, reviewed consensus:
+
+  1. **Three-tier Definition of Done** (V1/V2) — no major component is "done"
+     until it is proven at unit + integration/sim + e2e; a skipped tier is
+     stated with a reason (V4), never silent.
+  2. **A bug fixed once stays fixed, caught locally** (V5) — every discovered
+     defect ships with a failing-first regression test at its tier(s),
+     runnable on a contributor's own machine, so CI is the backstop and never
+     the first line of defense.
+
 **Tenets — canon, amendable with reviewed consensus and evidence.** Everything
 else in Parts I–VIII, including the strong disciplines we hold nearly as firmly
 as the immutables but that describe *how we build and govern* rather than *what
@@ -514,3 +542,13 @@ parameters (erasure k/n, replication factor, cache policy, DHT constants), the
   Freenet/GNUnet wound). **Named the external adversary** in B8 and V3: the suite
   that certifies a novel composition (and M0) must be written by an outside party
   (audit / bounty / independent red-team), not self-graded.
+- **2026-08-02 (build-immutables)** — Added **V5 — a bug fixed once stays fixed,
+  and breaks are caught locally**: every discovered defect ships in the same
+  change as a failing-first regression test at its tier(s), runnable on a
+  contributor's own machine, so CI is the backstop and never the first line.
+  Introduced the **build-immutable** category in Part IX — distinct in kind from
+  the product-immutables (which define *what silt is*) but equal in standing
+  (how we build) — and placed the three-tier Definition of Done (V1/V2) and V5
+  there. Prompted by finding the integrated hole-punch gap (#27 Phase 3) *locally*
+  via the Docker NAT harness, not at CI: the discipline that made that possible is
+  now canon (Andrew).

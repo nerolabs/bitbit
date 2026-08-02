@@ -32,7 +32,7 @@ func TestTrainingWheelsGateYoungNetworkThenShed(t *testing.T) {
 
 	commit := func(e ports.Entry, signers ...ed25519.PrivateKey) error {
 		prev, height := c.Head()
-		b := &Block{Height: height, Prev: prev, Entries: []ports.Entry{e}}
+		b := &Block{Version: BlockVersion, Height: height, Prev: prev, Entries: []ports.Entry{e}}
 		Sign(b, prop)
 		for _, s := range signers {
 			b.Atts = append(b.Atts, Attest(b, s))

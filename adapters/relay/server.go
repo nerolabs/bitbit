@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/internal/safe"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -136,6 +137,13 @@ func (s *Server) acceptLoop() {
 // whole life; connect conns are parked for splicing (ownership moves to
 // the pending table); accept conns are spliced immediately.
 func (s *Server) handle(conn *tls.Conn) {
+	// A relay decodes control frames from unauthenticated dialers; a
+	// malformed frame must drop the conn, not the relay (Gate 1 /
+	// anti-persona #14).
+	defer safe.Guard(func(r any) {
+		s.logf(ports.LogWarn, "recovered panic in relay handler", "remote", conn.RemoteAddr(), "panic", r)
+		conn.Close()
+	})
 	conn.SetDeadline(time.Now().Add(opTimeout))
 	if err := conn.Handshake(); err != nil {
 		conn.Close()

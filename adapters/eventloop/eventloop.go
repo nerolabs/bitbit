@@ -13,6 +13,14 @@ type Loop struct {
 	cond    *sync.Cond
 	queue   []func()
 	stopped bool
+	// OnPanic, if set, is called when a posted task panics. The loop
+	// recovers and keeps running, so one bad task — e.g. handling a
+	// malformed frame that reaches a node-side decoder — fails that task
+	// rather than killing the node's single thread (Gate 1 / anti-persona
+	// #14). Set it before Run. If nil the panic is still contained but
+	// silent; wire it to a logger in production so the drop is observable
+	// (tenets S3/V4). Set-once before Run, so no lock is needed.
+	OnPanic func(r any)
 }
 
 func New() *Loop {
@@ -46,8 +54,19 @@ func (l *Loop) Run() {
 		fn := l.queue[0]
 		l.queue = l.queue[1:]
 		l.mu.Unlock()
-		fn()
+		l.run(fn)
 	}
+}
+
+// run executes one task under panic recovery so a panicking task cannot
+// unwind through Run and stop the node's thread.
+func (l *Loop) run(fn func()) {
+	defer func() {
+		if r := recover(); r != nil && l.OnPanic != nil {
+			l.OnPanic(r)
+		}
+	}()
+	fn()
 }
 
 // Stop drains the queue and then lets Run return.

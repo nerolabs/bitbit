@@ -8,7 +8,135 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Transport frame cap was smaller than the minimum production chunk** (2026-08-02)
+  — a whole chunk rides in one length-prefixed frame, but the inbound read
+  loop's cap was 32 MiB while the *minimum* production chunk is 64 MiB, so every
+  production-sized chunk was dropped on receipt; the swarm could only move
+  sim-sized (64 KiB) chunks. The cap is now derived from the manifest chunk-size
+  ceiling plus envelope overhead (`maxFrame = manifest.MaxChunkSize +
+  frameOverhead`), so the wire can always carry a chunk the manifest layer
+  accepts and the two limits can't drift. `Send` now also rejects an over-cap
+  frame with an explicit error instead of emitting one the peer silently drops
+  (S1/S3). Traces to S1/S3 and anti-persona #14. Closes #104.
+
+### Security
+- **Gate 1 (A5): panic-recover + fuzz the decode surface** (2026-08-02) — a
+  daemon that crashes on a malformed frame can't be field-tested and can't
+  carry the "credible from day one" claim, so every untrusted-input decoder is
+  now proven not to panic and is caught if it ever does. New Go fuzz targets
+  cover the whole decode surface — the manifest CBOR decoder, the chunk-frame
+  length header (plus a Split/Join round-trip), `silt:`/`siltcare:` link
+  parsing, chain block/blocks decoders, the tcpnet wire envelope, and the relay
+  control frame; their seed corpora run as a smoke test on every push/PR and a
+  new nightly workflow mutates each for a real time budget (millions of execs,
+  zero panics found). Underneath that proof sits a defence-in-depth recovery
+  net (`internal/safe`): the tcpnet read loop and the relay client/server frame
+  loops drop the *connection* on any panic, and the node's event loop contains
+  a panicking task so one bad frame fails the *request*, not the *process* — an
+  event-loop panic is logged at error level (a top-severity bug until fixed),
+  never silent. Traces to tenets S1/S3 and anti-persona #14. Closes #87.
+- **Gate 1 (A6): bound the declared manifest chunk count + size** (2026-08-02) —
+  a manifest arrives as reassembled chunk data and *declares* its own chunk
+  count and sizes; a declared number is a claim, not a fact (tenet B7), so a
+  tiny manifest that declares a huge chunk array was a cheap memory-exhaustion
+  vector (anti-persona #14). The manifest CBOR decoder is now bounded
+  (`MaxArrayElements = MaxChunks`) so an over-declared array is refused as its
+  header is read — *before* the slice is allocated — across both the plain and
+  the sealed (layout/secrets) decode paths. `Validate` and `OpenLayout` add
+  semantic checks that reject an oversize declared chunk size or count cleanly,
+  per request, with the node still up. Bounds are exported and documented
+  (`MaxChunks`, `MaxChunkSize`), sized with headroom over the 64 MiB production
+  chunk. Traces to tenets B7 and S1/S3. Closes #88.
+### Security
+- **Gate 1 (I1): lock the local UI / JSON API** (2026-08-02) — the daemon's
+  local HTTP API sent CORS `*`, so any web page the operator visited could
+  enumerate or drive their node. It is now locked: every request must carry a
+  **localhost `Host`** (a DNS-rebinding page arrives as `evil.com` and is
+  refused), any **cross-origin request from a non-localhost page** is rejected
+  outright (localhost origins are *reflected*, not blanket-allowed, so the
+  observatory still aggregates sibling daemons), and every **state-changing
+  call requires a per-daemon bearer token** minted on first run
+  (`<store>/ui-token`, 0600) and handed to the operator's browser on the UI URL
+  (`/?token=…`). Reads keep their no-token localhost ergonomics. CORS `*` is
+  gone. Traces to Don't #3 (access-unsurveilled), B4 (privacy by construction),
+  and S4 (no seizable single point). Closes #89.
+### Security
+- **Chain permanence: version the Block schema before any Gate-4 record change**
+  (2026-08-02) — `Block` carried no version, so any future change to *what the
+  block hash commits to* or to *validation semantics* (real-bond commitments,
+  mandatory tokens) would be a hard fork with nothing to gate the eras:
+  `Decode`/`DecodeBlocks` would happily decode an old block and mis-validate it
+  under new rules. Blocks now carry a `Version` (era) that `Hash` commits to and
+  `Decode`/`DecodeBlocks` require — a version mismatch is an explicit
+  `ErrBlockVersion`, never silent mis-validation, and because the hash covers it
+  the era can't be swapped under a valid signature. Landed while the chain is
+  still throwaway, so it costs nothing now and prevents a flag-day later; it is
+  the prerequisite for the Gate-4 record-format changes (#90/#91/#92). Entry
+  versioning is deliberately deferred: entries are always validated within a
+  block whose version gates their rules, and standalone-registry entry
+  semantics are what the tokened-publish design turn (#97) will settle. Closes
+  #98.
+- **Register-after-distribute: a failed scatter no longer leaves a dangling
+  registry entry** (Gate 2, #65) — `pipeline.Add` published the registry entry
+  as its final step, *before* the caller distributed the chunks to peers, so a
+  loud placement failure left an entry pointing at content that never landed
+  (no link reaches the user, but the registry — and network-size estimates —
+  count phantom content; tenet S5). Publishing is now split from staging: a new
+  `pipeline.Stage` stores the chunks and sealed manifest and returns the entry
+  *without* registering it; the networked publish paths (`swarm add`, web-UI
+  publish) register **only after** distribution is confirmed. `Add` still
+  stages-and-publishes in one shot for callers that don't distribute separately
+  (local `add`, genesis, sim). Fetch-side retry and raised relay session limits
+  (the rest of #65) already landed. Closes #65.
+
+### Security
+- **Unlinkable publish is now the default; the Gated registry is fenced off**
+  (M0 privacy, #97/#99) — publishing recorded a permanent `Publisher → root`
+  link on the append-only chain because the publish clients attached the node's
+  durable identity by default. The chain never *required* it; it was being
+  written gratuitously and can never be undone. Now: the `swarm add` and web-UI
+  publish paths **attach no Publisher by default** (publish is unlinkable —
+  carry a blind-signed token, or nothing), and the chain **refuses a
+  Publisher-bearing entry** unless the deployment is explicitly trusted
+  (`chain.Config.AllowPublisher`, daemon `-allow-publisher`; `swarm add
+  -allow-publisher` to opt a single publish back in). Genesis is exempt (it
+  seeds via `AppendGenesis` and its proposer is public by design). Tokens stay
+  an orthogonal opt-in (`-token-quorum`/`-require-tokens`) for a *paid*
+  unlinkable publish, so earned-standing commit without tokens still works. The
+  credit-**Gated** registry — which hard-requires a Publisher and has no token
+  path — is documented sim/test-only and **fenced off**: an `internal/depcheck`
+  architecture test fails the build if any `cmd/` entry point constructs it (it
+  is used only by the sim today). Traces to **M0** (privacy corner), **F1 /
+  risk #14**, immutable #3 (no permanent linkage). Closes #97 and #99.
+- **Hole-punch now actually fires end-to-end: two NATed daemons upgrade the relay
+  path to a direct connection** (Gate 3, #27/#111) — the Phase-3 wiring existed
+  but never worked, and CI never caught it because it only ran the standalone
+  probe, never the integrated daemons. Two bugs, both found locally via the
+  Docker NAT harness (build-immutable V5): (1) the punch was only *requested* on
+  a fresh relay **dial**, but a relay conn is reused for every subsequent frame,
+  so a steady-state relay path never tried to go direct — now a reused
+  relay-backed conn also (cooldown-gated) requests the punch; (2) the punch was
+  requested but never **bound** — the relay control conn was dialed without
+  `SO_REUSEPORT`, so the punch dial couldn't re-bind that port to reuse the NAT
+  mapping the relay observed, so every attempt failed. The reuseport dial hook
+  now lives in a shared `internal/reuseport` package used by both the transport
+  and the relay client. Proven locally: cone punches (both daemons log a direct
+  connection), symmetric correctly stays on the relay. `integration/nat/
+  holepunch.sh` (cone + symmetric) is now wired into the `nat-holepunch` CI job
+  so this can never silently regress again. Closes #111.
+
 ### Docs
+- **Build-immutable: a bug fixed once stays fixed, caught locally** (2026-08-02)
+  — added tenet **V5** and a new **build-immutable** category to `docs/TENETS.md`.
+  Product-immutables define *what silt is*; build-immutables define *how we
+  build* and are held at the same amendment bar. V5: every discovered defect
+  ships in the same change as a failing-first regression test at its tier(s)
+  (unit / integration-sim / e2e), runnable on a contributor's own machine, so a
+  re-break surfaces locally in seconds — CI is the backstop, never the first line
+  of defense. The three-tier Definition of Done (V1/V2) is elevated alongside it.
+  Prompted by catching the integrated hole-punch gap (#27 Phase 3) locally via
+  the Docker NAT harness rather than at CI.
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or
   behavior change, acting on an intent-level fresh-eyes review. **M0** is

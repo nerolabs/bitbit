@@ -95,7 +95,7 @@ func (n *Node) ProposeEntry(e ports.Entry, attesters, broadcast []ports.NodeID, 
 		return
 	}
 	prev, height := n.chain.Head()
-	n.proposeBlock(&chain.Block{Height: height, Prev: prev, Entries: []ports.Entry{e}},
+	n.proposeBlock(&chain.Block{Version: chain.BlockVersion, Height: height, Prev: prev, Entries: []ports.Entry{e}},
 		attesters, broadcast, quorum, done)
 }
 
@@ -110,7 +110,7 @@ func (n *Node) ProposeRevocation(roots []ports.Hash, attesters, broadcast []port
 		return
 	}
 	prev, height := n.chain.Head()
-	n.proposeBlock(&chain.Block{Height: height, Prev: prev, Revocations: roots},
+	n.proposeBlock(&chain.Block{Version: chain.BlockVersion, Height: height, Prev: prev, Revocations: roots},
 		attesters, broadcast, quorum, done)
 }
 
@@ -216,9 +216,11 @@ func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) 
 	ask(0)
 }
 
-// attestations share the block CBOR mode via small wrappers.
+// attestations share the block CBOR mode via small wrappers. The wrapper
+// is a chain.Block, so it carries the current version like any other —
+// chain.Decode (used by attDecode) requires it.
 func attEncode(a chain.Attestation) ([]byte, error) {
-	b := chain.Block{Atts: []chain.Attestation{a}}
+	b := chain.Block{Version: chain.BlockVersion, Atts: []chain.Attestation{a}}
 	return chain.Encode(&b), nil
 }
 

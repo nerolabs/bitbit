@@ -10,6 +10,17 @@ import (
 // the ledger's fee, paid by the entry's Publisher. This is where the
 // economics touch the registry — and the only place; lookups stay free
 // because reading must never require wealth.
+//
+// SIM/TEST ONLY — NOT an M0 path (#99). Gated hard-requires a durable
+// Publisher (ErrPublisherRequired below) and has no publish-token concept,
+// so every entry it accepts records a permanent Publisher→root linkage. On
+// a persistent network that is the M0 privacy corner surrendered. The
+// production registry is the reputation-quorum chain (core/chain), which
+// takes the unlinkable token path and refuses Publisher entries by default
+// (chain.Config.AllowPublisher, #97). Gated exists to model credit
+// economics in the sim; it must never back a persistent network. An
+// architecture test (internal/depcheck) fails the build if any cmd/ entry
+// point constructs it.
 type Gated struct {
 	log    *Log
 	ledger ports.CreditLedger

@@ -60,6 +60,7 @@ func swarmAdd(args []string) error {
 	mode := fs.String("mode", "convergent", "encryption mode")
 	chunkSize := fs.Int("chunk-size", pipeline.DefaultChunkSize, "chunk size in bytes")
 	tokenQuorum := fs.Int("token-quorum", 0, "publisher privacy: acquire a publish token from this many of the -peers (validators) so the publish carries no Publisher identity (0 = off)")
+	allowPublisher := fs.Bool("allow-publisher", false, "record this node's durable Publisher identity on the entry (permanent linkage; off by default for privacy — prefer -token-quorum or an ungated publish)")
 	pos := parseFlexible(fs, args)
 	if len(pos) != 1 || *peers == "" || *regURL == "" {
 		return fmt.Errorf("usage: silt swarm add <file> -peers ID@ADDR -registry URL [flags]")
@@ -97,26 +98,43 @@ func swarmAdd(args []string) error {
 	if rerr := run(func(done func()) {
 		publish := func(tok *ports.PublishToken) {
 			opts := pipeline.Options{ChunkSize: *chunkSize, Mode: m}
-			if tok != nil {
+			switch {
+			case tok != nil:
 				opts.Token = tok // unlinkable: no Publisher identity
-			} else {
-				opts.Publisher = e.nd.ID()
+			case *allowPublisher:
+				opts.Publisher = e.nd.ID() // opt-in: records permanent linkage
 			}
+			// Default (neither): publish carries no durable identity — M0-safe
+			// on the chain; a credit-gated registry will refuse it, which is
+			// the signal to pass -token-quorum or -allow-publisher.
+			// Stage stores the chunks + manifest but does NOT register the
+			// entry yet; we publish only after a confirmed scatter, so a
+			// placement failure never leaves a dangling registry entry that
+			// no link reaches (register-after-distribute, #65).
 			var aerr error
-			h, aerr = pipeline.Add(context.Background(), e.nd.Store(), reg, f, opts)
+			var entry ports.Entry
+			h, entry, aerr = pipeline.Stage(context.Background(), e.nd.Store(), f, opts)
 			if aerr != nil {
 				err = aerr
 				done()
 				return
 			}
-			entry, _, _ := reg.Lookup(context.Background(), h.Root)
 			mf, merr := pipeline.LoadFull(context.Background(), e.nd.Store(), entry, h)
 			if merr != nil {
 				err = merr
 				done()
 				return
 			}
-			e.nd.Distribute(entry, mf, false, func(p int, derr error) { placed = p; err = derr; done() })
+			e.nd.Distribute(entry, mf, false, func(p int, derr error) {
+				placed = p
+				if derr != nil {
+					err = derr // failed scatter → leave the registry untouched
+					done()
+					return
+				}
+				err = reg.Publish(context.Background(), entry) // register only now
+				done()
+			})
 		}
 		if *tokenQuorum > 0 {
 			acquirePublishToken(e.nd, validators, *tokenQuorum, func(tok *ports.PublishToken, aerr error) {

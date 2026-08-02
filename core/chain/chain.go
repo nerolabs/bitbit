@@ -59,11 +59,32 @@ type Config struct {
 	Anchors          map[ports.NodeID]bool
 	AnchorQuorum     int
 	MatureValidators int
+	// AllowPublisher permits an entry to carry a durable Publisher NodeID.
+	// It is FALSE by default because a Publisher→root record is permanent
+	// on an append-only chain — the M0 privacy corner silently surrendered
+	// in the historical record (F1/#14, #97). The unlinkable path (a
+	// blind-signed publish token, or no identity at all) is the default;
+	// only an explicitly trusted deployment opts back into Publisher
+	// entries. Genesis is exempt (it seeds via AppendGenesis, and its
+	// proposer is public by design).
+	AllowPublisher bool
 }
 
 func DefaultConfig() Config {
 	return Config{MinProposerRep: 100, MinAttesterRep: 100, Quorum: 3}
 }
+
+// BlockVersion is the schema/rule era a block is minted under. It is
+// committed by Hash and checked at decode, so a block from one era can
+// never be silently mis-validated under another era's rules — the
+// hard-fork guard the chain needs BEFORE any change to what a block hash
+// commits to or how a block validates (real-bond commitments, mandatory
+// tokens; #98, prerequisite for #90/#91/#92). Additive field changes stay
+// version-compatible via the keyasint tags (the Token addition proved
+// this); a version bump is reserved for a change that would otherwise be a
+// silent flag-day. There is deliberately no v2 yet: this lands the guard
+// while the chain is still throwaway.
+const BlockVersion = 1
 
 // Block is one link of the registry chain.
 type Block struct {
@@ -78,6 +99,9 @@ type Block struct {
 	// immutable chain, so takedown is an ADDITION — a tombstone — that
 	// replicates and is tamper-evident like any other block.
 	Revocations []ports.Hash `cbor:"7,keyasint,omitempty"`
+	// Version is the block's rule era (see BlockVersion). Committed by Hash
+	// and required at decode; every minted block sets it.
+	Version uint64 `cbor:"8,keyasint"`
 }
 
 // Attestation is a validator's signature over the block hash. The
@@ -101,7 +125,7 @@ func init() {
 // proposer. Signing the hash therefore signs the block's entire
 // content and its place in history.
 func (b *Block) Hash() ports.Hash {
-	unsigned := Block{Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations}
+	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations}
 	raw, err := encMode.Marshal(&unsigned)
 	if err != nil {
 		panic(err) // canonical encoding of our own struct cannot fail
@@ -143,6 +167,9 @@ func Decode(raw []byte) (*Block, error) {
 	if err := cbor.Unmarshal(raw, &b); err != nil {
 		return nil, fmt.Errorf("chain: decode block: %w", err)
 	}
+	if b.Version != BlockVersion {
+		return nil, fmt.Errorf("%w: got %d, want %d", ErrBlockVersion, b.Version, BlockVersion)
+	}
 	return &b, nil
 }
 
@@ -159,6 +186,11 @@ func DecodeBlocks(raw []byte) ([]Block, error) {
 	if err := cbor.Unmarshal(raw, &bs); err != nil {
 		return nil, fmt.Errorf("chain: decode blocks: %w", err)
 	}
+	for i := range bs {
+		if bs[i].Version != BlockVersion {
+			return nil, fmt.Errorf("%w: block %d got %d, want %d", ErrBlockVersion, i, bs[i].Version, BlockVersion)
+		}
+	}
 	return bs, nil
 }
 
@@ -172,6 +204,8 @@ var (
 	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
 	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
 	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
+	ErrBlockVersion   = errors.New("chain: unsupported block version")
+	ErrPublisherEntry = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -291,6 +325,13 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		}
 		if len(e.ManifestChunks) == 0 {
 			return fmt.Errorf("chain: entry %s has no manifest pointers", e.Root)
+		}
+		// M0 privacy (#97): a Publisher→root record is permanent on this
+		// append-only chain, so the default refuses it. Publish carries no
+		// durable identity — a blind-signed token, or nothing — unless the
+		// deployment is explicitly trusted (AllowPublisher).
+		if !c.cfg.AllowPublisher && e.Publisher != (ports.NodeID{}) {
+			return fmt.Errorf("%w: entry %s", ErrPublisherEntry, e.Root)
 		}
 		if c.tokenQuorum > 0 {
 			if e.Token == nil {

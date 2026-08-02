@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/internal/reuseport"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -23,7 +24,7 @@ func (t *Transport) SetRequestPunch(fn func(ports.NodeID)) { t.requestPunch = fn
 // most once per cooldown. Called after we reach a peer through the relay: if
 // the punch lands, future frames go direct; if not, nothing is lost.
 func (t *Transport) maybeRequestPunch(to ports.NodeID) {
-	if t.requestPunch == nil || !reusePortSupported {
+	if t.requestPunch == nil || !reuseport.Supported {
 		return
 	}
 	t.mu.Lock()
@@ -46,13 +47,13 @@ func (t *Transport) maybeRequestPunch(to ports.NodeID) {
 // so subsequent sends to peer bypass the relay. This is the onPunch callback
 // the relay client fires.
 func (t *Transport) HolePunch(peer ports.NodeID, peerAddr string, localPort int) {
-	if !reusePortSupported || peerAddr == "" || localPort == 0 || peer == t.self {
+	if !reuseport.Supported || peerAddr == "" || localPort == 0 || peer == t.self {
 		return
 	}
 	d := net.Dialer{
 		Timeout:   3 * time.Second,
 		LocalAddr: &net.TCPAddr{Port: localPort},
-		Control:   reuseControl,
+		Control:   reuseport.Control,
 	}
 	var raw net.Conn
 	var err error
@@ -80,5 +81,5 @@ func (t *Transport) HolePunch(peer ports.NodeID, peerAddr string, localPort int)
 		conn = tls.Client(raw, identity.ClientConfig(t.cert, peer))
 	}
 	t.logf(ports.LogInfo, "hole-punch: direct connection established", "peer", peer, "addr", peerAddr)
-	t.readLoop(conn) // handshake + identity check + adopt; blocks until it dies
+	t.readLoop(conn, false) // direct now; adopt replaces the relay conn so reuse stops requesting punches
 }

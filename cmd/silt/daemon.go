@@ -65,6 +65,7 @@ func cmdDaemon(args []string) error {
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (V1: held in RAM) — a bigger bond earns more standing")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
+	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -175,6 +176,12 @@ func cmdDaemon(args []string) error {
 	if lg != nil {
 		obs = lg
 	}
+	// A task that panics on the node's thread (e.g. handling a malformed
+	// frame that reaches a decoder) fails that task, not the daemon — and
+	// says so, loudly. Any such panic is a top-severity bug until fixed.
+	loop.OnPanic = func(r any) {
+		ports.LogIf(obs, ports.LogError, "recovered panic on node thread", "panic", r)
+	}
 
 	// -relay: this daemon offers to forward ciphertext between NATed
 	// peers. A capability, not infrastructure: any reachable node can do
@@ -234,7 +241,11 @@ func cmdDaemon(args []string) error {
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
+			AllowPublisher: *allowPublisher,
 		}, ledger.Reputation)
+		if *allowPublisher {
+			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
+		}
 		chainPath = filepath.Join(*storeDir, "chain.cbor")
 		if n, err := chainstore.Replay(chainPath, ch); err != nil {
 			fmt.Fprintln(os.Stderr, "chain replay:", err)
@@ -357,18 +368,25 @@ func cmdDaemon(args []string) error {
 		if rep, ok := store.(ports.CapacityReporter); ok {
 			capRep = rep
 		}
+		token, err := loadOrCreateUIToken(*storeDir)
+		if err != nil {
+			return err
+		}
 		ui := &uiServer{
 			loop: loop, nd: nd, reg: reg, capRep: capRep,
 			selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 			validator: *validator, started: time.Now(),
 			peerCount:     func() int { return tr.PeerCount() },
 			carePublished: *carePublished,
+			token:         token,
 		}
 		bound, err := ui.serve(*uiAddr)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("ui: http://%s\n", bound)
+		// The token rides the URL query so the operator's browser is
+		// authorized in one click; state-changing calls need it, reads don't.
+		fmt.Printf("ui: http://%s/?token=%s\n", bound, token)
 	}
 
 	// Discovery, in layers: explicit flag, DNS seed, and the persisted
