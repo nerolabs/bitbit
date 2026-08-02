@@ -162,3 +162,66 @@ func TestImpostorGetsNothing(t *testing.T) {
 		// silence: exactly right
 	}
 }
+
+// A frame whose handling panics must fail that request, not the node: the
+// receiver stays up and still delivers the next message. This is the Gate
+// 1 anti-persona-#14 outcome proven over the real TLS transport — readLoop
+// decode → event-loop dispatch → recovery net — not just at the helper
+// level.
+func TestPanickyHandlerDoesNotKillTheNode(t *testing.T) {
+	loopA := eventloop.New()
+	go loopA.Run()
+	defer loopA.Stop()
+	trA, err := tcpnet.New(loopA, identity.FromSeed(210), "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer trA.Close()
+
+	loopB := eventloop.New()
+	panicked := make(chan struct{}, 1)
+	loopB.OnPanic = func(any) { panicked <- struct{}{} }
+	go loopB.Run()
+	defer loopB.Stop()
+	idB := identity.FromSeed(211)
+	trB, err := tcpnet.New(loopB, idB, "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer trB.Close()
+
+	delivered := make(chan uint64, 1)
+	trB.SetHandler(func(_ ports.NodeID, m ports.Message) {
+		if m.RID == 1 {
+			panic("bad frame handling")
+		}
+		delivered <- m.RID
+	})
+
+	trA.AddPeer(idB.NodeID(), trB.Addr())
+	// First message panics inside the handler; the node must contain it.
+	if err := trA.Send(idB.NodeID(), ports.Message{Kind: ports.MsgFindNode, RID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-panicked:
+		// contained, as required
+	case <-time.After(2 * time.Second):
+		t.Fatal("panicking handler was not contained by the node thread")
+	}
+
+	// Gating the second send on the contained panic keeps ordering
+	// deterministic (concurrent sends race on the wire). The node must
+	// still be serving.
+	if err := trA.Send(idB.NodeID(), ports.Message{Kind: ports.MsgFindNode, RID: 2}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case rid := <-delivered:
+		if rid != 2 {
+			t.Fatalf("unexpected delivery RID %d", rid)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("node did not survive a panicking handler: second message never delivered")
+	}
+}

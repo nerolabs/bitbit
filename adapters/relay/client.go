@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/internal/safe"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -180,7 +181,11 @@ func (c *Client) Close() {
 // session is one registration: dial, register, then answer incoming
 // notices until the conn dies. registered fires once the relay has
 // acknowledged us; the return value says why the session ended.
-func (c *Client) session(registered func(error)) error {
+func (c *Client) session(registered func(error)) (err error) {
+	// A malformed frame from the relay must end this session, not crash
+	// the client (Gate 1 / anti-persona #14); Run's backoff loop then
+	// reconnects. The panic surfaces as the session's error.
+	defer safe.Recover("relay: client session", &err)
 	conn, err := dialRelay(c.cert, c.relayID, c.relayAddr)
 	if err != nil {
 		return err
