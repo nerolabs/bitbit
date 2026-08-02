@@ -49,6 +49,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	"github.com/nerolabs/silt/core/manifest"
+	"github.com/nerolabs/silt/core/vdf"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -113,18 +114,31 @@ func Seal(id ports.NodeID, size int64) *Commitment {
 }
 
 // Answer is a prover's response to a challenge: the probed blocks plus
-// their Merkle inclusion proofs against the committed root.
+// their Merkle inclusion proofs against the committed root. For a
+// space-TIME answer it also carries the VDF proof that bound the challenge
+// to elapsed sequential work (empty for a plain space-only answer).
 type Answer struct {
 	Indices []int
 	Blocks  [][]byte
 	Proofs  []manifest.Proof
+	// VDF proof (core/vdf) for a space-time answer: it attests that the
+	// prover did VDFT sequential squarings over the challenge, and the probed
+	// block indices are derived from VDFY — so the prover cannot know which
+	// blocks to hold until the sequential work is done. Empty ⇒ space-only.
+	VDFY  []byte `cbor:",omitempty"`
+	VDFPi []byte `cbor:",omitempty"`
+	VDFT  uint64 `cbor:",omitempty"`
 }
 
-// Answer builds the response for nonce from held blocks. It returns false
-// if the owner no longer holds a probed block (i.e. it cannot prove the
-// bond it committed to).
+// Answer builds the space-only response for nonce from held blocks. It
+// returns false if the owner no longer holds a probed block (i.e. it cannot
+// prove the bond it committed to).
 func (c *Commitment) Answer(nonce uint64) (Answer, bool) {
-	idxs := challengeIndices(c.Root, len(c.leaves), nonce)
+	return c.answer(challengeIndices(c.Root, len(c.leaves), nonce))
+}
+
+// answer builds a response over the given block indices.
+func (c *Commitment) answer(idxs []int) (Answer, bool) {
 	a := Answer{Indices: idxs}
 	for _, i := range idxs {
 		if i >= len(c.blocks) || c.blocks[i] == nil {
@@ -140,13 +154,58 @@ func (c *Commitment) Answer(nonce uint64) (Answer, bool) {
 	return a, true
 }
 
-// Verify checks an answer against ONLY the committed root — no ground
-// truth, no held blocks on the verifier's side. Passing requires the
+// AnswerSpaceTime is the proof-of-space-TIME response: it first runs the VDF
+// for `delay` sequential squarings over the fresh challenge (the non-
+// parallelisable elapsed-work floor), then derives the probed block indices
+// from the VDF output — so a prover cannot precompute which blocks to hold,
+// nor release the space and re-plot just in time, since it does not learn the
+// indices until after the delay. delay == 0 falls back to a space-only answer.
+func (c *Commitment) AnswerSpaceTime(nonce uint64, p vdf.Params, delay uint64) (Answer, bool) {
+	if delay == 0 {
+		return c.Answer(nonce)
+	}
+	proof, err := vdf.Eval(p, challengeSeed(c.Root, nonce), delay)
+	if err != nil {
+		return Answer{}, false
+	}
+	a, ok := c.answer(challengeIndices(c.Root, len(c.leaves), vdfDerivedNonce(proof.Y)))
+	if !ok {
+		return Answer{}, false
+	}
+	a.VDFY, a.VDFPi, a.VDFT = proof.Y, proof.Pi, proof.T
+	return a, true
+}
+
+// Verify checks a space-only answer against ONLY the committed root — no
+// ground truth, no held blocks on the verifier's side. Passing requires the
 // prover to have produced the exact probed blocks and valid inclusion
 // proofs, which it cannot do without holding them.
 func Verify(root ports.Hash, size int64, nonce uint64, a Answer) bool {
+	return verifyAt(root, size, challengeIndices(root, NumBlocks(size), nonce), a)
+}
+
+// VerifySpaceTime checks a proof-of-space-time answer: the VDF must attest the
+// required delay over the challenge (freshness + elapsed sequential work), and
+// the blocks it derives — cheaply, without redoing the work — must be held.
+// It stays O(log n) on the verifier: the whole point of the VDF is that
+// checking it is fast even though producing it was slow.
+func VerifySpaceTime(root ports.Hash, size int64, nonce uint64, a Answer, p vdf.Params, delay uint64) bool {
+	if delay == 0 {
+		return Verify(root, size, nonce, a)
+	}
+	if a.VDFT != delay {
+		return false // must attest exactly the required amount of work
+	}
+	if !vdf.Verify(p, challengeSeed(root, nonce), vdf.Proof{Y: a.VDFY, Pi: a.VDFPi, T: a.VDFT}) {
+		return false
+	}
+	want := challengeIndices(root, NumBlocks(size), vdfDerivedNonce(a.VDFY))
+	return verifyAt(root, size, want, a)
+}
+
+// verifyAt checks an answer's blocks against the expected probed indices.
+func verifyAt(root ports.Hash, size int64, want []int, a Answer) bool {
 	n := NumBlocks(size)
-	want := challengeIndices(root, n, nonce)
 	if len(a.Indices) != len(want) || len(a.Blocks) != len(want) || len(a.Proofs) != len(want) {
 		return false
 	}
@@ -163,6 +222,22 @@ func Verify(root ports.Hash, size int64, nonce uint64, a Answer) bool {
 		}
 	}
 	return true
+}
+
+// challengeSeed binds a VDF challenge to this bond and nonce, so a proof for
+// one bond/epoch cannot be replayed for another.
+func challengeSeed(root ports.Hash, nonce uint64) []byte {
+	b := make([]byte, len(root)+8)
+	copy(b, root[:])
+	binary.BigEndian.PutUint64(b[len(root):], nonce)
+	return b
+}
+
+// vdfDerivedNonce turns the VDF output into the block-sampling nonce, so the
+// blocks a prover must hold are unknowable until the sequential work is done.
+func vdfDerivedNonce(y []byte) uint64 {
+	h := sha256.Sum256(append([]byte("silt/bond/st/v1"), y...))
+	return binary.BigEndian.Uint64(h[:8])
 }
 
 // challengeIndices derives which blocks a nonce probes, from the PUBLIC

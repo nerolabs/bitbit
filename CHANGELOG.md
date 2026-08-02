@@ -9,6 +9,33 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **Gate 4b (#91): the bond is now proof-of-space-TIME — the VDF is wired into
+  the live bond audit** (2026-08-02) — completes the mechanism: standing is
+  backed not just by held space (the plot) but by space held *across time*. A
+  bond challenge now answers with a `core/vdf` proof over the fresh
+  `(root ‖ nonce)` challenge, and the probed plot-block indices are derived from
+  the *VDF output* — so a prover cannot know which blocks to keep ready until it
+  has done `BondVDFDelay` sequential squarings, and therefore cannot release the
+  pledged space and re-plot just-in-time, nor parallelise its way out of the
+  elapsed-time floor. Verification stays O(log n) (checking a VDF is fast even
+  though producing it was slow) plus the existing Merkle checks, so consensus
+  cost on the core loop is unchanged. `core/bond` gains `AnswerSpaceTime` /
+  `VerifySpaceTime` (additive — the space-only `Answer`/`Verify` remain), the
+  answer carries the VDF proof inside the existing CBOR `Answer` (so no wire
+  format change), and `core/vdf` gains `Default()` — the RSA-2048 challenge
+  modulus, an unknown-order group needing no fresh trusted setup (a documented
+  launch anchor; class groups are the setup-free upgrade). `BondVDFDelay` is a
+  new node-config tuning knob (Evolving): a modest default keeps the
+  deterministic sim fast, a real deployment raises it for a stronger time floor;
+  `0` disables the time binding. The daemon inherits it from `DefaultConfig`
+  (the #65 dropped-field discipline), and the `bondstanding` sim now exercises
+  the whole space-time path over the wire. Tested (V5): held bonds answer, a
+  space-only answer / wrong-delay / forged-VDF-output all fail, and the probed
+  blocks provably derive from the work not the raw nonce. Honestly labelled:
+  producing the VDF currently runs on the audit path; moving the heavy work
+  fully off the core loop and persisting the plot across restarts (B2 / #93) is
+  the next 4b step. Traces to **M0** (Sybil corner: space held across time),
+  **D1**, **B2**. See `docs/design/gate4-m0-mechanism.md` §3b.
 - **Gate 4b (#91): the bond is now a real space-hard plot, not independent
   blocks** (2026-08-02) — replaces the honestly-labelled placeholder in
   `core/bond` (each block was cheap iterated SHA-256 over `id‖index`, so an

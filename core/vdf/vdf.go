@@ -54,6 +54,26 @@ type Params struct {
 	Modulus *big.Int
 }
 
+// Default returns the shared VDF parameters silt uses: the RSA-2048 modulus
+// from the RSA Factoring Challenge. Its factorisation is not publicly known
+// (the challenge was withdrawn unsolved), so it is a well-scrutinised
+// unknown-order group needing NO fresh trusted setup — an explicit, documented
+// launch anchor (a "scaffolding that sheds" per immutable #3). The standard
+// caveat applies: whoever generated it once knew the factors and claims to
+// have destroyed them; the class-group variant removes the anchor entirely and
+// is the recorded upgrade path.
+func Default() Params {
+	n, ok := new(big.Int).SetString(rsa2048, 10)
+	if !ok {
+		panic("vdf: bad default modulus") // static constant; cannot fail
+	}
+	return Params{Modulus: n}
+}
+
+// rsa2048 is the RSA-2048 challenge number (617 decimal digits), factorisation
+// unknown. See https://en.wikipedia.org/wiki/RSA_numbers#RSA-2048.
+const rsa2048 = "25195908475657893494027183240048398571429282126204032027777137836043662020707595556264018525880784406918290641249515082189298559149176184502808489120072844992687392807287776735971418347270261896375014971824691165077613379859095700097330459748808428401797429100642458691817195118746121515172654632282216869987549182422433637259085141865462043576798423387184774447920739934236584823824281198163815010674810451660377306056201619676256133844143603833904414952634432190114657544454178424020924616515723350778707749817125772467962926386356373289912154831438167899885040445364023527381951378636564391212010397122822120720357"
+
 // Validate rejects params that cannot host a sound VDF.
 func (p Params) Validate() error {
 	if p.Modulus == nil || p.Modulus.Sign() <= 0 {

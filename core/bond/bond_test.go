@@ -4,8 +4,92 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/nerolabs/silt/core/vdf"
 	"github.com/nerolabs/silt/ports"
 )
+
+// stDelay is a small VDF delay: enough to exercise the space-time path, fast
+// enough for a unit test (the security floor is a deployment tuning knob).
+const stDelay = 300
+
+// A held bond answers its own space-TIME challenge: the VDF binds elapsed
+// sequential work, the derived blocks are held, and the cheap verify passes.
+func TestSpaceTimeHeldBondAnswers(t *testing.T) {
+	c := Seal(nodeID(1), 1<<20)
+	p := vdf.Default()
+	for _, nonce := range []uint64{1, 42, 9999} {
+		ans, ok := c.AnswerSpaceTime(nonce, p, stDelay)
+		if !ok {
+			t.Fatalf("holder could not answer space-time nonce %d", nonce)
+		}
+		if ans.VDFT != stDelay || len(ans.VDFY) == 0 {
+			t.Fatalf("answer carries no VDF proof for nonce %d", nonce)
+		}
+		if !VerifySpaceTime(c.Root, c.Size, nonce, ans, p, stDelay) {
+			t.Fatalf("valid space-time answer for nonce %d rejected", nonce)
+		}
+	}
+}
+
+// The time half has teeth: an answer that skips the VDF, claims the wrong
+// amount of work, or forges the VDF output all fail — even if the block
+// (space) proofs are perfectly valid.
+func TestSpaceTimeRejectsMissingOrForgedWork(t *testing.T) {
+	c := Seal(nodeID(1), 1<<20)
+	p := vdf.Default()
+	const nonce = 42
+
+	// A space-ONLY answer (no VDF) must not satisfy a space-time challenge.
+	spaceOnly, ok := c.Answer(nonce)
+	if !ok {
+		t.Fatal("setup: space-only answer")
+	}
+	if VerifySpaceTime(c.Root, c.Size, nonce, spaceOnly, p, stDelay) {
+		t.Fatal("an answer with no VDF proof passed a space-time challenge")
+	}
+
+	honest, ok := c.AnswerSpaceTime(nonce, p, stDelay)
+	if !ok {
+		t.Fatal("setup: space-time answer")
+	}
+
+	// Claiming a different amount of work than required fails.
+	wrongT := honest
+	wrongT.VDFT = stDelay + 1
+	if VerifySpaceTime(c.Root, c.Size, nonce, wrongT, p, stDelay) {
+		t.Fatal("an answer claiming the wrong VDF delay passed")
+	}
+
+	// Forging the VDF output fails (the proof no longer attests the work, and
+	// the derived block indices would shift under it anyway).
+	forged := honest
+	y := append([]byte(nil), honest.VDFY...)
+	y[len(y)-1] ^= 0x01
+	forged.VDFY = y
+	if VerifySpaceTime(c.Root, c.Size, nonce, forged, p, stDelay) {
+		t.Fatal("a forged VDF output passed")
+	}
+}
+
+// The probed blocks are chosen by the VDF OUTPUT, not the raw nonce — so a
+// prover cannot know which blocks to keep ready until it has done the work.
+func TestSpaceTimeBlocksDerivedFromWork(t *testing.T) {
+	c := Seal(nodeID(1), 1<<20)
+	const nonce = 7
+	spaceOnly, _ := c.Answer(nonce)
+	spaceTime, _ := c.AnswerSpaceTime(nonce, vdf.Default(), stDelay)
+	if bytes.Equal(intsToBytes(spaceOnly.Indices), intsToBytes(spaceTime.Indices)) {
+		t.Fatal("space-time indices equal the raw-nonce indices — the work does not steer block selection")
+	}
+}
+
+func intsToBytes(xs []int) []byte {
+	b := make([]byte, 0, len(xs)*8)
+	for _, x := range xs {
+		b = append(b, byte(x), byte(x>>8), byte(x>>16), byte(x>>24))
+	}
+	return b
+}
 
 func nodeID(b byte) ports.NodeID { return ports.HashBytes([]byte{b}) }
 
