@@ -279,7 +279,7 @@ func cmdDaemon(args []string) error {
 		}
 		nd.EnableChain(ch, ident.Signer())
 		if sz, perr := parseSize(*bondSize); perr == nil && sz > 0 {
-			nd.EnableBond(sz)
+			nd.EnableBond(ident.Signer(), sz)
 			fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
 		}
 		// Publisher privacy (T3): this validator issues blind-signed publish

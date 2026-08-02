@@ -43,7 +43,7 @@ func TestBondAuditEarnsStandingOverTheNetwork(t *testing.T) {
 		nd := node.New(id, nodeCfg, sched, net.Endpoint(id), st)
 		nd.SetLedger(ledger)
 		if bonded {
-			nd.EnableBond(bondSize) // seal + advertise BEFORE bootstrap so gossip carries it
+			nd.EnableBond(ident.Signer(), bondSize) // seal + advertise BEFORE bootstrap so gossip carries it
 		}
 		ch := chain.New(cfg, repFn)
 		if gb, _, _, gerr := genesis.Build(st); gerr == nil {

@@ -9,6 +9,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **Gate 4b (#91): bind the bond plot to its identity — close the
+  plot-amortisation gap** (2026-08-03) — the Sybil cost only holds if each
+  identity holds its OWN distinct plot; previously nothing stopped a single
+  operator from pointing N node identities at ONE shared plot (all advertising
+  the same root, answering from one copy on disk), collapsing the per-identity
+  cost from S to S/N. Two changes close it, together: **(C)** the plot is now
+  sealed from a per-identity **secret** derived from the node's signing key
+  (`EnableBond` takes the signer; `bond.Seal` takes the secret) rather than the
+  public NodeID — so only an identity's owner can generate its plot, and an
+  outsider cannot precompute a *victim's* root to grief it; and **(A)** the
+  ledger binds each bond root to the first identity that proves it
+  (`RecordBondChallenge` gains a `root`; a per-root owner map), so a root builds
+  standing for **at most one identity** — N identities sharing one plot earn one
+  bond's worth of standing, not N, forcing N distinct plots = N×disk. Honest
+  identities never collide (distinct secret ⇒ distinct root), so the dedup only
+  ever bites deliberate sharing. This upgrades design §6's open amortisation
+  question from "hand it to the red-team" to a built defence — noting it is
+  still not a proof of *correct* plotting (no PoRep/SNARK); the secret + dedup
+  make sharing a root un-grief-able and uneconomical rather than impossible.
+  Tested (V5): the M0 outcome is pinned — three identities proving one shared
+  root leave only the first with standing while a distinct plot earns normally
+  (failing-first: without dedup all three would clear the bar); distinct
+  secrets yield distinct roots; and the over-the-wire bond audit + restart
+  reload paths stay green under the new derivation. Traces to **M0** (the Sybil
+  corner), **D1**. See `docs/design/gate4-m0-mechanism.md` §3b/§6.
 - **Gate 4b (#91): the bond is now proof-of-space-TIME — the VDF is wired into
   the live bond audit** (2026-08-02) — completes the mechanism: standing is
   backed not just by held space (the plot) but by space held *across time*. A

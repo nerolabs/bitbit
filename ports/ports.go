@@ -174,10 +174,13 @@ type CreditLedger interface {
 	RecordAudit(prover NodeID, id ChunkID, passed bool)
 	// RecordBondChallenge settles a storage-BOND challenge: the prover
 	// answered (or failed) a random challenge on its identity-bound bond
-	// of provenBytes. This is the Sybil-cost input to reputation —
-	// standing that must be backed by real, challenged, held storage, not
-	// self-reported serving. tick is a monotonic clock for staleness.
-	RecordBondChallenge(prover NodeID, provenBytes int64, passed bool, tick uint64)
+	// of provenBytes, rooted at root. This is the Sybil-cost input to
+	// reputation — standing that must be backed by real, challenged, held
+	// storage, not self-reported serving. root binds the standing to a
+	// specific plot: a root credits at most one identity, so a colluding
+	// operator cannot amortise one plot across many identities. tick is a
+	// monotonic clock for staleness.
+	RecordBondChallenge(prover NodeID, root Hash, provenBytes int64, passed bool, tick uint64)
 	// DecayStale retires bonded standing not re-proven within maxAge of
 	// now, so consensus standing must be sustained by ongoing challenges.
 	DecayStale(now, maxAge uint64)

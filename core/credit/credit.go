@@ -51,6 +51,12 @@ type Ledger struct {
 	grant    int64
 	accounts map[ports.NodeID]*account
 	order    []ports.NodeID // registration order: deterministic iteration
+	// rootOwner binds each bond root to the first identity that proved it, so
+	// a bond root builds standing for AT MOST ONE identity. A colluding
+	// operator pointing N identities at one shared plot therefore earns one
+	// bond's standing, not N — each identity needs its own distinct plot
+	// (distinct secret ⇒ distinct root). Honest identities never collide.
+	rootOwner map[ports.Hash]ports.NodeID
 
 	// Audit economics: storage that survives a spot-check earns rent;
 	// storage that turns out to be a lie is slashed hard. Balances may
@@ -70,6 +76,7 @@ func New(fee, grant int64) *Ledger {
 	return &Ledger{
 		fee: fee, grant: grant,
 		accounts:    make(map[ports.NodeID]*account),
+		rootOwner:   make(map[ports.Hash]ports.NodeID),
 		AuditReward: 1_000,
 		AuditSlash:  25_000,
 	}
@@ -128,12 +135,26 @@ func (l *Ledger) Audits(n ports.NodeID) (passed, failed int) {
 // reaches it through an optional interface (a type assertion) so this
 // lands without touching every CreditLedger implementer; promote it to
 // the port once the auditor is wired in core/node/por.go.
-func (l *Ledger) RecordBondChallenge(prover ports.NodeID, provenBytes int64, passed bool, tick uint64) {
+func (l *Ledger) RecordBondChallenge(prover ports.NodeID, root ports.Hash, provenBytes int64, passed bool, tick uint64) {
 	a := l.acct(prover)
 	if a.firstSeenTick == 0 {
 		a.firstSeenTick = tick
 	}
 	if passed {
+		// Root-owner dedup (see rootOwner): a bond root credits standing to at
+		// most one identity, so a colluding operator cannot amortise one plot
+		// across N identities. The FIRST identity to prove a root owns it; a
+		// later identity advertising the SAME root earns nothing. Only the
+		// true owner can produce the plot to answer challenges (core/bond seals
+		// from a per-identity secret), so an outsider cannot grief a victim by
+		// pre-claiming its root.
+		if root != (ports.Hash{}) {
+			if owner, ok := l.rootOwner[root]; ok && owner != prover {
+				a.bondedBytes = 0 // root already backs another identity's standing
+				return
+			}
+			l.rootOwner[root] = prover
+		}
 		a.bondedBytes = provenBytes
 		a.lastBondTick = tick
 		return

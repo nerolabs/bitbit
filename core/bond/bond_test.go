@@ -15,8 +15,8 @@ const stDelay = 300
 // A plot reloaded from persisted bytes rebuilds the same commitment (root
 // re-derived, not trusted — B7) and answers challenges — the restart path.
 func TestReconstructRoundTrip(t *testing.T) {
-	orig := Seal(nodeID(5), 1<<20)
-	got, err := Reconstruct(nodeID(5), orig.Size, orig.Blocks())
+	orig := Seal(secret(5), 1<<20)
+	got, err := Reconstruct(orig.Size, orig.Blocks())
 	if err != nil {
 		t.Fatalf("reconstruct: %v", err)
 	}
@@ -29,12 +29,12 @@ func TestReconstructRoundTrip(t *testing.T) {
 	}
 	// A wrong size (block count mismatch) or a corrupt block length is rejected
 	// so the caller re-plots rather than trusting a bad plot.
-	if _, err := Reconstruct(nodeID(5), (1<<20)+BlockSize, orig.Blocks()); err == nil {
+	if _, err := Reconstruct((1<<20)+BlockSize, orig.Blocks()); err == nil {
 		t.Fatal("reconstruct accepted a block count that disagrees with size")
 	}
 	short := append([][]byte(nil), orig.Blocks()...)
 	short[0] = short[0][:BlockSize-1]
-	if _, err := Reconstruct(nodeID(5), orig.Size, short); err == nil {
+	if _, err := Reconstruct(orig.Size, short); err == nil {
 		t.Fatal("reconstruct accepted a wrong-length block")
 	}
 }
@@ -42,7 +42,7 @@ func TestReconstructRoundTrip(t *testing.T) {
 // A held bond answers its own space-TIME challenge: the VDF binds elapsed
 // sequential work, the derived blocks are held, and the cheap verify passes.
 func TestSpaceTimeHeldBondAnswers(t *testing.T) {
-	c := Seal(nodeID(1), 1<<20)
+	c := Seal(secret(1), 1<<20)
 	p := vdf.Default()
 	for _, nonce := range []uint64{1, 42, 9999} {
 		ans, ok := c.AnswerSpaceTime(nonce, p, stDelay)
@@ -62,7 +62,7 @@ func TestSpaceTimeHeldBondAnswers(t *testing.T) {
 // amount of work, or forges the VDF output all fail — even if the block
 // (space) proofs are perfectly valid.
 func TestSpaceTimeRejectsMissingOrForgedWork(t *testing.T) {
-	c := Seal(nodeID(1), 1<<20)
+	c := Seal(secret(1), 1<<20)
 	p := vdf.Default()
 	const nonce = 42
 
@@ -101,7 +101,7 @@ func TestSpaceTimeRejectsMissingOrForgedWork(t *testing.T) {
 // The probed blocks are chosen by the VDF OUTPUT, not the raw nonce — so a
 // prover cannot know which blocks to keep ready until it has done the work.
 func TestSpaceTimeBlocksDerivedFromWork(t *testing.T) {
-	c := Seal(nodeID(1), 1<<20)
+	c := Seal(secret(1), 1<<20)
 	const nonce = 7
 	spaceOnly, _ := c.Answer(nonce)
 	spaceTime, _ := c.AnswerSpaceTime(nonce, vdf.Default(), stDelay)
@@ -118,18 +118,18 @@ func intsToBytes(xs []int) []byte {
 	return b
 }
 
-func nodeID(b byte) ports.NodeID { return ports.HashBytes([]byte{b}) }
+func secret(b byte) []byte { h := ports.HashBytes([]byte{b}); return h[:] }
 
 // The plot must be a deterministic function of identity: the same node
 // regenerates the same bond (so it can re-plot on setup), and two identities
 // get genuinely distinct plots (so N Sybils are N distinct blobs on disk).
 func TestPlotDeterministicAndIdentityBound(t *testing.T) {
-	a := Seal(nodeID(1), 1<<20)
-	b := Seal(nodeID(1), 1<<20)
+	a := Seal(secret(1), 1<<20)
+	b := Seal(secret(1), 1<<20)
 	if a.Root != b.Root {
 		t.Fatal("same identity produced a different plot — cannot regenerate")
 	}
-	other := Seal(nodeID(2), 1<<20)
+	other := Seal(secret(2), 1<<20)
 	if a.Root == other.Root {
 		t.Fatal("two identities produced the same plot — bonds not identity-bound")
 	}
@@ -141,7 +141,7 @@ func TestPlotDeterministicAndIdentityBound(t *testing.T) {
 // hold and a prover could recompute any single block on demand instead of
 // storing the plot.
 func TestPlotBlockDependsOnEarlierBlocks(t *testing.T) {
-	id := nodeID(7)
+	id := secret(7)
 	// Build honest leaves for a small plot.
 	const n = 64
 	leaves := make([]ports.Hash, n)
@@ -174,7 +174,7 @@ func TestPlotBlockDependsOnEarlierBlocks(t *testing.T) {
 // Dependency indices are always earlier blocks (a DAG, never a cycle) and
 // deterministic from the public (id, i).
 func TestParentIndicesAreEarlierAndDeterministic(t *testing.T) {
-	id := nodeID(3)
+	id := secret(3)
 	if p := parentIndices(id, 0); p != nil {
 		t.Fatalf("block 0 should have no parents, got %v", p)
 	}
@@ -198,7 +198,7 @@ func TestParentIndicesAreEarlierAndDeterministic(t *testing.T) {
 // A node that HOLDS its bond can answer any challenge, and the verifier
 // confirms it against only the committed root.
 func TestHeldBondAnswersItsOwnChallenge(t *testing.T) {
-	c := Seal(nodeID(1), 1<<20) // 1 MiB
+	c := Seal(secret(1), 1<<20) // 1 MiB
 	for _, nonce := range []uint64{1, 42, 9999} {
 		ans, ok := c.Answer(nonce)
 		if !ok {
@@ -214,7 +214,7 @@ func TestHeldBondAnswersItsOwnChallenge(t *testing.T) {
 // satisfy the root. Corrupting a probed block, or answering with another
 // identity's bond, both fail — so passing genuinely proves held storage.
 func TestForgedOrUnheldBondFails(t *testing.T) {
-	c := Seal(nodeID(1), 1<<20)
+	c := Seal(secret(1), 1<<20)
 	ans, ok := c.Answer(42)
 	if !ok {
 		t.Fatal("setup: holder should answer")
@@ -230,7 +230,7 @@ func TestForgedOrUnheldBondFails(t *testing.T) {
 	}
 
 	// Another identity's bond does not answer for this root (identity-bound).
-	other, ok := Seal(nodeID(2), 1<<20).Answer(42)
+	other, ok := Seal(secret(2), 1<<20).Answer(42)
 	if !ok {
 		t.Fatal("setup: other holder should answer its own bond")
 	}

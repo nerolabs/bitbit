@@ -1,8 +1,10 @@
 package node
 
 import (
+	"crypto/ed25519"
 	"testing"
 
+	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/simclock"
 	"github.com/nerolabs/silt/adapters/simnet"
 	"github.com/nerolabs/silt/core/bond"
@@ -43,17 +45,24 @@ func newBondNode(t *testing.T, id ports.NodeID, store ports.PlotStore) *Node {
 	return n
 }
 
+// bondIdentity returns a stable (NodeID, signer) pair for a seed, so a
+// "restart" (a fresh node from the same seed) derives the same plot secret.
+func bondIdentity(seed int64) (ports.NodeID, ed25519.PrivateKey) {
+	ident := identity.FromSeed(seed)
+	return ident.NodeID(), ident.Signer()
+}
+
 // The restart outcome: a node with a persisted plot reloads it on the next
 // start instead of re-plotting the deliberately-expensive dataset, keeps the
 // same committed root, and can still answer a space-time challenge from the
 // reloaded plot.
 func TestEnableBondReloadsInsteadOfReplotting(t *testing.T) {
-	id := ports.HashBytes([]byte("validator-A"))
+	id, signer := bondIdentity(101)
 	store := &countingPlotStore{}
 	const size = 1 << 20
 
 	first := newBondNode(t, id, store)
-	first.EnableBond(size)
+	first.EnableBond(signer, size)
 	if store.saves != 1 {
 		t.Fatalf("first EnableBond should plot once and save; saves=%d", store.saves)
 	}
@@ -61,7 +70,7 @@ func TestEnableBondReloadsInsteadOfReplotting(t *testing.T) {
 
 	// Simulate a restart: a fresh node, same identity, same store.
 	second := newBondNode(t, id, store)
-	second.EnableBond(size)
+	second.EnableBond(signer, size)
 
 	if store.saves != 1 {
 		t.Fatalf("restart re-plotted (saves=%d) instead of reloading — #93 regressed", store.saves)
@@ -82,19 +91,19 @@ func TestEnableBondReloadsInsteadOfReplotting(t *testing.T) {
 // If the persisted plot is corrupt (its bytes no longer hash to the stored
 // root), EnableBond re-plots rather than trusting it (B7).
 func TestEnableBondReplotsOnCorruptPlot(t *testing.T) {
-	id := ports.HashBytes([]byte("validator-B"))
+	id, signer := bondIdentity(202)
 	store := &countingPlotStore{}
 	const size = 1 << 20
 
 	n1 := newBondNode(t, id, store)
-	n1.EnableBond(size)
+	n1.EnableBond(signer, size)
 	good := n1.bond.Root
 
 	// Corrupt a stored block so it no longer matches the persisted root.
 	store.blocks[0][0] ^= 0xff
 
 	n2 := newBondNode(t, id, store)
-	n2.EnableBond(size)
+	n2.EnableBond(signer, size)
 	if store.saves != 2 {
 		t.Fatalf("a corrupt plot should trigger a re-plot (saves=%d, want 2)", store.saves)
 	}

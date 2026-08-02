@@ -24,7 +24,8 @@ func TestSybilCannotFormQuorumWithoutHeldStorage(t *testing.T) {
 
 	// Honest proposer: proves a 64 MiB identity-bound bond → rep ~1024.
 	prop := key(1)
-	led.RecordBondChallenge(idOf(prop), 64<<20, true, 1)
+	pid := idOf(prop)
+	led.RecordBondChallenge(pid, ports.HashBytes(pid[:]), 64<<20, true, 1)
 
 	// Four Sybils that wash-serve each other enormous volumes.
 	var sybils []ed25519.PrivateKey
@@ -67,7 +68,8 @@ func TestSybilCannotFormQuorumWithoutHeldStorage(t *testing.T) {
 	// ~128 ≥ 100). The same block commits — standing is available to anyone
 	// who actually pays storage, which is exactly the incentive we want.
 	for i := 0; i < 3; i++ {
-		led.RecordBondChallenge(idOf(sybils[i]), 8<<20, true, 2)
+		sid := idOf(sybils[i])
+		led.RecordBondChallenge(sid, ports.HashBytes(sid[:]), 8<<20, true, 2)
 	}
 	b2 := &Block{Version: BlockVersion, Height: height, Prev: prev, Entries: []ports.Entry{entry(7)}}
 	Sign(b2, prop)

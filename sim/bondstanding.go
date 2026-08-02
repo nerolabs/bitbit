@@ -117,7 +117,7 @@ func BondStanding(seed int64, o BondStandingOpts) (BondStandingResult, error) {
 	// other — balances soar, standing stays zero.
 	bonded := make([]ports.NodeID, 0, o.Bonded)
 	for i := 0; i < o.Bonded; i++ {
-		ledger.RecordBondChallenge(cl.Nodes[i].ID(), o.BondBytes, true, 1)
+		ledger.RecordBondChallenge(cl.Nodes[i].ID(), synthRoot(cl.Nodes[i].ID()), o.BondBytes, true, 1)
 		bonded = append(bonded, cl.Nodes[i].ID())
 	}
 	sybils := make([]ports.NodeID, 0, o.Sybils)
@@ -214,7 +214,7 @@ func BondStanding(seed int64, o BondStandingOpts) (BondStandingResult, error) {
 	// quorum can no longer form. Whoever stops proving loses their vote.
 	now := o.DecayAge + 2
 	ledger.DecayStale(now, o.DecayAge)
-	ledger.RecordBondChallenge(publisher.ID(), o.BondBytes, true, now) // proposer keeps proving
+	ledger.RecordBondChallenge(publisher.ID(), synthRoot(publisher.ID()), o.BondBytes, true, now) // proposer keeps proving
 	decayEntry := synthEntry("after decay")
 	dDone := false
 	var dErr error
@@ -236,3 +236,9 @@ func synthEntry(name string) ports.Entry {
 		ManifestChunks: []ports.ChunkID{ports.HashBytes([]byte(name + "/m"))},
 	}
 }
+
+// synthRoot gives each identity a distinct synthetic bond root for scenarios
+// that grant standing directly (rather than plotting a real bond). Distinct
+// roots keep the credit ledger's root-owner dedup from treating unrelated
+// fake bonds as a shared plot.
+func synthRoot(id ports.NodeID) ports.Hash { return ports.HashBytes(id[:]) }

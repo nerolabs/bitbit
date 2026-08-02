@@ -7,7 +7,7 @@ import (
 // A valid answer must still verify after crossing the wire (it rides
 // MsgBondReply.Data as CBOR) — the property the bond auditor depends on.
 func TestAnswerSurvivesWireRoundTrip(t *testing.T) {
-	c := Seal(nodeID(3), 1<<20)
+	c := Seal(secret(3), 1<<20)
 	ans, ok := c.Answer(77)
 	if !ok {
 		t.Fatal("holder should answer its own challenge")
