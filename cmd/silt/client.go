@@ -37,6 +37,8 @@ func cmdClient(args []string) error {
 	listen := fs.String("listen", "0.0.0.0:0", "TCP listen address for swarm traffic")
 	capacity := fs.String("capacity", "5G", "storage you contribute to the network (0 = consume only)")
 	bootstrap := fs.String("bootstrap", "", "bootstrap peers: ID@HOST:PORT[,...]")
+	// Empty default is deliberate: no built-in seed domain (neutral infra,
+	// community-run) — see the discovery package doc (#27 Part A).
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
 	registryURL := fs.String("registry", "", "registry ref for browsing/publishing (ID@https://host:port)")
 	uiAddr := fs.String("ui", "127.0.0.1:8090", "local web UI address")

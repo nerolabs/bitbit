@@ -9,6 +9,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Gates 1–3 completeness audit: closed missing regressions in the floors**
+  (2026-08-02) — a pre-Gate-4 audit verified the landed floors (Gate 1),
+  register-after-distribute (Gate 2, #65), and NAT traversal (Gate 3, #27/#111)
+  are whole at all three test tiers, and fixed the coverage gaps it found. The
+  register-after-distribute *failure* outcome had no regression: the one sim
+  test touching an unplaceable scatter used the old `Add` (publish-up-front)
+  path, so it couldn't catch a dangling entry. The gate is now a single tested
+  helper, `pipeline.RegisterAfterDistribute` (publish iff the scatter
+  confirmed), that both the `swarm add` and daemon-UI publish paths call
+  instead of hand-rolling "publish iff `derr == nil`" — covered by a pipeline
+  unit test (both branches) and a sim test that drives the real `node.Distribute`
+  failure and asserts the registry is left empty (S5). The relay's per-target
+  session cap (`PerPeerSessions`, the #65 knob) gained an isolation test proving
+  one target's fan-out can't be throttled by — or monopolise beyond its slot —
+  another's; previously only the global `MaxSessions` branch was exercised. The
+  default `-dns-seed` is documented as a *deliberate* empty (neutral
+  infrastructure, community-run seeds — #27 Part A), not an unfinished hole.
 - **Transport frame cap was smaller than the minimum production chunk** (2026-08-02)
   — a whole chunk rides in one length-prefixed frame, but the inbound read
   loop's cap was 32 MiB while the *minimum* production chunk is 64 MiB, so every
