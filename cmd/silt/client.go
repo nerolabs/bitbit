@@ -152,18 +152,25 @@ func cmdClient(args []string) error {
 	if rep, ok := store.(ports.CapacityReporter); ok {
 		capRep = rep
 	}
+	token, err := loadOrCreateUIToken(*storeDir)
+	if err != nil {
+		return err
+	}
 	ui := &uiServer{
 		loop: loop, nd: nd, reg: reg, capRep: capRep,
 		selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 		validator: false, started: time.Now(),
 		peerCount: func() int { return tr.PeerCount() },
 		links:     links,
+		token:     token,
 	}
 	bound, err := ui.serve(*uiAddr)
 	if err != nil {
 		return err
 	}
-	url := "http://" + bound + "/library.html"
+	// The token rides the URL query so one click authorizes the operator's
+	// browser for state-changing calls; reads work without it.
+	url := "http://" + bound + "/library.html?token=" + token
 	fmt.Printf("library:  %s\n", url)
 
 	loop.Post(func() {

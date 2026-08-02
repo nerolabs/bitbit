@@ -8,6 +8,20 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **Gate 1 (I1): lock the local UI / JSON API** (2026-08-02) — the daemon's
+  local HTTP API sent CORS `*`, so any web page the operator visited could
+  enumerate or drive their node. It is now locked: every request must carry a
+  **localhost `Host`** (a DNS-rebinding page arrives as `evil.com` and is
+  refused), any **cross-origin request from a non-localhost page** is rejected
+  outright (localhost origins are *reflected*, not blanket-allowed, so the
+  observatory still aggregates sibling daemons), and every **state-changing
+  call requires a per-daemon bearer token** minted on first run
+  (`<store>/ui-token`, 0600) and handed to the operator's browser on the UI URL
+  (`/?token=…`). Reads keep their no-token localhost ergonomics. CORS `*` is
+  gone. Traces to Don't #3 (access-unsurveilled), B4 (privacy by construction),
+  and S4 (no seizable single point). Closes #89.
+
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or

@@ -4,22 +4,37 @@ package main
 // daemon serves static pages (go:embed) plus a JSON API; all node-state
 // reads post onto the daemon's event loop, and publish/fetch run
 // through an in-process ephemeral swarm client so the daemon's storage
-// pledge is never touched by UI operations. CORS is open on the API so
-// the observatory page can aggregate many daemons from one browser tab.
+// pledge is never touched by UI operations.
+//
+// The local surface is LOCKED (Gate 1 / I1, #89): the API used to send
+// CORS `*`, so any web page the operator visited could enumerate or drive
+// their node. Now every request must arrive with a localhost Host (no DNS
+// rebinding), any cross-origin request from a non-localhost page is
+// refused outright, and every state-changing call must carry the
+// per-daemon bearer token minted on first run. Read-only localhost
+// ergonomics are preserved, including the observatory aggregating several
+// local daemons from one browser tab (localhost origins are reflected, not
+// blanket-allowed). Traces to Don't #3 (access-unsurveilled), B4 (privacy
+// by construction), and S4 (no seizable single point).
 
 import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nerolabs/silt/adapters/eventloop"
@@ -45,6 +60,7 @@ type uiServer struct {
 	peerCount     func() int
 	links         *linkbook.Book // client mode only (nil on a plain daemon)
 	carePublished bool           // daemon repairs content published through its own UI (#44)
+	token         string         // per-daemon bearer token gating state-changing calls (#89)
 }
 
 func (s *uiServer) onLoop(fn func()) {
@@ -74,15 +90,132 @@ func (s *uiServer) serve(addr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	go http.Serve(ln, cors(mux))
+	go http.Serve(ln, s.guard(mux))
 	return ln.Addr().String(), nil
 }
 
-func cors(h http.Handler) http.Handler {
+// guard locks the local surface (#89). Order matters: reject a non-local
+// Host (DNS-rebinding) and a cross-origin drive-by before doing any work,
+// answer CORS preflight, then require the bearer token on anything that
+// changes state. Static file requests (no /api/ prefix) still pass the
+// Host and Origin checks — a rebinding page must not read them either — but
+// never need the token.
+func (s *uiServer) guard(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// 1. Host allow-list: the browser echoes the host it was pointed at,
+		// so a DNS-rebinding page (evil.com → 127.0.0.1) arrives with a
+		// non-local Host and is refused here.
+		if !isLocalHost(r.Host) {
+			httpError(w, http.StatusForbidden, fmt.Errorf("non-local Host %q refused", r.Host))
+			return
+		}
+		// 2. Origin allow-list, replacing CORS `*`. A same-origin GET sends
+		// no Origin (skip). A cross-origin page (drive-by or observatory)
+		// sends one: reflect localhost origins so the observatory keeps
+		// working, refuse everything else.
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if !isLocalOrigin(origin) {
+				httpError(w, http.StatusForbidden, fmt.Errorf("cross-origin request from %q refused", origin))
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		}
+		// 3. CORS preflight: answer after the checks, before the token gate.
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// 4. Token gate on state-changing methods only — reads keep their
+		// no-token localhost ergonomics.
+		if isMutating(r.Method) && !s.validToken(r) {
+			httpError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid API token"))
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func isMutating(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+// validToken accepts the bearer token from the Authorization header or,
+// for form-driven POSTs and download links that can't set headers, a
+// `token` field/query param. Compared in constant time.
+func (s *uiServer) validToken(r *http.Request) bool {
+	if s.token == "" {
+		return false // never allow mutation on a daemon with no token
+	}
+	got := ""
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		got = strings.TrimPrefix(h, "Bearer ")
+	} else if t := r.URL.Query().Get("token"); t != "" {
+		got = t
+	} else {
+		got = r.FormValue("token")
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
+}
+
+// isLocalHost reports whether the request's Host authority names the local
+// machine (any port). Anything else — a rebinding page's real hostname —
+// is refused.
+func isLocalHost(host string) bool {
+	h, _, err := net.SplitHostPort(host)
+	if err != nil {
+		h = host // no port
+	}
+	switch h {
+	case "localhost", "127.0.0.1", "::1", "[::1]":
+		return true
+	}
+	// Any loopback literal (127.0.0.0/8, ::1) counts.
+	if ip := net.ParseIP(strings.Trim(h, "[]")); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// isLocalOrigin reports whether an Origin header names a localhost page —
+// the daemon's own UI or a sibling local daemon's observatory.
+func isLocalOrigin(origin string) bool {
+	rest, ok := strings.CutPrefix(origin, "http://")
+	if !ok {
+		rest, ok = strings.CutPrefix(origin, "https://")
+	}
+	if !ok {
+		return false
+	}
+	return isLocalHost(rest)
+}
+
+// loadOrCreateUIToken returns the daemon's persistent UI bearer token,
+// minting one on first run. Persisted 0600 in the store dir so it survives
+// restarts and the same operator's browser keeps working.
+func loadOrCreateUIToken(storeDir string) (string, error) {
+	path := filepath.Join(storeDir, "ui-token")
+	if b, err := os.ReadFile(path); err == nil {
+		if tok := strings.TrimSpace(string(b)); tok != "" {
+			return tok, nil
+		}
+	}
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	tok := hex.EncodeToString(raw[:])
+	if err := os.WriteFile(path, []byte(tok), 0o600); err != nil {
+		return "", err
+	}
+	return tok, nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
