@@ -9,6 +9,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Docs
+- **Build-immutable: a bug fixed once stays fixed, caught locally** (2026-08-02)
+  — added tenet **V5** and a new **build-immutable** category to `docs/TENETS.md`.
+  Product-immutables define *what silt is*; build-immutables define *how we
+  build* and are held at the same amendment bar. V5: every discovered defect
+  ships in the same change as a failing-first regression test at its tier(s)
+  (unit / integration-sim / e2e), runnable on a contributor's own machine, so a
+  re-break surfaces locally in seconds — CI is the backstop, never the first line
+  of defense. The three-tier Definition of Done (V1/V2) is elevated alongside it.
+  Prompted by catching the integrated hole-punch gap (#27 Phase 3) locally via
+  the Docker NAT harness rather than at CI.
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or
   behavior change, acting on an intent-level fresh-eyes review. **M0** is
