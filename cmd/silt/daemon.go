@@ -363,18 +363,25 @@ func cmdDaemon(args []string) error {
 		if rep, ok := store.(ports.CapacityReporter); ok {
 			capRep = rep
 		}
+		token, err := loadOrCreateUIToken(*storeDir)
+		if err != nil {
+			return err
+		}
 		ui := &uiServer{
 			loop: loop, nd: nd, reg: reg, capRep: capRep,
 			selfPeer:  fmt.Sprintf("%s@%s", id, tr.Addr()),
 			validator: *validator, started: time.Now(),
 			peerCount:     func() int { return tr.PeerCount() },
 			carePublished: *carePublished,
+			token:         token,
 		}
 		bound, err := ui.serve(*uiAddr)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("ui: http://%s\n", bound)
+		// The token rides the URL query so the operator's browser is
+		// authorized in one click; state-changing calls need it, reads don't.
+		fmt.Printf("ui: http://%s/?token=%s\n", bound, token)
 	}
 
 	// Discovery, in layers: explicit flag, DNS seed, and the persisted
