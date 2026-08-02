@@ -8,6 +8,27 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Added
+- **Gate 4a (#90): real proof-of-retrieval primitive (`core/por`)** (2026-08-02)
+  — the first Gate-4 construction piece. A verifier holding a small secret key
+  can now check that a prover still holds a chunk's bytes *without fetching
+  them* — the property the toy scheme (`core/node/por.go`, which grades against
+  ground truth it fetches itself) deliberately lacked. The construction is the
+  private-verification Compact Proof of Retrievability of Shacham & Waters
+  (ASIACRYPT 2008) — a homomorphic linear authenticator over the Curve25519
+  field prime: per-block tags `σᵢ = f_k(i) + Σⱼ αⱼ·mᵢⱼ`, a seed-expanded
+  challenge, and an O(s) aggregated response `(μ, σ)` whose size is independent
+  of the chunk. A prover that deleted or altered any sampled block cannot make
+  the verification equation hold without the secret αⱼ, which the tags do not
+  reveal. The verify key is designed to ride the care-link, so caretakers audit
+  over ciphertext while storage-node provers cannot forge. Pure package (bytes
+  and keys only); wiring it into the manifest, node audit loop, and credit
+  ledger is the next 4a change. Adversarially tested: tampered/deleted-block,
+  key-less forgery, wrong-key, and wrong-unit proofs all fail. Traces to **M0**
+  (the Sybil corner: presence proven, not asserted), **B8** (adopt the proven
+  primitive), and **B7/V3** (a non-holder fails the challenge). See
+  `docs/design/gate4-m0-mechanism.md` §3a.
+
 ### Fixed
 - **Gates 1–3 completeness audit: closed missing regressions in the floors**
   (2026-08-02) — a pre-Gate-4 audit verified the landed floors (Gate 1),
