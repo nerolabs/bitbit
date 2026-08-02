@@ -106,9 +106,26 @@ from best-in-class components (B8), and prove it:
   red-team (V3/B8), or it does not ship.*
 - **4d (#93) — Persistence + issuer distribution.** Bond and RSA issuer key
   persist across restart; on-chain issuer registration.
+- **4f (#100) — Consensus equivocation detection + slashing + fork handling.**
+  Today a validator can double-sign at a height with no penalty, and a fork is
+  unrecoverable; slashing covers only storage-audit failures. Anti-persona #14
+  ("equivocate in consensus") is an outcome we *deny*, so the defense is Gate-4
+  work, not a footnote (surfaced by the build-vs-intention audit, 2026-08-02).
 - **4e — Multi-machine field test of the whole trust plane (#52).** The R1 gate:
   bonds, tokens, and consensus across real machines and real NAT. Sim + one host
   is not "done."
+
+**Chain-permanence prerequisites (land before any persistent network writes
+blocks).** The chain is append-only with no reorg, so a wrong record shape written
+first is *unrecoverable*. The build-vs-intention audit (`docs/reviews/build-vs-
+intention-2026-08-02.md`) found three: tokened publish is not the default, so the
+chain writes a permanent `Publisher→root` identity map (#97, the M0 privacy corner
+silently surrendered in history); `Block`/`Entry` carry no version field, so any
+Gate-4 record change is a silent hard fork (#98); and the non-chain `Gated`
+registry hard-requires a Publisher (#99). These are cheap now and impossible later.
+The pre-code design constraints (off-loop crypto vs. B2; cross-layer
+unlinkability; the subjective-reputation partition boundary) live in
+`docs/design/gate4-m0-mechanism.md`.
 
 > **The binding is the hard part, not the primitives.** "Adopt best-in-class,
 > don't invent" (B8) does *not* make Gate 4 easy — it *relocates* the research
