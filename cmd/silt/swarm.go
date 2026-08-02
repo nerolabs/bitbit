@@ -107,21 +107,34 @@ func swarmAdd(args []string) error {
 			// Default (neither): publish carries no durable identity — M0-safe
 			// on the chain; a credit-gated registry will refuse it, which is
 			// the signal to pass -token-quorum or -allow-publisher.
+			// Stage stores the chunks + manifest but does NOT register the
+			// entry yet; we publish only after a confirmed scatter, so a
+			// placement failure never leaves a dangling registry entry that
+			// no link reaches (register-after-distribute, #65).
 			var aerr error
-			h, aerr = pipeline.Add(context.Background(), e.nd.Store(), reg, f, opts)
+			var entry ports.Entry
+			h, entry, aerr = pipeline.Stage(context.Background(), e.nd.Store(), f, opts)
 			if aerr != nil {
 				err = aerr
 				done()
 				return
 			}
-			entry, _, _ := reg.Lookup(context.Background(), h.Root)
 			mf, merr := pipeline.LoadFull(context.Background(), e.nd.Store(), entry, h)
 			if merr != nil {
 				err = merr
 				done()
 				return
 			}
-			e.nd.Distribute(entry, mf, false, func(p int, derr error) { placed = p; err = derr; done() })
+			e.nd.Distribute(entry, mf, false, func(p int, derr error) {
+				placed = p
+				if derr != nil {
+					err = derr // failed scatter → leave the registry untouched
+					done()
+					return
+				}
+				err = reg.Publish(context.Background(), entry) // register only now
+				done()
+			})
 		}
 		if *tokenQuorum > 0 {
 			acquirePublishToken(e.nd, validators, *tokenQuorum, func(tok *ports.PublishToken, aerr error) {

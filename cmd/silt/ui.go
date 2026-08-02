@@ -412,10 +412,14 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 	var opErr error
 	rerr := run(func(done func()) {
 		var aerr error
+		var entry ports.Entry
 		// No Publisher: a UI publish is the default user path and must be
 		// unlinkable (M0/#97). A durable Publisher→root record is permanent
 		// on the chain; the UI never opts into it.
-		h, aerr = pipeline.Add(context.Background(), e.nd.Store(), s.reg, f, pipeline.Options{
+		//
+		// Stage (not Add): store the content, register only after a confirmed
+		// scatter, so a placement failure never leaves a dangling entry (#65).
+		h, entry, aerr = pipeline.Stage(context.Background(), e.nd.Store(), f, pipeline.Options{
 			Mode: mode, Rand: rand.Reader,
 		})
 		if aerr != nil {
@@ -423,14 +427,22 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 			done()
 			return
 		}
-		entry, _, _ := s.reg.Lookup(context.Background(), h.Root)
 		m, merr := pipeline.LoadFull(context.Background(), e.nd.Store(), entry, h)
 		if merr != nil {
 			opErr = merr
 			done()
 			return
 		}
-		e.nd.DistributeFrom(e.nd.Store(), entry, m, func(p int, derr error) { placed = p; opErr = derr; done() })
+		e.nd.DistributeFrom(e.nd.Store(), entry, m, func(p int, derr error) {
+			placed = p
+			if derr != nil {
+				opErr = derr // failed scatter → leave the registry untouched
+				done()
+				return
+			}
+			opErr = s.reg.Publish(context.Background(), entry) // register only now
+			done()
+		})
 	})
 	if rerr != nil {
 		httpError(w, 504, rerr)
