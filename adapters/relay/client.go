@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/internal/reuseport"
 	"github.com/nerolabs/silt/internal/safe"
 	"github.com/nerolabs/silt/ports"
 )
@@ -42,7 +43,14 @@ func DialThrough(cert tls.Certificate, relayID ports.NodeID, relayAddr string, t
 
 func dialRelay(cert tls.Certificate, relayID ports.NodeID, relayAddr string) (*tls.Conn, error) {
 	cfg := identity.ClientConfig(cert, relayID)
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", relayAddr, cfg)
+	// Dial with SO_REUSEPORT so the local port this registration binds can
+	// later be RE-bound by the hole-punch dial (which must fire from the same
+	// port the relay observed, #27). Without it the punch dial fails to bind
+	// (the port is already held by this conn) and every upgrade stays on the
+	// relay — the exact bug behind #111.
+	conn, err := tls.DialWithDialer(
+		&net.Dialer{Timeout: 5 * time.Second, Control: reuseport.Control},
+		"tcp", relayAddr, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("relay dial %s: %w", relayAddr, err)
 	}

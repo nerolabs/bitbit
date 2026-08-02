@@ -155,6 +155,14 @@ func isRelayForm(addr string) bool { return strings.HasPrefix(addr, "relay:") }
 type peerConn struct {
 	conn *tls.Conn
 	wmu  sync.Mutex
+	// viaRelay marks a conn that rides the relay splice (either we dialed
+	// the peer's relay form, or the peer reached us through the relay). A
+	// relay conn, once established, is reused for every subsequent frame —
+	// so the hole-punch upgrade (#27) must be triggered on that reuse, not
+	// only at dial time, or a steady-state relay path never tries to go
+	// direct. Set once at adopt; a later direct (punched) conn replaces the
+	// slot with a fresh peerConn whose viaRelay is false.
+	viaRelay bool
 }
 
 func (p *peerConn) write(frame []byte) error {
@@ -430,6 +438,13 @@ func (t *Transport) deliver(to ports.NodeID, pair addrPair, frame []byte, freshD
 	if !freshDial {
 		if pc := t.liveConn(to); pc != nil {
 			if pc.write(frame) == nil {
+				// A relay conn is reused for every frame, so this is the only
+				// place a steady-state relay path can be nudged toward a direct
+				// link. Cooldown-gated, so it's at most one request per peer per
+				// interval regardless of traffic (#27).
+				if pc.viaRelay {
+					t.maybeRequestPunch(to)
+				}
 				return
 			}
 			t.dropConn(to, pc) // conversation died; try a fresh dial
@@ -452,13 +467,14 @@ func (t *Transport) deliver(to ports.NodeID, pair addrPair, frame []byte, freshD
 		if directFailed && addr == pair.relay {
 			t.forgetDirect(to, pair.direct)
 		}
-		pc := t.adopt(to, conn)
+		viaRelay := addr == pair.relay
+		pc := t.adopt(to, conn, viaRelay)
 		if err := pc.write(frame); err != nil {
 			t.dropConn(to, pc)
 			return
 		}
-		go t.readLoop(conn)
-		if addr == pair.relay && addr != "" {
+		go t.readLoop(conn, viaRelay)
+		if viaRelay {
 			// We reached the peer through the relay; try to upgrade to a direct
 			// link so the bulk traffic leaves the relay (#27). Harmless if it
 			// fails — this relay conn keeps serving.
@@ -503,13 +519,13 @@ func (t *Transport) dialPeer(to ports.NodeID, addr string) (*tls.Conn, error) {
 // adopt records conn as the live conversation with id. The newest conn
 // wins the slot; a displaced conn is not closed — its readLoop keeps
 // serving whatever the peer still says on it until it dies naturally.
-func (t *Transport) adopt(id ports.NodeID, conn *tls.Conn) *peerConn {
+func (t *Transport) adopt(id ports.NodeID, conn *tls.Conn, viaRelay bool) *peerConn {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if pc, ok := t.conns[id]; ok && pc.conn == conn {
 		return pc
 	}
-	pc := &peerConn{conn: conn}
+	pc := &peerConn{conn: conn, viaRelay: viaRelay}
 	t.conns[id] = pc
 	return pc
 }
@@ -537,11 +553,13 @@ func (t *Transport) dropConn(id ports.NodeID, pc *peerConn) {
 // a relayed sender is authenticated by the same pinning rule — the
 // relay contributed a pipe, not an identity.
 func (t *Transport) RelayInbound(raw net.Conn) {
+	// Inbound through the relay splice: mark the conn relay-backed so reusing
+	// it triggers the hole-punch upgrade (#27).
 	t.readLoop(tls.Server(raw, &tls.Config{
 		Certificates: []tls.Certificate{t.cert},
 		ClientAuth:   tls.RequireAnyClientCert,
 		MinVersion:   tls.VersionTLS13,
-	}))
+	}), true)
 }
 
 func (t *Transport) acceptLoop() {
@@ -550,11 +568,11 @@ func (t *Transport) acceptLoop() {
 		if err != nil {
 			return // listener closed
 		}
-		go t.readLoop(conn.(*tls.Conn))
+		go t.readLoop(conn.(*tls.Conn), false) // direct inbound
 	}
 }
 
-func (t *Transport) readLoop(conn *tls.Conn) {
+func (t *Transport) readLoop(conn *tls.Conn, viaRelay bool) {
 	// A malformed frame from a peer must fail this conversation, not the
 	// node (Gate 1 / anti-persona #14). The decoders below are panic-free
 	// by construction — the fuzz targets prove it — but this guard is the
@@ -582,7 +600,7 @@ func (t *Transport) readLoop(conn *tls.Conn) {
 	// This conn is now the live conversation with from — in particular,
 	// our replies to a NATed peer ride it, because no dial can ever go
 	// the other way.
-	pc := t.adopt(from, conn)
+	pc := t.adopt(from, conn, viaRelay)
 	defer t.dropConn(from, pc)
 	for {
 		var hdr [4]byte
