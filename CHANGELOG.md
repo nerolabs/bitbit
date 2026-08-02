@@ -8,6 +8,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Transport frame cap was smaller than the minimum production chunk** (2026-08-02)
+  — a whole chunk rides in one length-prefixed frame, but the inbound read
+  loop's cap was 32 MiB while the *minimum* production chunk is 64 MiB, so every
+  production-sized chunk was dropped on receipt; the swarm could only move
+  sim-sized (64 KiB) chunks. The cap is now derived from the manifest chunk-size
+  ceiling plus envelope overhead (`maxFrame = manifest.MaxChunkSize +
+  frameOverhead`), so the wire can always carry a chunk the manifest layer
+  accepts and the two limits can't drift. `Send` now also rejects an over-cap
+  frame with an explicit error instead of emitting one the peer silently drops
+  (S1/S3). Traces to S1/S3 and anti-persona #14. Closes #104.
+
 ### Security
 - **Gate 1 (A6): bound the declared manifest chunk count + size** (2026-08-02) —
   a manifest arrives as reassembled chunk data and *declares* its own chunk
