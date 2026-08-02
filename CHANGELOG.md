@@ -8,6 +8,20 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Register-after-distribute: a failed scatter no longer leaves a dangling
+  registry entry** (Gate 2, #65) — `pipeline.Add` published the registry entry
+  as its final step, *before* the caller distributed the chunks to peers, so a
+  loud placement failure left an entry pointing at content that never landed
+  (no link reaches the user, but the registry — and network-size estimates —
+  count phantom content; tenet S5). Publishing is now split from staging: a new
+  `pipeline.Stage` stores the chunks and sealed manifest and returns the entry
+  *without* registering it; the networked publish paths (`swarm add`, web-UI
+  publish) register **only after** distribution is confirmed. `Add` still
+  stages-and-publishes in one shot for callers that don't distribute separately
+  (local `add`, genesis, sim). Fetch-side retry and raised relay session limits
+  (the rest of #65) already landed. Closes #65.
+
 ### Security
 - **Unlinkable publish is now the default; the Gated registry is fenced off**
   (M0 privacy, #97/#99) — publishing recorded a permanent `Publisher → root`

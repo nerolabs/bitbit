@@ -52,7 +52,32 @@ type Options struct {
 // key is the hash of the plaintext manifest, so convergent content
 // yields the same link every time — dedup extends all the way up to the
 // handle you share.
+//
+// Add stages the content and publishes the registry entry in one shot —
+// the right path for callers that don't distribute separately (local add,
+// genesis, sim). A networked publish that scatters to peers should instead
+// Stage, distribute, and publish only once distribution is confirmed, so a
+// failed scatter never leaves a dangling registry entry (#65) — see Stage.
 func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.Reader, opts Options) (link.Handle, error) {
+	h, entry, err := Stage(ctx, store, r, opts)
+	if err != nil {
+		return link.Handle{}, err
+	}
+	if err := reg.Publish(ctx, entry); err != nil {
+		return link.Handle{}, fmt.Errorf("add: publish: %w", err)
+	}
+	return h, nil
+}
+
+// Stage ingests r and stores every chunk plus the sealed manifest, then
+// returns the file's handle and the registry entry that names it — WITHOUT
+// publishing. The caller publishes (reg.Publish) only after confirming the
+// content is distributed, so a loud placement failure never leaves a
+// dangling registry entry pointing at content that isn't actually placed
+// (register-after-distribute, #65 / tenet S5). The returned entry carries
+// the manifest-chunk pointers, so the caller can LoadFull and Distribute
+// straight from it without a registry round-trip.
+func Stage(ctx context.Context, store ports.ChunkStore, r io.Reader, opts Options) (link.Handle, ports.Entry, error) {
 	if opts.ChunkSize == 0 {
 		opts.ChunkSize = DefaultChunkSize
 	}
@@ -60,11 +85,11 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		opts.Erasure = erasure.DefaultParams
 	}
 	if err := opts.Erasure.Validate(); err != nil {
-		return link.Handle{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, ports.Entry{}, fmt.Errorf("add: %w", err)
 	}
 	frames, err := chunk.Split(r, opts.ChunkSize)
 	if err != nil {
-		return link.Handle{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, ports.Entry{}, fmt.Errorf("add: %w", err)
 	}
 
 	m := &manifest.Manifest{
@@ -79,11 +104,11 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 	var fileKey [crypto.KeySize]byte
 	if opts.Mode == crypto.Private {
 		if opts.Rand == nil {
-			return link.Handle{}, fmt.Errorf("add: private mode requires an injected randomness source")
+			return link.Handle{}, ports.Entry{}, fmt.Errorf("add: private mode requires an injected randomness source")
 		}
 		fileKey, err = crypto.NewFileKey(opts.Rand)
 		if err != nil {
-			return link.Handle{}, err
+			return link.Handle{}, ports.Entry{}, err
 		}
 		m.FileKey = fileKey[:]
 	}
@@ -96,20 +121,20 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 			var secret [crypto.SecretSize]byte
 			ct, secret, err = crypto.ConvergentEncrypt(frame)
 			if err != nil {
-				return link.Handle{}, fmt.Errorf("add: chunk %d: %w", i, err)
+				return link.Handle{}, ports.Entry{}, fmt.Errorf("add: chunk %d: %w", i, err)
 			}
 			m.ChunkSecrets = append(m.ChunkSecrets, secret[:])
 		case crypto.Private:
 			ct, err = crypto.PrivateEncrypt(fileKey, uint64(i), frame)
 			if err != nil {
-				return link.Handle{}, fmt.Errorf("add: chunk %d: %w", i, err)
+				return link.Handle{}, ports.Entry{}, fmt.Errorf("add: chunk %d: %w", i, err)
 			}
 		default:
-			return link.Handle{}, fmt.Errorf("add: unknown mode %q", opts.Mode)
+			return link.Handle{}, ports.Entry{}, fmt.Errorf("add: unknown mode %q", opts.Mode)
 		}
 		c := ports.NewChunk(ct)
 		if err := store.Put(ctx, c); err != nil {
-			return link.Handle{}, fmt.Errorf("add: storing chunk %d: %w", i, err)
+			return link.Handle{}, ports.Entry{}, fmt.Errorf("add: storing chunk %d: %w", i, err)
 		}
 		m.Chunks = append(m.Chunks, c.ID[:])
 		ctChunks = append(ctChunks, ct)
@@ -123,12 +148,12 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 		hi := min(lo+p.K, len(ctChunks))
 		parity, err := erasure.EncodeStripe(p, ctChunks[lo:hi])
 		if err != nil {
-			return link.Handle{}, fmt.Errorf("add: encoding stripe %d: %w", j, err)
+			return link.Handle{}, ports.Entry{}, fmt.Errorf("add: encoding stripe %d: %w", j, err)
 		}
 		for q, shard := range parity {
 			c := ports.NewChunk(shard)
 			if err := store.Put(ctx, c); err != nil {
-				return link.Handle{}, fmt.Errorf("add: storing parity %d of stripe %d: %w", q, j, err)
+				return link.Handle{}, ports.Entry{}, fmt.Errorf("add: storing parity %d of stripe %d: %w", q, j, err)
 			}
 			m.Parity = append(m.Parity, c.ID[:])
 		}
@@ -143,37 +168,37 @@ func Add(ctx context.Context, store ports.ChunkStore, reg ports.Registry, r io.R
 	// Infrastructure hosts noise describing noise.
 	mbytes, err := m.Marshal()
 	if err != nil {
-		return link.Handle{}, fmt.Errorf("add: %w", err)
+		return link.Handle{}, ports.Entry{}, fmt.Errorf("add: %w", err)
 	}
 	h := link.Handle{Root: root, Key: ports.HashBytes(mbytes)}
 	blob, err := manifest.Seal(m, h.LayoutKey(), h.ContentKey())
 	if err != nil {
-		return link.Handle{}, fmt.Errorf("add: sealing manifest: %w", err)
+		return link.Handle{}, ports.Entry{}, fmt.Errorf("add: sealing manifest: %w", err)
 	}
 	mframes, err := chunk.Split(bytes.NewReader(blob), opts.ChunkSize)
 	if err != nil {
-		return link.Handle{}, fmt.Errorf("add: chunking manifest: %w", err)
+		return link.Handle{}, ports.Entry{}, fmt.Errorf("add: chunking manifest: %w", err)
 	}
 	var manifestIDs []ports.ChunkID
 	for i, f := range mframes {
 		c := ports.NewChunk(f)
 		if err := store.Put(ctx, c); err != nil {
-			return link.Handle{}, fmt.Errorf("add: storing manifest chunk %d: %w", i, err)
+			return link.Handle{}, ports.Entry{}, fmt.Errorf("add: storing manifest chunk %d: %w", i, err)
 		}
 		manifestIDs = append(manifestIDs, c.ID)
 	}
 
-	err = reg.Publish(ctx, ports.Entry{
+	entry := ports.Entry{
 		Root:           root,
 		ManifestChunks: manifestIDs,
 		FileSize:       m.FileSize,
 		Publisher:      opts.Publisher,
 		Token:          opts.Token,
-	})
-	if err != nil {
-		return link.Handle{}, fmt.Errorf("add: publish: %w", err)
 	}
-	return h, nil
+	// Deliberately NOT published here: the caller registers it after
+	// distribution is confirmed (Add does so immediately; a networked
+	// publish waits for a successful scatter) — see #65.
+	return h, entry, nil
 }
 
 // Get retrieves the file named by root and writes it to w. Every chunk
