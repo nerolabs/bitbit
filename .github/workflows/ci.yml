@@ -102,10 +102,18 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
-      - name: Cone NAT is punchable (direct connection through both NATs)
+      - name: Cone NAT is punchable — raw primitive (direct connection through both NATs)
         run: ./integration/nat/probe.sh
-      - name: Symmetric NAT defeats the punch (relay fallback is genuinely needed)
+      - name: Symmetric NAT defeats the punch — raw primitive (relay fallback is genuinely needed)
         run: NAT_MODE=symmetric ./integration/nat/probe.sh
+      - name: Two NATed DAEMONS upgrade the relay path to direct (integrated, #27/#111)
+        # The integrated path — caretaker traffic triggers the relay-coordinated
+        # punch and both daemons go direct — not just the standalone probe. This
+        # is the regression gate for #111 (the punch was never firing, then never
+        # binding): a re-break fails here, locally and in CI (build-immutable V5).
+        run: ./integration/nat/holepunch.sh
+      - name: Symmetric NAT — integrated daemons correctly stay on the relay
+        run: NAT_MODE=symmetric ./integration/nat/holepunch.sh
 
   website:
     name: Website — changelog + links

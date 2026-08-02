@@ -8,6 +8,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Hole-punch now actually fires end-to-end: two NATed daemons upgrade the relay
+  path to a direct connection** (Gate 3, #27/#111) — the Phase-3 wiring existed
+  but never worked, and CI never caught it because it only ran the standalone
+  probe, never the integrated daemons. Two bugs, both found locally via the
+  Docker NAT harness (build-immutable V5): (1) the punch was only *requested* on
+  a fresh relay **dial**, but a relay conn is reused for every subsequent frame,
+  so a steady-state relay path never tried to go direct — now a reused
+  relay-backed conn also (cooldown-gated) requests the punch; (2) the punch was
+  requested but never **bound** — the relay control conn was dialed without
+  `SO_REUSEPORT`, so the punch dial couldn't re-bind that port to reuse the NAT
+  mapping the relay observed, so every attempt failed. The reuseport dial hook
+  now lives in a shared `internal/reuseport` package used by both the transport
+  and the relay client. Proven locally: cone punches (both daemons log a direct
+  connection), symmetric correctly stays on the relay. `integration/nat/
+  holepunch.sh` (cone + symmetric) is now wired into the `nat-holepunch` CI job
+  so this can never silently regress again. Closes #111.
+
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or
