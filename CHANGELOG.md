@@ -8,6 +8,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Changed
+- **Gate 4b (#91): the bond is now a real space-hard plot, not independent
+  blocks** (2026-08-02) — replaces the honestly-labelled placeholder in
+  `core/bond` (each block was cheap iterated SHA-256 over `id‖index`, so an
+  attacker could recompute any block on demand and store nothing) with a
+  **sequential labeling plot**: block `i` depends on its identity, index,
+  immediate predecessor, and a few pseudo-random *earlier* blocks (a chain plus
+  long-range parents — a DAG). Because a block depends on earlier ones,
+  recomputing a single probed block forces recomputing its whole dependency
+  subgraph, and the long-range parents defeat cheap checkpointing — so the
+  rational strategy becomes to **store the S bytes**, which is exactly the space
+  being charged for. This makes N Sybil identities cost N distinct blobs of real
+  disk, the property the reputation→quorum path always assumed but never charged.
+  The challenge/answer/verify seam is untouched — `bond.Verify(root, size,
+  nonce, Answer)` stays a stateless O(log n) Merkle check — so only *what fills
+  the blocks* changed. Honestly labelled: space-hardness is heuristic (not yet a
+  formally depth-robust graph or a memory-hard label function — the hardening
+  path), and the *time* half (binding a fresh epoch challenge to the `core/vdf`
+  delay so the space must be held across time and the challenge can't be
+  precomputed) is the next 4b step. Tested (V5): determinism + identity-binding,
+  the dependency lever (perturbing a predecessor or long-range parent changes
+  the block — the space-hardness property the old independent blocks lacked),
+  and parent indices are always earlier + deterministic. Traces to **M0**
+  (Sybil corner), **D1**. See `docs/design/gate4-m0-mechanism.md` §3b.
+
 ### Added
 - **Gate 4b (#91): verifiable delay function primitive (`core/vdf`)** (2026-08-02)
   — the sequential-work core of the proof-of-space-*time* bond, and the first

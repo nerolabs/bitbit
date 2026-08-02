@@ -14,21 +14,36 @@
 // nonce picks which blocks, so a prover must hold (nearly) all of them —
 // cost = Size.
 //
-// HONESTLY LABELED: this is proof-of-SPACE-lite, not Filecoin PoRep.
-//   - It forces STORAGE over recomputation only insofar as sealing is
-//     expensive relative to a disk read. The placeholder sealBlock below
-//     is iterated SHA-256 — cheap, NOT memory-hard. A real deployment MUST
-//     swap it for a memory-hard function (argon2 / scrypt / Chia-style
-//     plotting) or the storage↔compute tradeoff lets an attacker recompute
-//     blocks on demand instead of storing them.
+// THE PLOT — why storing beats recomputing (Gate 4b). The bond dataset is a
+// SEQUENTIAL LABELING: block i is derived from the node's identity, its
+// index, its immediate predecessor, and a few pseudo-random EARLIER blocks
+// (a chain plus long-range parents — a directed acyclic graph). Because a
+// block depends on earlier ones, recomputing a single probed block on demand
+// forces recomputing its whole dependency subgraph back toward block 0; and
+// the pseudo-random long-range parents defeat cheap checkpointing (you would
+// have to store enough checkpoints to cover random reaches, i.e. store the
+// plot anyway). So the rational strategy is to STORE the S bytes — which is
+// exactly the space we are charging for. Same identity ⇒ same plot, so an
+// owner can regenerate on setup, but must then hold it to answer cheaply.
+//
+// HONESTLY LABELED — what this does and does not prove:
+//   - It delivers SPACE-hardness heuristically: the labeling makes recompute
+//     cost scale with dependency depth, so holding the plot beats recomputing
+//     it. It is NOT yet a formally depth-robust graph (DRG); a proven-DRG
+//     labeling (Ateniese-style) and/or a memory-hard label function are the
+//     hardening path, and the TIME half — a VDF binding a fresh epoch
+//     challenge to non-parallelisable elapsed work (core/vdf, already built)
+//     so the challenge can't be precomputed and the space must be held ACROSS
+//     time — is wired in the next 4b step.
 //   - No replication proof and no zero-knowledge: it proves "this identity
-//     holds a distinct blob of this size," not "this is a unique replica
-//     of user data." Elevating held REAL network content to standing (so
-//     the Sybil cost and durability funding become one mechanism) is the
-//     intended follow-up; the synthetic bond here is the cold-start.
+//     holds a distinct blob of this size," not "this is a unique replica of
+//     user data." Elevating held REAL network content to standing (so the
+//     Sybil cost and durability funding become one mechanism) is the intended
+//     follow-up; the synthetic bond here is the cold-start.
 package bond
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 
 	"github.com/fxamacker/cbor/v2"
@@ -80,15 +95,17 @@ type Commitment struct {
 	leaves []ports.Hash
 }
 
-// Seal generates the identity-bound bond of ~size bytes for id. Same id ⇒
-// same bond, so an owner can regenerate on setup — but must then STORE it
-// to answer challenges cheaply, which is the whole point.
+// Seal plots the identity-bound bond of ~size bytes for id. Blocks are
+// generated in order because each depends on earlier ones (see plotBlock),
+// so this is the deliberately non-trivial "plotting" step; the owner then
+// STORES the result to answer challenges cheaply, which is the whole point.
+// Same id ⇒ same plot.
 func Seal(id ports.NodeID, size int64) *Commitment {
 	n := NumBlocks(size)
 	blocks := make([][]byte, n)
 	leaves := make([]ports.Hash, n)
 	for i := 0; i < n; i++ {
-		b := sealBlock(id, i)
+		b := plotBlock(id, i, leaves) // reads leaves[0..i-1] already filled
 		blocks[i] = b
 		leaves[i] = ports.HashBytes(b)
 	}
@@ -163,19 +180,68 @@ func challengeIndices(root ports.Hash, nBlocks int, nonce uint64) []int {
 	return idx
 }
 
-// sealBlock is the identity-bound block generator. PLACEHOLDER: iterated
-// SHA-256 over (id ‖ index), expanded to BlockSize — deterministic and
-// identity-bound, but NOT memory-hard. Swap for argon2/scrypt/plotting
-// before this is a real Sybil cost (see package doc).
-func sealBlock(id ports.NodeID, index int) []byte {
-	seed := make([]byte, len(id)+8)
-	copy(seed, id[:])
-	binary.BigEndian.PutUint64(seed[len(id):], uint64(index))
+const (
+	plotDomain = "silt/bond/plot/v1"
+	// plotParents is how many pseudo-random EARLIER blocks each block depends
+	// on, on top of its immediate predecessor. More parents raise recompute
+	// cost and defeat checkpointing harder, at a small plotting-time cost.
+	plotParents = 3
+)
+
+// plotBlock is the identity-bound, dependency-chained block generator. Block
+// i mixes the identity, the index, its predecessor's leaf, and plotParents
+// pseudo-random earlier leaves, then expands that label to BlockSize. The
+// dependency on earlier blocks is what forces a prover to STORE the plot:
+// recomputing block i on demand means recomputing its dependency subgraph,
+// which the long-range parents make as costly as holding the plot outright.
+// leaves must already hold the finalized leaves of blocks 0..i-1.
+func plotBlock(id ports.NodeID, i int, leaves []ports.Hash) []byte {
+	h := sha256.New()
+	h.Write([]byte(plotDomain))
+	h.Write(id[:])
+	var ib [8]byte
+	binary.BigEndian.PutUint64(ib[:], uint64(i))
+	h.Write(ib[:])
+	if i > 0 {
+		h.Write(leaves[i-1][:]) // the chain: immediate predecessor
+	} else {
+		h.Write(make([]byte, len(ports.Hash{}))) // genesis: zero seed
+	}
+	for _, p := range parentIndices(id, i) {
+		h.Write(leaves[p][:]) // long-range dependencies
+	}
+	label := h.Sum(nil)
+
+	// Expand the label to a full block by chaining SHA-256. Filling from the
+	// label (not the raw seed) binds the block's every byte to its parents.
 	block := make([]byte, BlockSize)
-	h := ports.HashBytes(seed)
-	for off := 0; off < BlockSize; off += len(h) {
-		copy(block[off:], h[:])
-		h = ports.HashBytes(h[:]) // chain the hash to fill the block
+	cur := label
+	for off := 0; off < BlockSize; off += len(cur) {
+		copy(block[off:], cur)
+		next := sha256.Sum256(cur)
+		cur = next[:]
 	}
 	return block
+}
+
+// parentIndices derives plotParents pseudo-random dependency indices in
+// [0, i) for block i, from the PUBLIC (id, i) so a verifier could recompute
+// the graph. Returns nil for block 0 (no predecessors). Repeats are harmless.
+func parentIndices(id ports.NodeID, i int) []int {
+	if i == 0 {
+		return nil
+	}
+	out := make([]int, plotParents)
+	for j := 0; j < plotParents; j++ {
+		h := sha256.New()
+		h.Write([]byte(plotDomain + "/parent"))
+		h.Write(id[:])
+		var b [16]byte
+		binary.BigEndian.PutUint64(b[:8], uint64(i))
+		binary.BigEndian.PutUint64(b[8:], uint64(j))
+		h.Write(b[:])
+		sum := h.Sum(nil)
+		out[j] = int(binary.BigEndian.Uint64(sum[:8]) % uint64(i))
+	}
+	return out
 }
