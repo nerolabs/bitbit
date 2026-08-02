@@ -25,8 +25,9 @@ import (
 	"github.com/nerolabs/silt/ports"
 )
 
-// DefaultChunkSize is 64 KiB for the sim (64 MiB is the production
-// number; small chunks keep tests and demos fast).
+// DefaultChunkSize is 64 KiB for the sim; 64 MiB is the minimum production
+// chunk size (small chunks keep tests and demos fast). The manifest layer
+// bounds the maximum at manifest.MaxChunkSize.
 const DefaultChunkSize = 64 << 10
 
 type Options struct {

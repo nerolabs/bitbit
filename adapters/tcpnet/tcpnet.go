@@ -50,11 +50,25 @@ import (
 	"github.com/nerolabs/silt/adapters/eventloop"
 	"github.com/nerolabs/silt/adapters/identity"
 	"github.com/nerolabs/silt/adapters/relay"
+	"github.com/nerolabs/silt/core/manifest"
 	"github.com/nerolabs/silt/internal/safe"
 	"github.com/nerolabs/silt/ports"
 )
 
-const maxFrame = 32 << 20 // sanity cap; a frame carries at most one chunk
+// frameOverhead is the envelope wrapping around a chunk in one frame: the
+// sender's From/Addr/Relay, gossiped Contacts, the storage proof path, and
+// CBOR structure. It is tiny next to a chunk (a proof path is O(log n)
+// hashes) — a few MiB is generous headroom.
+const frameOverhead = 4 << 20
+
+// maxFrame bounds an inbound frame: large enough to carry the biggest legal
+// chunk (a frame carries at most one chunk) plus its envelope, small enough
+// to still cap per-frame allocation against a hostile peer (#14). It is
+// derived from the manifest chunk-size ceiling, not a standalone number, so
+// the transport can always carry a chunk the manifest layer accepts — the
+// two limits can't drift apart (#104). The minimum production chunk is 64
+// MiB, so the old 32 MiB cap silently dropped every production chunk.
+const maxFrame = manifest.MaxChunkSize + frameOverhead
 
 // Peer is an entry in the address book.
 type Peer struct {
@@ -392,6 +406,12 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	frame, err := encMode.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("tcpnet: encode: %w", err)
+	}
+	// Fail loudly rather than emit a frame the peer's read loop will drop
+	// on sight (a silent-loss shape S1/S3 forbids). The cap is the same one
+	// the receiver enforces.
+	if len(frame) > maxFrame {
+		return fmt.Errorf("tcpnet: frame of %d bytes exceeds max %d", len(frame), maxFrame)
 	}
 	go t.deliver(to, pair, frame, freshDial)
 	return nil
