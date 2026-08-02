@@ -279,8 +279,11 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 	var opErr error
 	rerr := run(func(done func()) {
 		var aerr error
+		// No Publisher: a UI publish is the default user path and must be
+		// unlinkable (M0/#97). A durable Publisher→root record is permanent
+		// on the chain; the UI never opts into it.
 		h, aerr = pipeline.Add(context.Background(), e.nd.Store(), s.reg, f, pipeline.Options{
-			Mode: mode, Rand: rand.Reader, Publisher: e.nd.ID(),
+			Mode: mode, Rand: rand.Reader,
 		})
 		if aerr != nil {
 			opErr = aerr

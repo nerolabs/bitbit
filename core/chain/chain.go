@@ -59,6 +59,15 @@ type Config struct {
 	Anchors          map[ports.NodeID]bool
 	AnchorQuorum     int
 	MatureValidators int
+	// AllowPublisher permits an entry to carry a durable Publisher NodeID.
+	// It is FALSE by default because a Publisher→root record is permanent
+	// on an append-only chain — the M0 privacy corner silently surrendered
+	// in the historical record (F1/#14, #97). The unlinkable path (a
+	// blind-signed publish token, or no identity at all) is the default;
+	// only an explicitly trusted deployment opts back into Publisher
+	// entries. Genesis is exempt (it seeds via AppendGenesis, and its
+	// proposer is public by design).
+	AllowPublisher bool
 }
 
 func DefaultConfig() Config {
@@ -172,6 +181,7 @@ var (
 	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
 	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
 	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
+	ErrPublisherEntry = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -291,6 +301,13 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		}
 		if len(e.ManifestChunks) == 0 {
 			return fmt.Errorf("chain: entry %s has no manifest pointers", e.Root)
+		}
+		// M0 privacy (#97): a Publisher→root record is permanent on this
+		// append-only chain, so the default refuses it. Publish carries no
+		// durable identity — a blind-signed token, or nothing — unless the
+		// deployment is explicitly trusted (AllowPublisher).
+		if !c.cfg.AllowPublisher && e.Publisher != (ports.NodeID{}) {
+			return fmt.Errorf("%w: entry %s", ErrPublisherEntry, e.Root)
 		}
 		if c.tokenQuorum > 0 {
 			if e.Token == nil {

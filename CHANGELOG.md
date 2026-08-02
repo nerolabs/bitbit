@@ -8,6 +8,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **Unlinkable publish is now the default; the Gated registry is fenced off**
+  (M0 privacy, #97/#99) — publishing recorded a permanent `Publisher → root`
+  link on the append-only chain because the publish clients attached the node's
+  durable identity by default. The chain never *required* it; it was being
+  written gratuitously and can never be undone. Now: the `swarm add` and web-UI
+  publish paths **attach no Publisher by default** (publish is unlinkable —
+  carry a blind-signed token, or nothing), and the chain **refuses a
+  Publisher-bearing entry** unless the deployment is explicitly trusted
+  (`chain.Config.AllowPublisher`, daemon `-allow-publisher`; `swarm add
+  -allow-publisher` to opt a single publish back in). Genesis is exempt (it
+  seeds via `AppendGenesis` and its proposer is public by design). Tokens stay
+  an orthogonal opt-in (`-token-quorum`/`-require-tokens`) for a *paid*
+  unlinkable publish, so earned-standing commit without tokens still works. The
+  credit-**Gated** registry — which hard-requires a Publisher and has no token
+  path — is documented sim/test-only and **fenced off**: an `internal/depcheck`
+  architecture test fails the build if any `cmd/` entry point constructs it (it
+  is used only by the sim today). Traces to **M0** (privacy corner), **F1 /
+  risk #14**, immutable #3 (no permanent linkage). Closes #97 and #99.
+
 ### Docs
 - **Intention review actioned: M0 sharpened, S7 added, the V1 gate spine put
   on the board** (2026-08-02) — a docs/canon + tracker pass, no code or
