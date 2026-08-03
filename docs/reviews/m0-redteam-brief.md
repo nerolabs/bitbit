@@ -66,6 +66,18 @@ is how to stand up the network shapes you'll need (a validator swarm, real
 NATs, a partition). Subvert any operation in the seam to violate a promise
 below.
 
+**Don't burn your budget on setup.** The [`examples/`](../examples/README.md)
+playbooks boot a validator swarm in one command, and two helpers instrument the
+attack: `silt id` prints a peer's NodeID without launching it (fill
+`-attesters`/`-bootstrap` up front), and `silt chain-status -store DIR` prints a
+replica's head height + head hash — how you tell whether two histories both
+stand. Several sims are **pre-built adversary models with the mechanism's denial
+already wired in** — extend these rather than starting cold: `silt sim run
+bondstanding` (a Sybil quorum is denied), `consensus` (a zero-reputation
+proposer is refused), `audit` (a liar-prover is caught), `takedown` (a denied
+root is blocked per-operator). `sim/*_test.go` and `go test ./sim/ -run <name>
+-v` show how each is driven.
+
 ## Where the mechanism lives
 
 - Sybil bond: `core/bond` (space-hard plot), `core/vdf` (the time), the plot's
@@ -90,6 +102,12 @@ below.
 - **State your assumptions.** If a break needs a capability (a global observer,
   factoring the VDF modulus, breaking Ed25519), say so — an attack that needs a
   broken primitive is not a break of *this* design.
+- **Scriptable → we'll keep it.** If your attack — or your denial — runs as a
+  script or a `go test`, hand it over; strong ones become permanent adversarial
+  regression tests (the acceptance pass's reproduction scripts became
+  [`examples/`](../examples/README.md)). A denial carries most when it's backed by
+  a *failing* attack — the mechanism visibly refusing, the way `bondstanding` /
+  `consensus` / `audit` already encode their denials — not by prose alone.
 
 ## What to hand back
 
