@@ -86,7 +86,7 @@ func cmdClient(args []string) error {
 
 	nd := node.New(id, node.DefaultConfig(), walltime.New(loop), tr, store)
 
-	level, logOn, err := resolveLogLevel(*logLevel, *debug)
+	level, logOn, err := resolveLogLevel(*logLevel, *debug, false) // a client is never a validator
 	if err != nil {
 		return err
 	}

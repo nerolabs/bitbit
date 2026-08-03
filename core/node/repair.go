@@ -356,6 +356,16 @@ func (n *Node) repairStripes(m *manifest.Layout, p erasure.Params, refs []shardR
 		n.repairStripe(m, p, stripeRefs, disperseShards, dominant, porKey, next)
 		return
 	}
+	// Degraded but still within the repair slack: parity/replication still
+	// covers the loss, so reconstructing now would be premature — but narrate
+	// it, so an operator who just killed a holder sees the caretaker NOTICE the
+	// loss rather than apparent silence (acceptance F2). Repair fires only once
+	// losses exceed the slack, which with the default replication takes more
+	// than "a couple" of deaths.
+	if missing > 0 {
+		n.logf(ports.LogInfo, "stripe degraded, within repair slack — watching",
+			"root", m.Root(), "stripe", stripe, "missing", missing, "slack", n.cfg.RepairSlack)
+	}
 	next()
 }
 

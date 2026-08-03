@@ -42,12 +42,15 @@ type bondInfo struct {
 // generated once and persisted. (The plot is still held in memory; a
 // disk-backed lazy commitment and moving plotting off the core loop are the
 // recorded hardening follow-ups — see the core/bond package doc.)
-func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) {
+// It returns whether the plot was RELOADED from disk (true) rather than freshly
+// sealed (false), so a restart can honestly say it reused the plot instead of
+// logging the identical wording as a first-time seal (acceptance F7).
+func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) (reloaded bool) {
 	if n.plotStore != nil {
 		if root, blocks, ok, err := n.plotStore.Load(n.id); ok && err == nil {
 			if c, rerr := bond.Reconstruct(size, blocks); rerr == nil && c.Root == root {
 				n.bond = c // reloaded from disk, re-verified — no re-plot (#93)
-				return
+				return true
 			}
 			n.logf(ports.LogWarn, "bond plot reload failed; re-plotting", "id", n.id)
 		} else if err != nil {
@@ -60,6 +63,7 @@ func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) {
 			n.logf(ports.LogWarn, "bond plot persist failed", "err", err)
 		}
 	}
+	return false
 }
 
 // StartBondAudit begins the periodic sweep in which this validator challenges
@@ -102,6 +106,10 @@ func (n *Node) bondAuditOnce(now uint64) {
 	// buys nothing with the quorum — only real held storage does.
 	if n.bond != nil {
 		n.ledger.RecordBondChallenge(n.id, n.bond.Root, n.bond.Size, true, now)
+		// Narrate our own standing every sweep so an operator can SEE the
+		// earned-standing mechanism the whole of M0 rests on actually working —
+		// rising as bonds prove out, decaying if they lapse (acceptance F7).
+		n.logf(ports.LogInfo, "standing", "self", n.id, "reputation", n.ledger.Reputation(n.id))
 	}
 	// Snapshot: the callbacks below mutate nothing here, but a peer could be
 	// learned mid-sweep — challenge the set we knew at sweep start.
@@ -140,6 +148,10 @@ func (n *Node) bondAuditOnce(now uint64) {
 				// only its first owner (credit dedup), so co-located Sybils
 				// pointing at one plot earn one bond's standing, not many.
 				n.ledger.RecordBondChallenge(id, info.root, info.size, ok, now)
+				// Narrate the verdict: a peer proving (or failing to prove) its
+				// bond is exactly the "is the trust plane working?" moment an
+				// operator needs to see, not infer from a diffed chain (F7).
+				n.logf(ports.LogInfo, "bond challenge", "peer", id, "passed", ok, "standing", n.ledger.Reputation(id))
 			})
 	}
 }
