@@ -77,6 +77,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   A read-only `Reputation` accessor was added to the `CreditLedger` port for the
   narration. No mechanism changed — this is pure observability. Traces to **M0**,
   **S5** (honest observability), **B5**. See the M0 acceptance report.
+- **Docs (acceptance F4/F5/F6/F8): the getting-started guides match reality**
+  (2026-08-03) — the acceptance operator hit four first-five-minutes doc snags,
+  none breaking the product but each eroding "every step works / every counter
+  reproduces": **(F4)** three guides (`README.md`, `docs/local-test-network.md`,
+  `docs/v1-test.md`) said `add` "prints the root hash" / a "64-char hex string"
+  then told you to `get <root>` — but `add` prints a full `silt:` **link** and
+  `get`/`info`/`swarm get` need that whole link, so a literal newcomer hit an
+  error; every such placeholder is now `<silt-link>` with the output described as
+  a link (the top-level `silt` usage block was already correct). **(F5)** the
+  quoted `sim run economy -seed 21` figures were stale — refreshed to the actual
+  deterministic output (Gini 0.00 → 0.63, top earner ~1.25 MB, freeloader ~444 KB,
+  20/36 second-round publishes ok). **(F6)** the `silt sim run` usage error listed
+  only `scatter` and the top-level usage omitted half the scenarios — both now list
+  all eight (`scatter, churn, economy, audit, capacity, consensus, bondstanding,
+  takedown`), including the previously undocumented `bondstanding`. **(F8)** the
+  `user-seam.md` store-layout table listed `chain/` (a directory); the committed
+  history is a single `chain.cbor` file. Traces to **S5** (honest observability
+  extends to the docs). See the M0 acceptance report.
 
 ### Added
 - **Gate 4d (#93): the publish-token issuer key persists across restarts**

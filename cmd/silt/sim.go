@@ -11,11 +11,11 @@ import (
 
 func cmdSim(args []string) error {
 	if len(args) < 1 || args[0] != "run" {
-		return fmt.Errorf("usage: silt sim run <scenario> [flags]  (scenarios: scatter)")
+		return fmt.Errorf("usage: silt sim run <scenario> [flags]  (scenarios: scatter, churn, economy, audit, capacity, consensus, bondstanding, takedown)")
 	}
 	args = args[1:]
 	if len(args) < 1 {
-		return fmt.Errorf("usage: silt sim run <scenario> [flags]  (scenarios: scatter)")
+		return fmt.Errorf("usage: silt sim run <scenario> [flags]  (scenarios: scatter, churn, economy, audit, capacity, consensus, bondstanding, takedown)")
 	}
 	scenario := args[0]
 	fs := flag.NewFlagSet("sim run "+scenario, flag.ExitOnError)

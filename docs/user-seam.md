@@ -24,7 +24,7 @@ its contents is how you reason about "does standing/content/identity come back?"
 | `proofs/` | each chunk's storage proof (#69) | it re-announces coded shards under the right key and can answer audits |
 | `plot/` | the validator's proof-of-space-time bond plot (#93) | its consensus standing survives without re-plotting |
 | `issuer/issuer.key` | the publish-token issuer RSA key | tokens it signed stay verifiable; peers' cached keys don't go stale |
-| `chain/` | the committed block history | the replica rejoins at its height, not from genesis |
+| `chain.cbor` | the committed block history (a single CBOR file) | the replica rejoins at its height, not from genesis |
 | `identity.pem` | the node's keypair (NodeID = hash of the pubkey) | its reputation is not transplantable and survives restart |
 
 ---

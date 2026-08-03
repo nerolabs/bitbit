@@ -24,11 +24,12 @@ head -c 1000000 /dev/urandom > demo.bin   # any file works; a PDF is more fun
 ./silt add demo.bin
 ```
 
-It prints a 64-char hex string — the file's Merkle root, its one true
-global name. Then:
+It prints a **silt: link** (`silt:v1:<root>:<key>`) — the file's one true
+global name, carrying both its Merkle root and the key to decrypt it. That
+whole link is what `get` wants (not the bare root). Then:
 
 ```sh
-./silt get <that-root> -o restored.bin
+./silt get <silt-link> -o restored.bin
 cmp demo.bin restored.bin && echo BIT-PERFECT
 ```
 
@@ -41,7 +42,7 @@ see the confirmation attack in
 ## 2. The math made tangible — delete shards, `get` anyway
 
 ```sh
-./silt info <root>
+./silt info <silt-link>
 ```
 
 This prints the stripe map: every 64 KiB chunk of your file, grouped
@@ -52,7 +53,7 @@ their files (chunks live at
 
 ```sh
 rm .silt/objects/ab/abcdef...   # ×6, any mix of data and parity
-./silt get <root> -o back.bin && cmp demo.bin back.bin \
+./silt get <silt-link> -o back.bin && cmp demo.bin back.bin \
   && echo "SURVIVED 6 DELETIONS"
 ```
 
@@ -98,11 +99,12 @@ exists once; Reed-Solomon is the entire safety net.
 ```
 
 Four phases: everyone gets a grant worth one publish, everyone spends
-it, traffic pays the hosts (watch the Gini coefficient go 0.00 → 0.49),
+it, traffic pays the hosts (watch the Gini coefficient go 0.00 → 0.63),
 then everyone tries to publish again. The closing lines are the
-punchline — the top earner served ~800 KB and publishes freely; the
-freeloader fetched ~440 KB, served nothing, and is locked out of the
-registry. (The ledger is deliberately gameable — v1's job is making the
+punchline — the top earner served ~1.25 MB and publishes freely; the
+freeloader fetched ~444 KB, served nothing, and is locked out of the
+registry (this run: 20 of 36 second-round publishes succeed, 16 rejected,
+6 of them freeloaders). The figures are deterministic for this seed. (The ledger is deliberately gameable — v1's job is making the
 economics observable, not secure; see `core/credit`.)
 
 ## While you play
