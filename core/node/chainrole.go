@@ -177,10 +177,17 @@ func (n *Node) broadcastCommit(b *chain.Block, validators []ports.NodeID, i int,
 		func(ports.Message, error) { n.broadcastCommit(b, validators, i+1, done) })
 }
 
-// SyncChain pulls blocks the local replica is missing from peers —
-// how a latecomer (or a restarted daemon) catches up. Every fetched
-// block is fully re-validated by Append; a lying peer can waste our
-// time but cannot feed us an invalid chain.
+// SyncChain reconciles the local replica against peers — how a latecomer or a
+// restarted daemon catches up AND how a partitioned validator heals a fork
+// (D2). It fetches each peer's full chain and asks the replica to Reconcile:
+// a peer that merely extends us is adopted as a catch-up, a peer on a heavier
+// competing fork triggers a reorg, and a peer on an equal-or-lighter history
+// is ignored — one uniform path (an equal-length fork, invisible to "give me
+// blocks above my head", is exactly why we compare whole chains, not suffixes).
+// Every block is fully re-validated inside Reconcile, so a lying peer wastes
+// our time but cannot feed us an invalid or foreign chain. (Fetching the whole
+// chain each sweep is the simple-correct v1; a genesis-to-head diff is the
+// recorded scaling follow-up.)
 func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) {
 	if n.chain == nil {
 		done(0, ErrNoChain)
@@ -197,16 +204,18 @@ func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) 
 			ask(i + 1)
 			return
 		}
-		_, height := n.chain.Head()
-		n.request(peers[i], ports.Message{Kind: ports.MsgGetChain, Height: height},
+		n.request(peers[i], ports.Message{Kind: ports.MsgGetChain, Height: 0},
 			func(resp ports.Message, err error) {
 				if err == nil && resp.OK {
-					if blocks, derr := chain.DecodeBlocks(resp.Data); derr == nil {
-						for _, blk := range blocks {
-							if n.chain.Append(blk) != nil {
-								break
+					if full, derr := chain.DecodeBlocks(resp.Data); derr == nil && len(full) > 0 {
+						before := n.chain.Len()
+						if ok, rerr := n.chain.Reconcile(full); ok {
+							if d := n.chain.Len() - before; d > 0 {
+								added += d
 							}
-							added++
+							n.logf(ports.LogInfo, "chain reconciled from peer", "peer", peers[i], "len", n.chain.Len())
+						} else if rerr != nil {
+							n.logf(ports.LogDebug, "peer chain not adopted", "peer", peers[i], "err", rerr)
 						}
 					}
 				}

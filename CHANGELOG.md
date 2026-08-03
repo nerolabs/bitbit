@@ -8,6 +8,40 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Added
+- **Gate 4f (#100): the chain can reconcile forks — reorg to the heavier
+  history** (2026-08-03, D2) — the registry chain was append-only with no
+  reorganisation ("first valid block at a height wins"), and `SyncChain`
+  silently `break`ed on divergence, so a partitioned or diverged validator
+  stayed forked forever. It now heals: `Chain.Reconcile` re-validates a peer's
+  full chain end to end in a throwaway replica and, iff that history is strictly
+  heavier (ties broken by the lower head hash, so every honest node picks the
+  same winner), **adopts it** — rolling state back to the shared genesis and
+  forward onto the heavier fork. Because all derived state (`byRoot`, `spent`,
+  `revoked`, `validatorsSeen`) is a pure function of the blocks, the reorg is a
+  whole-state swap, not fragile per-record undo. Fork-choice weight is the
+  cumulative count of DISTINCT qualified non-proposer attestations across the
+  chain — the heaviest history is the one the most *earned standing* has
+  committed to, not merely the longest (which a fast Sybil could extend);
+  signatures are objective, the qualification bar is the local reputation view
+  (which converges among honest replicas). The fork is genesis-anchored, so a
+  peer cannot swap in a heavier FOREIGN chain, and every block is re-validated,
+  so a lying peer wastes time but cannot feed an invalid history. `SyncChain`
+  now reconciles against each peer's full chain — one uniform path for catch-up,
+  fork-heal, and no-op (an equal-length fork is invisible to "give me blocks
+  above my head", which is why it compares whole chains). Tested (V5): unit —
+  a heavier fork is adopted, a lighter one rejected, ties break deterministically
+  by hash, a foreign genesis is refused, an under-quorum fork is re-validated and
+  rejected; integration — a 10-node network **partitions, each side commits its
+  own history, then heals and the lighter side reorgs onto the heavier fork over
+  the wire while the heavier side does not budge**. Honestly labelled:
+  fully-objective, partition-independent on-chain PoST-bond weight is the
+  recorded D2 hardening (a self-asserted or locally-qualified weight can diverge
+  under an adversarial partition); equivocation evidence + slashing is the next
+  4f increment; genesis-to-head diffs (vs. whole-chain fetch) are the scaling
+  follow-up. Traces to **M0** (consensus can't be captured by an off-head or
+  partitioning proposer), **D2**. See `docs/design/gate4-m0-mechanism.md` §3e.
+
 ### Changed
 - **Gate 4b (#91): bind the bond plot to its identity — close the
   plot-amortisation gap** (2026-08-03) — the Sybil cost only holds if each
