@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Gate 4d (#93): the publish-token issuer key persists across restarts**
+  (2026-08-03) — a validator that issues blind-signed publish tokens generated a
+  FRESH RSA key on every daemon start, which orphaned every token it had already
+  signed (they no longer verify) and staled every issuer public key its peers had
+  cached. A new `adapters/diskissuer` persists the key (PKCS#1 DER, written
+  atomically with `0600`), and the daemon **loads-or-creates** it: first run mints
+  the issuer identity, every restart keeps it — so outstanding tokens stay
+  verifiable and the distributed issuer set is stable. A corrupt or foreign key
+  file is a hard error, never silently overwritten with a new identity. Tested
+  (V5): the restart property is pinned (two `LoadOrCreate`s over the same dir
+  return the same key), plus save/load round-trip, clean-absent, and
+  corrupt-file handling; the real daemon (e2e + Docker NAT) starts and persists
+  the key. Honestly labelled: this is the issuer-key half of §3d's "issuer
+  survives restart"; **on-chain issuer registration** (so the qualified issuer
+  set is chain-verifiable rather than fetched ad-hoc) is the remaining §3d piece,
+  and it pairs with the deferred D3 canonical-validator-set work. Traces to
+  **M0** (the unlinkable-publish path stays live across restarts), **B7**. See
+  `docs/design/gate4-m0-mechanism.md` §3d.
 - **Gate 4f (#100): equivocation is provable and slashable — double-signing
   costs standing** (2026-08-03, D2) — the consensus analogue of a storage liar:
   a validator that signs two DIFFERENT blocks at the SAME height (trying to make

@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
 	"flag"
 	"fmt"
 	"net"
@@ -16,6 +15,7 @@ import (
 	"github.com/nerolabs/silt/adapters/chainhost"
 	"github.com/nerolabs/silt/adapters/chainstore"
 	"github.com/nerolabs/silt/adapters/discovery"
+	"github.com/nerolabs/silt/adapters/diskissuer"
 	"github.com/nerolabs/silt/adapters/diskplot"
 	"github.com/nerolabs/silt/adapters/diskproofs"
 	"github.com/nerolabs/silt/adapters/diskstore"
@@ -65,7 +65,7 @@ func cmdDaemon(args []string) error {
 	matureValidators := fs.Int("mature-validators", 0, "distinct non-anchor validators after which the anchor requirement sheds automatically (0 = never require anchors)")
 	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
-	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (V1: held in RAM) — a bigger bond earns more standing")
+	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (persisted to disk; a restart reloads it) — a bigger bond earns more standing")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
@@ -284,9 +284,12 @@ func cmdDaemon(args []string) error {
 		}
 		// Publisher privacy (T3): this validator issues blind-signed publish
 		// tokens, and (when -require-tokens) the chain accepts only entries that
-		// carry one — no Publisher identity on-chain. Issuer key is in-RAM for
-		// now (persisting it across restart is a tracked follow-up).
-		if issuerKey, kerr := rsa.GenerateKey(rand.Reader, 2048); kerr == nil {
+		// carry one — no Publisher identity on-chain. The issuer key PERSISTS
+		// (#93 / §3d): a restart reuses it, so outstanding tokens stay verifiable
+		// and peers' cached issuer keys don't go stale.
+		if is, ierr := diskissuer.Open(filepath.Join(*storeDir, "issuer")); ierr != nil {
+			return fmt.Errorf("token issuer store: %w", ierr)
+		} else if issuerKey, kerr := is.LoadOrCreate(rand.Reader); kerr == nil {
 			nd.EnableTokenIssuer(issuerKey)
 			if *requireTokens > 0 {
 				ch.RequireTokens(*requireTokens, nd.IssuerKeyOf)
