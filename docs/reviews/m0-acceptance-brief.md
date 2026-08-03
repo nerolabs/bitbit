@@ -10,10 +10,12 @@
 
 ## What you get
 
-Only the **public surface** — the same as a real newcomer:
+Only the **public surface** — the same as a real newcomer. Start from these
+two; everything you need is reachable from them:
 
-- the GitHub repository (clone, build, run, test);
-- the website and any published artifacts.
+- **the repository — <https://github.com/nerolabs/silt>** — clone, build, run,
+  test;
+- **the website — <https://silthq.com>** — and anything it links.
 
 Nothing from the builders. **The public docs are the interface under test.** If
 you cannot do something because it isn't documented, that is a finding, not a

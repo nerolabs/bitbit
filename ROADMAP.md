@@ -58,11 +58,20 @@ audit, capacity pledging/spill, mutual-TLS pinned identity, encrypted manifests
 + care-links, a quorum chain, web UI/observatory, and a desktop client. The
 silent-loss floors (#46/#60/#64) are fixed and field-proven; the reprovide and
 config-drift gaps (#69/#71) are closed. Cross-network hole-punching is proven
-through cone NAT in an automated Docker harness. The trust plane's *first cut*
-exists — bond-gated standing (#82), launch-window training wheels (#83), and
-blind publish tokens (#84) — but on **honestly-labeled placeholders** (a
-space-lite, in-RAM bond seal; challenge-time PoR), proven only in sim + e2e on a
-single host. Closing that gap for real is the mission work below.
+through cone NAT in an automated Docker harness. **The trust plane's real M0
+mechanism (Gate 4) is now built and internally adversarially tested** — a
+verify-without-fetch proof-of-retrieval, a proof-of-**space-time** bond (a
+space-hard identity-bound plot × a Wesolowski VDF, persisted, bound so N Sybils
+cost N real disks), standing as the time-integral of bond + audit, fork-choice
+reconciliation so partitions heal to the heavier-standing chain, and provable
+equivocation that slashes double-signers — replacing the earlier
+honestly-labeled placeholders (the space-lite in-RAM bond seal; the
+fetch-to-grade PoR). It is proven at the unit, in-process simulation, and
+real-daemon end-to-end tiers (including a two-validator consensus commit over
+TCP). What remains before it can be called *proven*: **independent adversarial
+review** (an acceptance pass then a red-team pass — see [`docs/reviews/`](docs/reviews/))
+and the multi-machine field test; some hardening items are honestly recorded in
+the CHANGELOG and design §6. M0 ships proven or it does not ship.
 
 ## The V1 gates (ordered by dependency and exposure)
 
@@ -90,7 +99,10 @@ from every-byte to rendezvous. Design in `docs/design/cross-network.md`.
 
 **Gate 4 — The car: the mission mechanism, real and multi-machine (the long
 pole).** Replace the labeled placeholders with the genuine M0 composition, built
-from best-in-class components (B8), and prove it:
+from best-in-class components (B8), and prove it. **Status: the mechanism is
+BUILT and internally tested (PRs #117–#126); the remaining bar is independent
+review + the multi-machine field test (4e/#52) + the external V3 red-team, which
+renders M0's yes/no verdict.** The sub-items:
 - **4a (#90) — Real proof-of-retrieval / proof-of-storage.** Adopt a published,
   peer-reviewed scheme (the compact-PoR / PDP / proof-of-space family); the
   novelty is not the primitive but the binding.
