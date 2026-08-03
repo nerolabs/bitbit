@@ -273,6 +273,22 @@ you go, probe:
   `k × chunk-size`, the same file added in `-mode private` vs the default
   `-mode convergent`.
 
+## Tier 4 — become a validator (the M0 trust plane)
+
+Everything above is the **storage** plane. The **trust** plane — earning
+consensus standing from a real storage bond, committing a publish through a
+validator quorum, watching several validators converge, and surviving a
+validator restart — is the heart of M0. It has its own runnable playbooks:
+
+- **[`examples/`](../examples/README.md)** — one-command scripts:
+  `flow4-earned-standing.sh` (earn standing, commit, with an unbonded-refused
+  negative control) and `flows567-convergence-fault-restart.sh` (three
+  validators converge, a survivor quorum commits after a kill, and a restarted
+  validator rejoins with no re-plot). The `silt id` / `silt chain-status`
+  helpers those scripts use are documented there too.
+- **[`user-seam.md`](user-seam.md)** §Role 4 — the validator operations
+  reference, with a concrete copy-paste recipe.
+
 ## Cleanup
 
 `Ctrl-C` each daemon. The stores are just directories — remove them when

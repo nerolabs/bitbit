@@ -52,6 +52,15 @@ private and governable.
   first published, so it will land before it can be denied. Takedown is
   therefore primarily reactive; a pre-publish check catches only
   *known* bad hashes.
+- **A denied root looks like ordinary data loss to a fetcher.** Because
+  compliant nodes answer "not found" (they do not advertise "I refuse
+  this"), a client fetching a root the *local* operator has denied sees a
+  generic erasure-exhaustion error (`stripe … shard(s) lost`), not a
+  distinct "refused by policy" signal. This is deliberate — an operator
+  enforcing a takedown need not broadcast that it is doing so — and it is
+  not a failure: the takedown is per-operator, so the fetcher simply
+  retrieves the same root from any operator that hasn't denied it. Only the
+  operator's own log names the denial (`denylist: N root(s) denied; purged …`).
 
 ## 2. Who runs the denylist? (Not the project.)
 

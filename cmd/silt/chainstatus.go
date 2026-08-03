@@ -42,6 +42,6 @@ func cmdChainStatus(args []string) error {
 	fmt.Printf("  head hash:    %s\n", headHash)
 	fmt.Printf("  blocks:       %d (incl. genesis)\n", len(blocks))
 	fmt.Printf("  entries:      %d committed\n", entries)
-	fmt.Println("  → compare head height AND head hash across replicas: identical means they agree")
+	fmt.Println("  → identical values across replicas mean they agree on the committed history")
 	return nil
 }
