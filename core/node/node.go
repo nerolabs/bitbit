@@ -72,6 +72,13 @@ type Config struct {
 	// standing must be backed by *sustained* held storage (T1b, #78).
 	BondAuditInterval ports.Duration
 	BondMaxAge        ports.Duration
+	// ChainSyncInterval is how often a validator reconciles its chain replica
+	// against the validators it knows (SyncChain) — so a restarted or briefly-
+	// partitioned node catches up on blocks it missed and heals forks, instead
+	// of being stranded at its pre-restart height (F1). Catch-up must RETRY,
+	// not fire once at boot, because peer reputation is re-earned live by bond
+	// audits and isn't ready the instant the daemon starts.
+	ChainSyncInterval ports.Duration
 	// BondVDFDelay is the number of sequential squarings a bond proof must
 	// bind (core/vdf) — the "time" in proof-of-space-time: a prover cannot
 	// answer until it has done this much non-parallelisable work over the
@@ -100,6 +107,7 @@ func DefaultConfig() Config {
 
 		BondAuditInterval: 60 * ports.Second,
 		BondMaxAge:        300 * ports.Second, // ~5 audit intervals unproven → standing lapses
+		ChainSyncInterval: 30 * ports.Second,  // catch-up retries so a restart rejoins once bond audits re-establish peer standing
 		BondVDFDelay:      1000,               // modest; a real deployment raises it for a stronger time floor
 	}
 }
@@ -235,6 +243,13 @@ type Node struct {
 	// attested — an honest validator does not equivocate, even if two competing
 	// proposals reach it before either commits (D2). See chainrole.go.
 	attested map[uint64]ports.Hash
+	// chain-sync loop (F1): chainSyncSeed is the explicit attester set to
+	// reconcile against (may be empty — every learned validator bond is also a
+	// target), chainSyncOnCatchUp fires after a catch-up so the daemon persists,
+	// and chainSyncRunning guards the self-rescheduling tick.
+	chainSyncSeed      []ports.NodeID
+	chainSyncOnCatchUp func(added int)
+	chainSyncRunning   bool
 	// denylist is the operator's local takedown list (nil = none). The
 	// effective set also includes on-chain revocations; see isDenied.
 	denylist *denylist.Set
