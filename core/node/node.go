@@ -230,6 +230,11 @@ type Node struct {
 	chain    *chain.Chain
 	signer   ed25519.PrivateKey
 	onCommit func(chain.Block)
+	// attested records the block hash this validator has signed at each height,
+	// so it NEVER signs a second, different block at a height it already
+	// attested — an honest validator does not equivocate, even if two competing
+	// proposals reach it before either commits (D2). See chainrole.go.
+	attested map[uint64]ports.Hash
 	// denylist is the operator's local takedown list (nil = none). The
 	// effective set also includes on-chain revocations; see isDenied.
 	denylist *denylist.Set
@@ -327,6 +332,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		proofs:         make(map[ports.ChunkID]ports.StorageProof),
 		peerDomains:    make(map[ports.NodeID]uint64),
 		peerBonds:      make(map[ports.NodeID]bondInfo),
+		attested:       make(map[uint64]ports.Hash),
 		peerIssuerKeys: make(map[ports.NodeID]*rsa.PublicKey),
 		serveLoad:      make(map[ports.ChunkID]int),
 		leases:         make(map[ports.ChunkID]ports.Time),

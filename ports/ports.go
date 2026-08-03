@@ -184,6 +184,10 @@ type CreditLedger interface {
 	// DecayStale retires bonded standing not re-proven within maxAge of
 	// now, so consensus standing must be sustained by ongoing challenges.
 	DecayStale(now, maxAge uint64)
+	// SlashEquivocation records a PROVEN consensus double-sign (a validator
+	// signed two different blocks at the same height; see chain.Equivocation),
+	// burying the culprit's standing so it can no longer influence consensus.
+	SlashEquivocation(id NodeID)
 	Balance(n NodeID) int64
 	CanPublish(n NodeID) bool
 	// ChargePublish deducts the publish fee, or returns

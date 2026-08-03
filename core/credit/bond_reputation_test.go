@@ -65,6 +65,26 @@ func TestSharedPlotEarnsStandingForOnlyOneIdentity(t *testing.T) {
 	}
 }
 
+// USE CASE: a PROVEN consensus double-sign is the gravest offense and costs
+// everything — an equivocator is buried below any threshold, barred from
+// proposing or attesting, no matter how much standing it had earned. OUTCOME
+// asserted: strong standing → slashed → deeply negative, well under the bar.
+func TestEquivocationBuriesStanding(t *testing.T) {
+	l := New(50_000, 0)
+	v := id(1)
+	l.RecordBondChallenge(v, v, 64<<20, true, 1)
+	for a := 0; a < 40; a++ {
+		l.RecordAudit(v, id(byte(a)), true) // pile on earned standing
+	}
+	if l.Reputation(v) < attesterBar {
+		t.Fatal("setup: a bonded, audited validator should clear the bar")
+	}
+	l.SlashEquivocation(v)
+	if l.Reputation(v) >= 0 {
+		t.Fatal("a proven double-signer must be buried below zero — barred from consensus for good")
+	}
+}
+
 // USE CASE: a validator that can no longer answer for the bond it committed
 // to should lose its seat. OUTCOME asserted: after a failed challenge it no
 // longer clears the attester bar.

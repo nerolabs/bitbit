@@ -9,6 +9,35 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Gate 4f (#100): equivocation is provable and slashable — double-signing
+  costs standing** (2026-08-03, D2) — the consensus analogue of a storage liar:
+  a validator that signs two DIFFERENT blocks at the SAME height (trying to make
+  two competing histories both look supported) is now caught and penalised. Two
+  parts: **(prevention)** an honest validator records the block hash it signed at
+  each height and REFUSES to sign a different block there — it never equivocates,
+  even if two competing proposals reach it before either commits; **(penalty)** a
+  `chain.Equivocation` is a compact, self-verifying proof (the two conflicting
+  blocks; any node recomputes their hashes, confirms same height + different
+  block, and that the culprit's signature — as proposer OR attester — verifies in
+  both), and `chain.FindEquivocations` extracts every cross-fork double-signer
+  from two competing histories. When a node reconciles across a fork it slashes
+  each proven equivocator in its local ledger (`credit.SlashEquivocation`), a
+  crushing, permanent reputation penalty that buries the culprit below any
+  threshold — so its proposals are refused and its attestations stop counting
+  toward any fork's weight. An honest validator signing sequential heights is
+  never implicated (the heights differ) and a forged accusation fails (the
+  signatures won't verify). Tested (V5): unit — a double-sign is provable, a
+  sequential signer and an unsigned accusation are not, the same block is not a
+  conflict, and every cross-fork culprit is found while one-fork signers are
+  spared; node — a validator REFUSES a second block at a height it attested, and
+  reconciling across a fork slashes the double-signer below zero. Honestly
+  labelled: strict lock-on-attest can stall a height's liveness if a proposal
+  fails and its attesters are needed again there — proper resolution is
+  round-based unlocking (Tendermint POLC), a recorded 4f hardening; on-chain
+  equivocation records so every replica slashes in lockstep (vs. each acting on
+  what it observes) is the other recorded follow-up. Traces to **M0** (a
+  double-signing proposer cannot stand two histories AND keep its standing),
+  **D2**. See `docs/design/gate4-m0-mechanism.md` §3e.
 - **Gate 4f (#100): the chain can reconcile forks — reorg to the heavier
   history** (2026-08-03, D2) — the registry chain was append-only with no
   reorganisation ("first valid block at a height wins"), and `SyncChain`

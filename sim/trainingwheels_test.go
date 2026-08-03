@@ -67,8 +67,13 @@ func TestTrainingWheelsShedThroughTheNodeLoop(t *testing.T) {
 	all := ids
 
 	// OUTCOME 1: young network — a full quorum of independents but NO anchor
-	// is refused. The launch window can't be captured by a Sybil quorum.
-	if err := propose(prop, "young-no-anchor", []ports.NodeID{ids[2], ids[3]}, all, cfg.Quorum, sched); !errors.Is(err, chain.ErrAnchorRequired) {
+	// is refused. The launch window can't be captured by a Sybil quorum. Uses
+	// throwaway independents ids[4]/ids[5]: this proposal fails at height 1, and
+	// an honest validator won't later sign a DIFFERENT block at a height it
+	// already attested (non-equivocation, D2), so the maturity-accumulating
+	// independents (ids[2]/ids[3]/ids[4], each at a distinct committed height)
+	// must not be spent on the failed attempt.
+	if err := propose(prop, "young-no-anchor", []ports.NodeID{ids[4], ids[5]}, all, cfg.Quorum, sched); !errors.Is(err, chain.ErrAnchorRequired) {
 		t.Fatalf("immature commit without an anchor must be refused; got %v", err)
 	}
 
