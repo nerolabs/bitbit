@@ -206,6 +206,9 @@ var (
 	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
 	ErrBlockVersion   = errors.New("chain: unsupported block version")
 	ErrPublisherEntry = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
+	ErrEmptyFork      = errors.New("chain: cannot reconcile an empty fork")
+	ErrNoGenesis      = errors.New("chain: local replica has no genesis to anchor a reconcile")
+	ErrForeignGenesis = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -453,6 +456,119 @@ func (c *Chain) apply(b Block) {
 			c.validatorsSeen[id] = true
 		}
 	}
+}
+
+// Weight is the chain's fork-choice weight: the cumulative count, over every
+// block, of DISTINCT qualified non-proposer attestations. More real
+// validators standing behind a history makes it heavier — so the heaviest
+// chain is the one the most earned standing has committed to, not merely the
+// longest (which a fast Sybil could extend). Signatures are objective; the
+// qualification bar is the local reputation view, which converges among
+// honest replicas. (Making the weight fully partition-independent — objective
+// on-chain PoST-bond weight — is the recorded D2 hardening; see §3e.)
+func (c *Chain) Weight() int64 {
+	var w int64
+	for i := range c.blocks {
+		w += c.blockWeight(&c.blocks[i])
+	}
+	return w
+}
+
+// blockWeight counts the distinct, qualified, non-proposer attesters whose
+// signatures verify over this block — the same rule ValidateCommit counts a
+// quorum by, so a committed block's weight is exactly its qualified support.
+func (c *Chain) blockWeight(b *Block) int64 {
+	h := b.Hash()
+	seen := make(map[ports.NodeID]bool)
+	var n int64
+	for _, a := range b.Atts {
+		if len(a.PubKey) != ed25519.PublicKeySize {
+			continue
+		}
+		id := a.AttesterID()
+		if seen[id] || id == b.ProposerID() {
+			continue
+		}
+		if !ed25519.Verify(ed25519.PublicKey(a.PubKey), h[:], a.Sig) {
+			continue
+		}
+		if c.rep(id) < c.cfg.MinAttesterRep {
+			continue
+		}
+		seen[id] = true
+		n++
+	}
+	return n
+}
+
+// Reconcile heals a fork (D2): given a peer's full chain from genesis, it
+// re-validates the whole thing in a throwaway replica and, iff that chain is
+// strictly heavier than ours (ties broken by the lower head hash), ADOPTS it —
+// rolling our replica back to the common genesis and forward onto the heavier
+// history. A diverged node therefore stops being forked forever (the old
+// SyncChain just `break`ed). The fork must share OUR genesis, so a peer cannot
+// swap the chain out from under us with a heavier foreign history; and every
+// block is fully re-validated, so a lying peer wastes our time but cannot feed
+// us an invalid chain. Returns whether we adopted the fork.
+func (c *Chain) Reconcile(fork []Block) (bool, error) {
+	if len(fork) == 0 {
+		return false, ErrEmptyFork
+	}
+	if len(c.blocks) == 0 {
+		return false, ErrNoGenesis
+	}
+	if fork[0].Height != 0 || fork[0].Hash() != c.blocks[0].Hash() {
+		return false, ErrForeignGenesis // must branch from our own genesis
+	}
+	// Re-validate the candidate history end to end in a fresh replica.
+	tmp := New(c.cfg, c.rep)
+	tmp.tokenQuorum, tmp.issuerKey = c.tokenQuorum, c.issuerKey
+	if err := tmp.AppendGenesis(fork[0]); err != nil {
+		return false, err
+	}
+	for i := 1; i < len(fork); i++ {
+		if err := tmp.Append(fork[i]); err != nil {
+			return false, fmt.Errorf("reconcile: fork block %d (height %d): %w", i, fork[i].Height, err)
+		}
+	}
+	if !heavier(tmp, c) {
+		return false, nil
+	}
+	c.adopt(tmp)
+	return true, nil
+}
+
+// heavier reports whether chain a should win fork-choice over b: strictly more
+// weight, or equal weight with a deterministic lower-head-hash tiebreak so
+// every honest node picks the same winner.
+func heavier(a, b *Chain) bool {
+	wa, wb := a.Weight(), b.Weight()
+	if wa != wb {
+		return wa > wb
+	}
+	ha, hb := a.blocks[len(a.blocks)-1].Hash(), b.blocks[len(b.blocks)-1].Hash()
+	return bytesLess(ha[:], hb[:])
+}
+
+func bytesLess(a, b []byte) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// adopt replaces this replica's state with a reconciled fork's. Because all
+// derived state (byRoot, spent, revoked, validatorsSeen) is a pure function of
+// the blocks, swapping the whole precomputed set is the reorg — no fragile
+// per-record undo.
+func (c *Chain) adopt(t *Chain) {
+	c.blocks = t.blocks
+	c.byRoot = t.byRoot
+	c.revoked = t.revoked
+	c.validatorsSeen = t.validatorsSeen
+	c.spent = t.spent
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {
