@@ -42,6 +42,10 @@ type account struct {
 	bondFails     int
 	firstSeenTick uint64
 	lastBondTick  uint64
+	// equivocations counts PROVEN consensus double-signs (core/chain). It is
+	// the gravest offense — an attack on consensus itself — so it does not
+	// merely dent standing, it buries it below any threshold forever.
+	equivocations int
 }
 
 // Ledger implements ports.CreditLedger plus the observability the sim's
@@ -163,6 +167,22 @@ func (l *Ledger) RecordBondChallenge(prover ports.NodeID, root ports.Hash, prove
 	a.bondFails++
 }
 
+// equivocationSlash is the reputation penalty per proven double-sign — large
+// enough to bury any conceivable earned standing, so an equivocator is barred
+// from proposing and attesting and its attestations stop counting toward any
+// fork's weight. Double-signing attacks consensus itself; it costs everything.
+const equivocationSlash = 1 << 40
+
+// SlashEquivocation records a proven consensus double-sign against a validator
+// (evidence verified by chain.VerifyEquivocation before this is called). It
+// zeroes the node's bonded standing and applies a crushing, permanent
+// reputation penalty, so the equivocator can no longer influence consensus.
+func (l *Ledger) SlashEquivocation(id ports.NodeID) {
+	a := l.acct(id)
+	a.equivocations++
+	a.bondedBytes = 0
+}
+
 // DecayStale zeroes any standing whose last passing bond-challenge is
 // older than maxAge, so a node that stops answering loses standing
 // without anyone having to catch it lying. The validator/caretaker loop
@@ -202,7 +222,8 @@ func (l *Ledger) Reputation(n ports.NodeID) int64 {
 	return a.bondedBytes/bondUnit +
 		int64(a.auditsPassed)*25 -
 		int64(a.auditsFailed)*250 -
-		int64(a.bondFails)*250
+		int64(a.bondFails)*250 -
+		int64(a.equivocations)*equivocationSlash
 }
 
 func (l *Ledger) Balance(n ports.NodeID) int64      { return l.acct(n).balance }

@@ -43,7 +43,17 @@ func (n *Node) handleChain(from ports.NodeID, msg ports.Message) bool {
 			n.reply(from, msg, ports.Message{Kind: ports.MsgAttestReply, OK: false})
 			return true
 		}
+		// Never equivocate: refuse to sign a DIFFERENT block at a height we
+		// already attested, even if two competing proposals arrive before
+		// either commits. An honest validator's signature at a height is
+		// final; this is what makes a double-sign proof (chain.Equivocation)
+		// evidence of malice, not an accident.
+		if prev, ok := n.attested[b.Height]; ok && prev != b.Hash() {
+			n.reply(from, msg, ports.Message{Kind: ports.MsgAttestReply, OK: false})
+			return true
+		}
 		att := chain.Attest(b, n.signer)
+		n.attested[b.Height] = b.Hash()
 		raw, _ := attEncode(att)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgAttestReply, OK: true, Data: raw})
 	case ports.MsgCommitBlock:
@@ -177,6 +187,23 @@ func (n *Node) broadcastCommit(b *chain.Block, validators []ports.NodeID, i int,
 		func(ports.Message, error) { n.broadcastCommit(b, validators, i+1, done) })
 }
 
+// slashEquivocators finds validators who signed a different block at the same
+// height across two competing histories (the abandoned fork and the adopted
+// one) and slashes each in the local ledger — a proven double-sign costs
+// standing (D2). The evidence is self-verifying (chain.VerifyEquivocation,
+// inside FindEquivocations), so this cannot be triggered by an honest validator
+// signing sequential heights. On-chain inclusion so every replica slashes in
+// lockstep is the recorded follow-up; here each validator acts on what it sees.
+func (n *Node) slashEquivocators(a, b []chain.Block) {
+	if n.ledger == nil {
+		return
+	}
+	for _, e := range chain.FindEquivocations(a, b) {
+		n.ledger.SlashEquivocation(e.CulpritID())
+		n.logf(ports.LogWarn, "validator slashed for equivocation", "culprit", e.CulpritID(), "height", e.A.Height)
+	}
+}
+
 // SyncChain reconciles the local replica against peers — how a latecomer or a
 // restarted daemon catches up AND how a partitioned validator heals a fork
 // (D2). It fetches each peer's full chain and asks the replica to Reconcile:
@@ -209,10 +236,12 @@ func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) 
 				if err == nil && resp.OK {
 					if full, derr := chain.DecodeBlocks(resp.Data); derr == nil && len(full) > 0 {
 						before := n.chain.Len()
+						old := n.chain.Blocks(0) // snapshot to catch cross-fork double-signs
 						if ok, rerr := n.chain.Reconcile(full); ok {
 							if d := n.chain.Len() - before; d > 0 {
 								added += d
 							}
+							n.slashEquivocators(old, n.chain.Blocks(0))
 							n.logf(ports.LogInfo, "chain reconciled from peer", "peer", peers[i], "len", n.chain.Len())
 						} else if rerr != nil {
 							n.logf(ports.LogDebug, "peer chain not adopted", "peer", peers[i], "err", rerr)
