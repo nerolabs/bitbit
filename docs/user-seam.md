@@ -95,24 +95,43 @@ commands below are the actually-tested flow (see `e2e/e2e_test.go`
 
 ### Earn standing and commit through consensus
 
+**First, learn the NodeIDs.** Validator wiring is mutual — to start A you name
+B in `-attesters`, and to start B you `-bootstrap` to A — so you need the peer
+IDs up front. `silt id` prints the ID a daemon *would* use **without launching
+one** (`-id-seed N` for a deterministic demo identity, or `-store DIR` for the
+persistent keyfile a real daemon reads):
+
 ```sh
-# Validator A: registry + validator + a storage bond. -min-rep 100 means
-# standing must be EARNED (no -quorum 0 rubber-stamp). Fast bond audit so
-# standing accrues quickly. Name B (a deterministic id) as an attester.
-silt daemon -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store dA \
-  -validator -min-rep 100 -quorum 1 -attesters <ID_B> \
+silt id -id-seed 1        # A's NodeID  (call it <ID_A>)
+silt id -id-seed 2        # B's NodeID  (call it <ID_B>)
+```
+
+Now stand up the two validators (the `-id-seed` here makes each daemon adopt the
+identity you just printed, so the IDs match):
+
+```sh
+# Validator B first, so A can bootstrap to it. B runs its own bond and names A
+# as its attester. Copy B's `peer:` line from its output → that's <B> below.
+silt daemon -id-seed 2 -listen 127.0.0.1:7102 -store dB \
+  -validator -min-rep 100 -quorum 1 -attesters <ID_A> \
   -bond 8M -bond-audit 1s -capacity 1G
 
-# Validator B: joins A, runs its own bond. Each audits the other, so each
-# earns the other's standing in its own ledger.
-silt daemon -listen 127.0.0.1:7102 -store dB -bootstrap <A> \
-  -validator -min-rep 100 -quorum 1 -bond 8M -bond-audit 1s -capacity 1G
+# Validator A: registry + validator + a storage bond. -min-rep 100 means
+# standing must be EARNED (no -quorum 0 rubber-stamp). Fast bond audit so
+# standing accrues quickly. Names B as its attester and bootstraps to it.
+silt daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store dA \
+  -validator -min-rep 100 -quorum 1 -attesters <ID_B> -bootstrap <B> \
+  -bond 8M -bond-audit 1s -capacity 1G
 
 # Publish through consensus: the entry commits only once the bond audits have
 # earned real standing on both sides (a few 1s rounds). A success is a genuine
-# quorum commit on earned standing — NOT a self-commit.
+# quorum commit on earned standing — NOT a self-commit. <A> is A's peer: line,
+# <regRef> is A's registry: line, both copied verbatim from A's output.
 silt swarm add FILE -peers <A> -registry <regRef>
 ```
+
+For the whole thing as a runnable script (plus 3-validator convergence, fault
+tolerance, and restart), see [`examples/`](../examples/README.md).
 
 | Operation | Flag(s) | Expected | How to verify |
 |---|---|---|---|
@@ -126,15 +145,21 @@ silt swarm add FILE -peers <A> -registry <regRef>
 | Training wheels | `-anchors ID[,…] -anchor-quorum A -mature-validators M` | a young network's commit also needs anchor sign-off, until M distinct independents have attested — then it sheds automatically | before maturity an anchorless quorum is refused; after, it commits |
 | Trusted mode (opt out of privacy) | `-allow-publisher` | permits a durable Publisher→root record | off by default; only for explicitly trusted deployments |
 | **Restart survival** | stop, rerun with the same `-store DIR` | bond plot + issuer key + chain reload | it is a validator again immediately — **no re-plot**, standing intact |
+| Inspect the chain | `silt chain-status -store DIR` | read-only: head height, head hash, block/entry counts | run it on each replica — same head height **and** hash = they agree |
 
 ### What the QA phase should exercise here (roadmap #52 field test)
 
+Runnable as [`examples/flows567-convergence-fault-restart.sh`](../examples/README.md)
+— or by hand:
+
 - **Convergence** — several validators, a publish, every replica agreeing on
-  the committed history.
+  the committed history. Check with `silt chain-status -store DIR` on each: an
+  identical head height **and** head hash means they agree byte-for-byte (no
+  need to hash `chain.cbor`).
 - **Fault tolerance** — kill one validator mid-flight; a quorum of the rest
   still commits.
 - **Restart-standing** — restart a validator; it rejoins with standing intact
-  (the persisted plot), no re-plot delay.
+  (the persisted plot), no re-plot delay, and its chain catches up to the head.
 - **The three M0 denials** — see [the red-team brief](reviews/m0-redteam-brief.md)
   and the design doc's §6.
 
@@ -144,7 +169,7 @@ silt swarm add FILE -peers <A> -registry <regRef>
 
 | Concern | How |
 |---|---|
-| Identity | a keyfile in `<store>/identity.pem` (persistent), or `-id-seed N` for scripted/deterministic demos |
+| Identity | a keyfile in `<store>/identity.pem` (persistent), or `-id-seed N` for scripted/deterministic demos. `silt id [-id-seed N \| -store DIR]` prints a node's ID **without launching it** — so you can fill `-attesters <ID>` before first start |
 | Logging | `-log info` (narrates placements/commits/repairs) or `-debug` (firehose) → `<store>/debug.log` |
 | The whole thing in one process | `silt sim run <scenario>` and `silt net demo -nodes N` — deterministic, no sockets |
 

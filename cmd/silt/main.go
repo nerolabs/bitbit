@@ -34,8 +34,12 @@ Usage:
   silt sim run capacity | consensus | bondstanding | takedown  [-nodes N] [-seed S]
   silt net demo        [-nodes N] [-size B]   (real TCP sockets)
 
+  silt id           [-id-seed N | -store DIR] [-listen ADDR]   (print a node's ID without launching it)
+  silt chain-status [-store DIR]                               (read-only: head height + hash of a validator's chain)
+
   silt daemon [-listen ADDR] [-store DIR] [-capacity 2G] [-bootstrap ID@ADDR,...]
                 [-dns-seed DOMAIN] [-serve-registry ADDR | -registry REF] [-care CARELINK,...]
+                [-validator -min-rep N -quorum Q -attesters ID[,...] -bond 8M]
   silt swarm add <file>  -peers ID@ADDR[,...] -registry REF
   silt swarm get <link>  -o <out> -peers ID@ADDR[,...] -registry REF
 
@@ -68,6 +72,10 @@ func main() {
 		err = cmdSim(os.Args[2:])
 	case "net":
 		err = cmdNet(os.Args[2:])
+	case "id":
+		err = cmdID(os.Args[2:])
+	case "chain-status":
+		err = cmdChainStatus(os.Args[2:])
 	case "daemon":
 		err = cmdDaemon(os.Args[2:])
 	case "client":

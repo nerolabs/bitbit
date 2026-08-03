@@ -97,8 +97,35 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   extends to the docs). See the M0 acceptance report.
 
 ### Added
+- **Validator onboarding (acceptance re-run new-F1/new-F2): `silt id`, `silt
+  chain-status`, and a runnable `examples/` playbook** (2026-08-03) — the M0
+  acceptance re-run PASSED (all 9 flows, all 8 tenets, zero `broken`), leaving
+  two "major" gaps that both blocked a literal newcomer from the validator flow
+  without changing any mechanism. **(new-F1)** Role-4 setup was chicken-and-egg:
+  `-attesters <ID_B>` needs B's NodeID, but nothing told you how to learn it
+  before launch (the acceptance script resorted to booting a throwaway daemon to
+  read its `peer:` line). New `silt id [-id-seed N | -store DIR] [-listen ADDR]`
+  prints the NodeID a daemon *would* use without launching one — resolving the
+  identity exactly as the daemon does — so the topology is wireable up front.
+  **(new-F2)** there was no operator playbook for the multi-validator flows 5–7
+  and no way to confirm convergence except hashing `chain.cbor` by hand. New
+  read-only `silt chain-status [-store DIR]` prints a replica's head height, head
+  hash, and block/entry counts — identical head height AND hash across replicas
+  proves they agree; a rising head after a restart proves catch-up. And a new
+  top-level **`examples/`** directory ships four bash playbooks
+  (`flow2-publish-fetch`, `flow4-earned-standing`,
+  `flows567-convergence-fault-restart`, `flow8-takedown`) — the flows-5–7 script
+  IS the field test roadmap #52 owes itself, now runnable in one command. The
+  playbooks track only the PIDs they start (no blanket `pkill`) and use both new
+  commands. `docs/user-seam.md` Role 4 gains a concrete `silt id`-based recipe
+  and points at `examples/`. All four playbooks pass end to end locally
+  (including the restarted-validator chain catch-up on real daemons — the
+  daemon-level confirmation of the F1 restart fix). Traces to **S5** (an operator
+  can see and reproduce what's true), **#52**. Adopted from the M0 acceptance
+  reproduction scripts.
 - **Gate 4d (#93): the publish-token issuer key persists across restarts**
   (2026-08-03) — a validator that issues blind-signed publish tokens generated a
+  FRESH RSA key on every daemon start, which orphaned every token it had already
   FRESH RSA key on every daemon start, which orphaned every token it had already
   signed (they no longer verify) and staled every issuer public key its peers had
   cached. A new `adapters/diskissuer` persists the key (PKCS#1 DER, written
