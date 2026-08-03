@@ -29,6 +29,7 @@ Run **one at a time** — each binds fixed loopback ports (7100–7103, and
 | `flow4-earned-standing.sh` | 4 | Earned-standing commit **plus** a negative control: an unbonded publish is refused — not a rubber-stamp. |
 | `flows567-convergence-fault-restart.sh` | 5, 6, 7 | 3-validator convergence (identical head hash), survivor-quorum commit after a kill, and restart with **no re-plot** + chain catch-up + storage re-announce. |
 | `flow8-takedown.sh` | 8 | Per-hash denylist on one operator; the other operator still serves. No global switch. |
+| `flow-tokens-issuer-restart.sh` | 7 (token sub-claim) | Publisher-privacy path: validators require blind publish tokens, a tokened publish commits (no Publisher), then the **issuer is restarted** and still issues tokens its peers accept — the issuer key persists byte-identical (#126). Includes a token-less-publish-refused negative control. |
 
 ## Two helpers the playbooks lean on
 

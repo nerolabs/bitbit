@@ -9,6 +9,32 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Doc-truth reconciliation + a token round-trip playbook (acceptance round 3)**
+  (2026-08-03) — the third acceptance re-run PASSED again (all 9 flows, all 8
+  tenets, **zero code defects**); its findings were stale docs and one
+  discoverability gap, several making the product look *worse* than it is. **(F1)**
+  `risk-register.md` row 14 claimed a default publish still writes a permanent
+  `Publisher→root` map — but the chain default now REJECTS Publisher entries
+  (`-allow-publisher=false`), so a default publish records no author; updated to
+  CLOSED-by-default, with blind tokens as the additional opt-in for full
+  unlinkability. **(F2)** `threat-catalog.md` F1 still said "the RSA issuer key is
+  in-RAM (persistence is a follow-up)"; it persists now (#126, `adapters/diskissuer`)
+  — corrected. **(F3)** the website said publishing is "cryptographically
+  unlinkable" as an unqualified property; qualified to "names no author by default —
+  with opt-in blind tokens, cryptographically unlinkable," matching the honest
+  in-repo docs. **(F4)** the headline walkthrough (`local-test-network.md`) never
+  reached the trust-plane flows 4–7; added a "Tier 4 — become a validator" section
+  pointing at `examples/` and `user-seam.md` §Role 4. **(F5, doc-note only per
+  decision)** documented that a denied root reads to a fetcher as ordinary
+  data-loss (compliant nodes answer "not found" rather than advertising a refusal —
+  deliberate; the fetcher retrieves from another operator). **(F6)** the F7
+  sub-claim "the tokens it issued stay valid across a restart" had no operator-level
+  repro; added **`examples/flow-tokens-issuer-restart.sh`** — validators require
+  blind tokens, a tokened publish commits (no Publisher), the issuer is restarted
+  (its `issuer.key` reloads byte-identical, no re-mint), and a token issued by the
+  restarted issuer still commits (peers accept it), with a token-less-publish-refused
+  negative control. Also made `silt chain-status`'s hint line un-ambiguous to grep.
+  No mechanism changed. Traces to **S5**.
 - **Docs & UX polish (acceptance re-run new-F3/F4/F5/F6)** (2026-08-03) — four
   minor/cosmetic gaps the passing re-run surfaced, each a small correctness or
   clarity fix, no mechanism change. **(F3)** the Tier-1 "erasure by hand"

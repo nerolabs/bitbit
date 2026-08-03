@@ -110,7 +110,7 @@ limits operator-configurable with sane defaults.
 - E5 **Revocation-as-weapon** ~ — quorum revokes lawful content (auditable, but abuse remains; adoption-bound).
 
 ## F. Privacy / deanonymization (beyond the doc'd traffic-analysis)
-- F1 **Publisher identity on-chain** ✓ — CLOSED (T3/#84). A publish is authorized by a quorum-issued **blind publish token** (a serial blind-signed by k distinct validators), so a committed entry carries the token and NO Publisher NodeID — authorship is unlinked from the durable key. Residuals (labeled): a colluding validator set narrows the anonymity *set* to same-epoch requesters of the same subset (use a canonical set); the RSA issuer key is in-RAM (cross-restart persistence + on-chain issuer registration are follow-ups).
+- F1 **Publisher identity on-chain** ✓ — CLOSED (T3/#84). A publish is authorized by a quorum-issued **blind publish token** (a serial blind-signed by k distinct validators), so a committed entry carries the token and NO Publisher NodeID — authorship is unlinked from the durable key. Residuals (labeled): a colluding validator set narrows the anonymity *set* to same-epoch requesters of the same subset (use a canonical set). The RSA issuer key now **persists** across restarts (#126, `adapters/diskissuer` — tokens it signed stay verifiable and peers' cached keys don't go stale); on-chain issuer registration remains a follow-up.
 - F2 **Access-pattern correlation** ✗ — a participating node sees which roots you fetch/hold over time.
 - F3 **Timing/size fingerprinting** ✗ — chunk sizes + timing fingerprint files even encrypted (no padding).
 - F4 **IP↔NodeID persistence** ✗ — reputation needs a long-lived identity; long-lived identity is persistent trackability. A genuine tension.
