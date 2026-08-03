@@ -31,6 +31,7 @@ Usage:
   silt sim run churn   [-nodes N] [-seed S] [-kill-frac F] [-waves W] [-caretakers C]
   silt sim run economy [-nodes N] [-seed S] [-freeloaders F] [-fee C]
   silt sim run audit   [-nodes N] [-seed S] [-liars L]
+  silt sim run capacity | consensus | bondstanding | takedown  [-nodes N] [-seed S]
   silt net demo        [-nodes N] [-size B]   (real TCP sockets)
 
   silt daemon [-listen ADDR] [-store DIR] [-capacity 2G] [-bootstrap ID@ADDR,...]

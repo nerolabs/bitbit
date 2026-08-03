@@ -65,10 +65,10 @@ step — is [`docs/v1-test.md`](docs/v1-test.md).
 ```sh
 go build -o silt ./cmd/silt
 
-./silt add somefile.pdf            # prints the file's Merkle root
+./silt add somefile.pdf            # prints a silt: link (silt:v1:<root>:<key>)
 ./silt ls                          # registry contents
-./silt info <root>                 # stripe map: every shard, its stripe, its presence
-./silt get <root> -o restored.pdf  # full verify-everything retrieval
+./silt info <silt-link>            # stripe map: every shard, its stripe, its presence
+./silt get <silt-link> -o restored.pdf  # full verify-everything retrieval
 ./silt add secret.txt -mode private  # random key, no dedup, no confirmation attack
 ./silt add big.iso -k 4 -n 7       # custom erasure geometry
 
@@ -111,7 +111,7 @@ version:
 ./silt swarm add movie.mp4 -peers <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
 
 # retrieve from anywhere (kill a daemon first, for sport)
-./silt swarm get <root> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
+./silt swarm get <silt-link> -o out.mp4 -peers <ID>@127.0.0.1:7101 -registry <ID>@https://127.0.0.1:7100
 ```
 
 The registry is served over **key-pinned HTTPS**, so its reference is

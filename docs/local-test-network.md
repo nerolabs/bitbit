@@ -162,10 +162,10 @@ the file across the daemons, and leaves, keeping nothing:
 silt swarm add movie.bin \
   -peers    <SEED_ID>@127.0.0.1:7101 \
   -registry <SEED_ID>@https://127.0.0.1:7100
-#  → prints the root hash. Note it.
+#  → prints a silt: link (silt:v1:<root>:<key>). Note the whole link.
 
 # retrieve it — the publisher is already gone, so this comes from the swarm
-silt swarm get <root> -o got.bin \
+silt swarm get <silt-link> -o got.bin \
   -peers    <SEED_ID>@127.0.0.1:7101 \
   -registry <SEED_ID>@https://127.0.0.1:7100
 diff movie.bin got.bin && echo "RETRIEVED FROM THE SWARM"
@@ -175,7 +175,7 @@ diff movie.bin got.bin && echo "RETRIEVED FROM THE SWARM"
 terminals (kill a holder), then fetch again:
 
 ```sh
-silt swarm get <root> -o got2.bin \
+silt swarm get <silt-link> -o got2.bin \
   -peers <SEED_ID>@127.0.0.1:7101 -registry <SEED_ID>@https://127.0.0.1:7100
 diff movie.bin got2.bin && echo "SURVIVED A NODE DEATH"
 ```
