@@ -1,6 +1,7 @@
 package link
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nerolabs/silt/ports"
@@ -41,6 +42,19 @@ func TestParseAnyCare(t *testing.T) {
 	}
 	if fromFull != fromCare || fromFull != h.Care() {
 		t.Fatal("both link forms must degrade to the same care capability")
+	}
+}
+
+// Parsing a care link as a FULL link fails with a message that names the care
+// link (not a bare "not a link", which reads like a typo — acceptance F6).
+func TestParseFullRejectsCareLinkClearly(t *testing.T) {
+	h := handle()
+	_, err := Parse(h.Care().String())
+	if err == nil {
+		t.Fatal("a care link must not parse as a full (fetch) link")
+	}
+	if !strings.Contains(err.Error(), "care link") {
+		t.Fatalf("error should name the care link, got: %v", err)
 	}
 }
 

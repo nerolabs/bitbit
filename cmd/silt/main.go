@@ -175,6 +175,12 @@ func cmdGet(args []string) error {
 	}
 	h, err := link.Parse(pos[0])
 	if err != nil {
+		if _, cerr := link.ParseCare(pos[0]); cerr == nil {
+			return fmt.Errorf("that's a care link — repair/audit only, it cannot decrypt content.\n"+
+				"  inspect its structure:   silt info %s\n"+
+				"  repair it as a caretaker: silt daemon -care %s\n"+
+				"  to fetch the bytes you need the full silt:v1:ROOT:KEY link", pos[0], pos[0])
+		}
 		return err
 	}
 	store, reg, err := openBackend(*storeDir)

@@ -47,7 +47,7 @@ func cmdDaemon(args []string) error {
 	listen := fs.String("listen", "127.0.0.1:0", "TCP listen address for swarm traffic")
 	storeDir := fs.String("store", ".silt-daemon", "chunk store directory")
 	bootstrap := fs.String("bootstrap", "", "comma-separated peer list: ID@HOST:PORT")
-	registryURL := fs.String("registry", "", "URL of the swarm registry (http://host:port)")
+	registryURL := fs.String("registry", "", "registry ref: ID@https://host:port (key-pinned — copy the daemon's 'registry:' line verbatim; a bare http:// or unkeyed https:// is refused)")
 	serveRegistry := fs.String("serve-registry", "", "host the registry at this address (persisted in the store dir)")
 	idSeed := fs.Int64("id-seed", 0, "derive the identity from a seed (default: persistent keyfile) — for scripted demos")
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
