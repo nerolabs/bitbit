@@ -17,7 +17,7 @@ a hands-on, end-to-end walkthrough: run the whole swarm in one command, then
 stand up a real multi-node network on your laptop, publish a file, and watch it
 survive a node death.
 
-## Status: storage plane field-proven; trust plane a first cut
+## Status: storage plane field-proven; trust plane mechanism built, review pending
 
 silt has two planes. The **storage plane** — content-addressed,
 erasure-coded, peer-served chunks with NAT traversal — is
@@ -25,11 +25,21 @@ erasure-coded, peer-served chunks with NAT traversal — is
 silent-loss failure shapes fixed (#46/#60/#64), and cross-network
 publish/fetch proven through cone NAT via TCP hole-punching (CI Docker
 harness). The **trust plane** — consensus-secured registry, reputation,
-and revocation — is a **first cut on honestly-labeled placeholders**
-(an in-RAM space-lite bond, a toy proof-of-retrieval), proven in
-simulation and single-host end-to-end only. V1 ships the real trilemma
-mechanism (real proof-of-retrieval, a memory-hard bond, unlinkable
-standing) proven multi-machine — it is not done yet.
+and revocation — is where the M0 trilemma lives, and its **real mechanism
+is now built and internally adversarially tested** (Gate 4): a real
+verify-without-fetch proof-of-retrieval, a proof-of-**space-time** bond
+(a space-hard identity-bound plot × a Wesolowski VDF, persisted, with the
+per-identity binding that makes N Sybils cost N real disks), standing
+composed as the time-integral of bond+audit, fork-choice reconciliation so
+partitions heal to the heavier-standing chain, and provable equivocation
+that slashes a double-signer. It is proven at the unit, in-process
+simulation, and real-daemon end-to-end tiers (including a two-validator
+consensus commit over TCP). What it is **not** yet: **independently
+reviewed**. Before the trust plane can be called *proven*, it faces a
+separate adversarial red-team and an operator acceptance pass — see
+[`docs/reviews/`](docs/reviews/) for the handoff briefs — and some hardening
+items remain honestly recorded in the CHANGELOG and the design doc's §6. M0
+ships proven or it does not ship.
 
 The 0.x releases are **experimental learning releases**, not steps to
 V1: the cadence is learning phase → feature-complete = 0.9.0 (RC line)

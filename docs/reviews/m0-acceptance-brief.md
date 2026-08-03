@@ -19,10 +19,18 @@ Nothing from the builders. **The public docs are the interface under test.** If
 you cannot do something because it isn't documented, that is a finding, not a
 question to ask.
 
+> **This brief is the WHAT and the WHY only** — the cases to test and what
+> "pass" means. **Every HOW — every command, flag, and step — you get from the
+> public docs**, discovered the way any newcomer would. This brief deliberately
+> does not tell you how to run anything, or which doc to open. If a case can't
+> be accomplished from the public docs, that undocumented gap is your single
+> most important finding.
+
 ## The claims to verify
 
-Read `docs/TENETS.md` and the website's description of what silt is, then hold
-the system to its own word. The headline claims (verify each *by doing it*):
+silt makes the following promises (in its tenets and on its website). Confirm
+each is actually stated in the public materials, then hold the system to it *by
+doing it*:
 
 - **"The link is the primitive."** A `silt:` link is all a user needs to
   retrieve and decrypt; a `siltcare:` link repairs/audits without decrypting.
@@ -49,16 +57,17 @@ For each: follow the documented steps, record what actually happens, and mark
    a *different* node/process.
 3. **Care link** — repair/audit a file with a `siltcare:` link; confirm you
    cannot read its contents.
-4. **Become a validator** — run a node that earns standing via a bond and helps
-   commit a publish through consensus (the earned-standing path, not a trusted
-   `-quorum 0` shortcut).
+4. **Become a validator** — run a node that earns standing by proving real held
+   storage over time, and helps commit a publish through consensus on the
+   *earned-standing* path (not a trusted rubber-stamp where any node can write).
 5. **Multi-validator convergence** — stand up several validators; publish; every
    replica ends up agreeing on the committed history.
 6. **Fault tolerance** — kill one validator mid-flight; a quorum of the rest
    still commits.
-7. **Restart survival** — restart a validator; its bond standing and issuer key
-   survive (it is a validator again immediately, no re-plot). Restart a storage
-   node; its content is still discoverable and served.
+7. **Restart survival** — restart a validator; its standing comes back
+   immediately, without redoing the expensive one-time bond setup, and the
+   tokens it issued stay valid. Restart a storage node; its content is still
+   discoverable and served.
 8. **Takedown** — deny a specific root on one operator; confirm it stops serving
    there and that nothing removed it *everywhere*.
 9. **Cross-NAT** — run two nodes behind (simulated) NATs and move a file between

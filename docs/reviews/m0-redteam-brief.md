@@ -56,6 +56,14 @@ Run each as its own fresh session. Do not dilute — one mindset, exhaustively.
 - **The liar prover.** Claim storage you do not hold and pass an audit; or make
   an honest host fail one.
 
+## The attack surface
+
+[`docs/user-seam.md`](../user-seam.md) is the complete set of operations silt
+exposes, by role — your attack-surface map. [`docs/test-topologies.md`](../test-topologies.md)
+is how to stand up the network shapes you'll need (a validator swarm, real
+NATs, a partition). Subvert any operation in the seam to violate a promise
+below.
+
 ## Where the mechanism lives
 
 - Sybil bond: `core/bond` (space-hard plot), `core/vdf` (the time), the plot's
