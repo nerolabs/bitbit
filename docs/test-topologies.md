@@ -36,19 +36,29 @@ Publish from an ephemeral client; kill a daemon and re-fetch. Full walkthrough:
 ## 2 — Validator swarm (consensus, the M0 surface)
 
 Two or more `-validator` daemons with bonds, committing a publish through
-earned standing. Manual commands: [user-seam.md](user-seam.md) Role 4. The
-**automated** version is the e2e harness — real daemons as OS processes over
-real TCP:
+earned standing. Manual commands: [user-seam.md](user-seam.md) Role 4.
+
+The **fastest stand-up** is the runnable [`examples/`](../examples/README.md)
+playbooks — `flow4-earned-standing.sh` (a validator quorum + an unbonded-refused
+negative control) and `flows567-convergence-fault-restart.sh` (three validators,
+kill one, restart one). They use two helpers you'll want for any adversarial
+setup: **`silt id`** prints a node's NodeID *without launching it* (so you can
+fill `-attesters <ID>`/`-bootstrap <ID>@ADDR` before the peer exists), and
+**`silt chain-status -store DIR`** prints a replica's head height + head hash —
+your read-only instrument for whether two replicas actually agree. There is also
+an **automated e2e** harness (real daemons over real TCP):
 
 ```sh
 go test ./e2e/ -run TestBondEarnedStandingCommitsOverTCP -v   # -short skips process spawns
 ```
 
 To exercise the field scenarios (convergence across replicas, kill-a-validator,
-restart-standing), scale that harness up: more `-validator` daemons, a higher
-`-quorum`, kill/restart a daemon between publishes and assert the chain still
-commits and the restarted node keeps its standing (its `plot/` reloads). Doing
-these from the [user-seam](user-seam.md) commands is the roadmap-#52 field test.
+restart-standing), scale up: more `-validator` daemons, a higher `-quorum`,
+kill/restart a daemon between publishes; confirm each replica agrees with
+`silt chain-status` (same head height AND hash) and that a restarted node keeps
+its standing (its `plot/` reloads, no re-plot). Doing these from the
+[user-seam](user-seam.md) commands — or the `examples/` scripts — is the
+roadmap-#52 field test.
 
 ## 3 — Cross-NAT internet (Docker, real kernel NAT)
 
@@ -76,11 +86,26 @@ containers, extend topology 3: put validators on two container networks, sever
 the link between them (`docker network disconnect`), let each commit, then
 reconnect and run `SyncChain` — the diverged side should adopt the heavier fork.
 
+This is the shape the **fork-choice / equivocation** adversary attacks, and
+`silt chain-status -store DIR` is how you *observe* the outcome: run it on a
+validator from each side. Two committed heads at the **same height with different
+head hashes** means both partitions stood a history (the thing to make permanent);
+after reconnect the lighter side's head hash should converge to the heavier's. A
+break is: it doesn't converge, or *both* survive — the honestly-labelled residual
+that locally-qualified fork-choice weight can diverge under an adversarial
+partition (design §3e / CHANGELOG "honestly labelled") is the target to confirm or
+exceed here.
+
 ## Notes for building new topologies
 
 - **Deterministic ids.** `-id-seed N` gives a stable NodeID so one daemon can
-  name another as an attester/bootstrap before it exists (the e2e and NAT
-  harnesses rely on this).
+  name another as an attester/bootstrap before it exists. `silt id -id-seed N`
+  (or `-store DIR`) prints that ID *without launching a daemon* — the clean way
+  to fill `-attesters`/`-bootstrap` up front.
+- **Observe the chain read-only.** `silt chain-status -store DIR` prints head
+  height, head hash, and block/entry counts from a replica's `chain.cbor`
+  without a daemon — compare across replicas to detect agreement, divergence, or
+  a stalled catch-up (no hashing files by hand).
 - **Registry ref is key-pinned.** Copy the exact `ID@https://…` line a
   `-serve-registry` daemon prints; a bare URL is refused.
 - **Assert on log lines.** Daemons print machine-greppable lines (`peer:`,
