@@ -16,7 +16,7 @@ func TestOnlyProvenStorageClearsTheAttesterBar(t *testing.T) {
 	l := New(50_000, 0)
 	honest, sybilA, sybilB := id(1), id(2), id(3)
 
-	l.RecordBondChallenge(honest, 64<<20, true, 1)
+	l.RecordBondChallenge(honest, honest, 64<<20, true, 1)
 	if l.Reputation(honest) < attesterBar {
 		t.Fatal("a node that proved real held storage must clear the attester bar")
 	}
@@ -33,17 +33,49 @@ func TestOnlyProvenStorageClearsTheAttesterBar(t *testing.T) {
 	}
 }
 
+// USE CASE: a colluding operator must not amortise ONE plot across many
+// identities. Standing is bound to the bond ROOT, and a root credits at most
+// one identity — so N identities pointing at a single shared plot earn ONE
+// bond's standing, not N. This closes the plot-amortisation gap (design §6):
+// combined with per-identity-secret plots (core/bond), N identities need N
+// distinct plots = N×disk. OUTCOME asserted: only the first identity to prove
+// a shared root clears the attester bar; the rest earn nothing, while a
+// distinct plot earns standing normally.
+func TestSharedPlotEarnsStandingForOnlyOneIdentity(t *testing.T) {
+	l := New(50_000, 0)
+	shared := id(200) // one plot's root, pointed at by colluding identities
+	a, b, c := id(1), id(2), id(3)
+
+	l.RecordBondChallenge(a, shared, 64<<20, true, 1)
+	l.RecordBondChallenge(b, shared, 64<<20, true, 1)
+	l.RecordBondChallenge(c, shared, 64<<20, true, 1)
+
+	if l.Reputation(a) < attesterBar {
+		t.Fatal("the first identity to prove the plot should earn its standing")
+	}
+	if l.Reputation(b) >= attesterBar || l.Reputation(c) >= attesterBar {
+		t.Fatal("identities sharing one plot must earn NO standing — amortisation is closed")
+	}
+
+	// An identity holding its OWN distinct plot (a different root) earns
+	// standing normally — the dedup only bites a SHARED root.
+	l.RecordBondChallenge(b, id(201), 64<<20, true, 1)
+	if l.Reputation(b) < attesterBar {
+		t.Fatal("an identity with its own distinct plot must earn standing")
+	}
+}
+
 // USE CASE: a validator that can no longer answer for the bond it committed
 // to should lose its seat. OUTCOME asserted: after a failed challenge it no
 // longer clears the attester bar.
 func TestAFailedBondLosesTheAbilityToAttest(t *testing.T) {
 	l := New(50_000, 0)
 	n := id(1)
-	l.RecordBondChallenge(n, 64<<20, true, 1)
+	l.RecordBondChallenge(n, n, 64<<20, true, 1)
 	if l.Reputation(n) < attesterBar {
 		t.Fatal("setup: bonded node should clear the bar")
 	}
-	l.RecordBondChallenge(n, 64<<20, false, 2)
+	l.RecordBondChallenge(n, n, 64<<20, false, 2)
 	if l.Reputation(n) >= attesterBar {
 		t.Fatal("a node that failed its bond challenge must lose its vote")
 	}
@@ -55,8 +87,8 @@ func TestAFailedBondLosesTheAbilityToAttest(t *testing.T) {
 func TestStandingMustBeSustainedToKeepVoting(t *testing.T) {
 	l := New(50_000, 0)
 	stale, fresh := id(1), id(2)
-	l.RecordBondChallenge(stale, 64<<20, true, 1) // last proven at tick 1
-	l.RecordBondChallenge(fresh, 64<<20, true, 4) // last proven at tick 4
+	l.RecordBondChallenge(stale, stale, 64<<20, true, 1) // last proven at tick 1
+	l.RecordBondChallenge(fresh, fresh, 64<<20, true, 4) // last proven at tick 4
 
 	l.DecayStale(5, 2) // now=5, maxAge=2: anything last proven before tick 3 is stale
 	if l.Reputation(stale) >= attesterBar {

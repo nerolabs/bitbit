@@ -6,6 +6,21 @@
 // missing Sybil cost the reputation-quorum chain has always assumed but
 // never charged (threat-catalog B1/D3).
 //
+// IDENTITY BINDING (Gate 4b). The plot is sealed from a per-identity SECRET
+// (derived from the node's signing key), not its public NodeID, so:
+//   - only the identity's owner can generate its plot — an outsider cannot
+//     precompute a victim's root to grief it; and
+//   - a validator credits a given bond root to at most ONE identity
+//     (core/credit's root-owner dedup), so a colluding operator cannot point
+//     N identities at ONE shared plot: each identity needs its own distinct
+//     plot (distinct secret ⇒ distinct root), restoring the N×size cost.
+//
+// Together these close the plot-amortisation gap (design §6): "strict binding,
+// N plots for N identities." Note this is NOT a proof of CORRECT plotting
+// (no PoRep/SNARK): a verifier still trusts the advertised root and only
+// checks the prover can answer challenges on it — the dedup and the secret
+// are what make sharing a root uneconomical and un-grief-able, respectively.
+//
 // The challenge shape mirrors the toy PoR in core/node/por.go, but points
 // at an identity-bound bond instead of a shared file, and — crucially —
 // the verifier checks the answer against ONLY the committed Merkle root it
@@ -90,28 +105,28 @@ func NumBlocks(size int64) int {
 // Root is public (published once, cheap to gossip); blocks/leaves are the
 // cost the owner carries to keep answering.
 type Commitment struct {
-	ID     ports.NodeID
 	Size   int64
 	Root   ports.Hash
 	blocks [][]byte
 	leaves []ports.Hash
 }
 
-// Seal plots the identity-bound bond of ~size bytes for id. Blocks are
-// generated in order because each depends on earlier ones (see plotBlock),
-// so this is the deliberately non-trivial "plotting" step; the owner then
-// STORES the result to answer challenges cheaply, which is the whole point.
-// Same id ⇒ same plot.
-func Seal(id ports.NodeID, size int64) *Commitment {
+// Seal plots the identity-bound bond of ~size bytes from a per-identity
+// secret (see the package doc: the secret binds the plot to its owner and
+// makes each identity's plot distinct). Blocks are generated in order because
+// each depends on earlier ones (see plotBlock), so this is the deliberately
+// non-trivial "plotting" step; the owner then STORES the result to answer
+// challenges cheaply. Same secret ⇒ same plot, so an owner can regenerate.
+func Seal(secret []byte, size int64) *Commitment {
 	n := NumBlocks(size)
 	blocks := make([][]byte, n)
 	leaves := make([]ports.Hash, n)
 	for i := 0; i < n; i++ {
-		b := plotBlock(id, i, leaves) // reads leaves[0..i-1] already filled
+		b := plotBlock(secret, i, leaves) // reads leaves[0..i-1] already filled
 		blocks[i] = b
 		leaves[i] = ports.HashBytes(b)
 	}
-	return &Commitment{ID: id, Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}
+	return &Commitment{Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}
 }
 
 // Blocks exposes the plot blocks so the owner can persist them (ports.
@@ -124,7 +139,7 @@ func (c *Commitment) Blocks() [][]byte { return c.blocks }
 // the wrong length — a corrupt or stale plot the caller should discard and
 // re-plot. The caller should additionally check the returned Root equals the
 // root it persisted, catching silent on-disk corruption.
-func Reconstruct(id ports.NodeID, size int64, blocks [][]byte) (*Commitment, error) {
+func Reconstruct(size int64, blocks [][]byte) (*Commitment, error) {
 	n := NumBlocks(size)
 	if len(blocks) != n {
 		return nil, fmt.Errorf("bond: plot has %d blocks, want %d for size %d", len(blocks), n, size)
@@ -136,7 +151,7 @@ func Reconstruct(id ports.NodeID, size int64, blocks [][]byte) (*Commitment, err
 		}
 		leaves[i] = ports.HashBytes(b)
 	}
-	return &Commitment{ID: id, Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}, nil
+	return &Commitment{Size: size, Root: manifest.MerkleRoot(leaves), blocks: blocks, leaves: leaves}, nil
 }
 
 // Answer is a prover's response to a challenge: the probed blocks plus
@@ -290,16 +305,17 @@ const (
 )
 
 // plotBlock is the identity-bound, dependency-chained block generator. Block
-// i mixes the identity, the index, its predecessor's leaf, and plotParents
-// pseudo-random earlier leaves, then expands that label to BlockSize. The
-// dependency on earlier blocks is what forces a prover to STORE the plot:
-// recomputing block i on demand means recomputing its dependency subgraph,
-// which the long-range parents make as costly as holding the plot outright.
-// leaves must already hold the finalized leaves of blocks 0..i-1.
-func plotBlock(id ports.NodeID, i int, leaves []ports.Hash) []byte {
+// i mixes the per-identity secret, the index, its predecessor's leaf, and
+// plotParents pseudo-random earlier leaves, then expands that label to
+// BlockSize. The dependency on earlier blocks is what forces a prover to
+// STORE the plot: recomputing block i on demand means recomputing its
+// dependency subgraph, which the long-range parents make as costly as holding
+// the plot outright. leaves must already hold the finalized leaves of blocks
+// 0..i-1.
+func plotBlock(secret []byte, i int, leaves []ports.Hash) []byte {
 	h := sha256.New()
 	h.Write([]byte(plotDomain))
-	h.Write(id[:])
+	h.Write(secret)
 	var ib [8]byte
 	binary.BigEndian.PutUint64(ib[:], uint64(i))
 	h.Write(ib[:])
@@ -308,7 +324,7 @@ func plotBlock(id ports.NodeID, i int, leaves []ports.Hash) []byte {
 	} else {
 		h.Write(make([]byte, len(ports.Hash{}))) // genesis: zero seed
 	}
-	for _, p := range parentIndices(id, i) {
+	for _, p := range parentIndices(secret, i) {
 		h.Write(leaves[p][:]) // long-range dependencies
 	}
 	label := h.Sum(nil)
@@ -326,9 +342,9 @@ func plotBlock(id ports.NodeID, i int, leaves []ports.Hash) []byte {
 }
 
 // parentIndices derives plotParents pseudo-random dependency indices in
-// [0, i) for block i, from the PUBLIC (id, i) so a verifier could recompute
-// the graph. Returns nil for block 0 (no predecessors). Repeats are harmless.
-func parentIndices(id ports.NodeID, i int) []int {
+// [0, i) for block i, from (secret, i). Returns nil for block 0 (no
+// predecessors). Repeats are harmless.
+func parentIndices(secret []byte, i int) []int {
 	if i == 0 {
 		return nil
 	}
@@ -336,7 +352,7 @@ func parentIndices(id ports.NodeID, i int) []int {
 	for j := 0; j < plotParents; j++ {
 		h := sha256.New()
 		h.Write([]byte(plotDomain + "/parent"))
-		h.Write(id[:])
+		h.Write(secret)
 		var b [16]byte
 		binary.BigEndian.PutUint64(b[:8], uint64(i))
 		binary.BigEndian.PutUint64(b[8:], uint64(j))

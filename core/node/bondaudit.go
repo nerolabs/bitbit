@@ -7,10 +7,24 @@
 package node
 
 import (
+	"crypto/ed25519"
+
 	"github.com/nerolabs/silt/core/bond"
+	"github.com/nerolabs/silt/core/crypto"
 	"github.com/nerolabs/silt/core/vdf"
 	"github.com/nerolabs/silt/ports"
 )
+
+// bondSecret derives a node's per-identity plot secret from its signing key,
+// domain-separated so it never coincides with any other use of the key. The
+// plot is sealed from THIS (only the owner has it), which is what binds the
+// bond to the identity and stops an outsider precomputing a victim's root.
+func bondSecret(signer ed25519.PrivateKey) []byte {
+	var seed [32]byte
+	copy(seed[:], signer.Seed())
+	k := crypto.DeriveKey(seed, "silt/bond/plot/v1")
+	return k[:]
+}
 
 // bondInfo is a peer's advertised bond, learned from gossip (BondRoot /
 // BondSize on every message the peer sends).
@@ -28,10 +42,10 @@ type bondInfo struct {
 // generated once and persisted. (The plot is still held in memory; a
 // disk-backed lazy commitment and moving plotting off the core loop are the
 // recorded hardening follow-ups — see the core/bond package doc.)
-func (n *Node) EnableBond(size int64) {
+func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) {
 	if n.plotStore != nil {
 		if root, blocks, ok, err := n.plotStore.Load(n.id); ok && err == nil {
-			if c, rerr := bond.Reconstruct(n.id, size, blocks); rerr == nil && c.Root == root {
+			if c, rerr := bond.Reconstruct(size, blocks); rerr == nil && c.Root == root {
 				n.bond = c // reloaded from disk, re-verified — no re-plot (#93)
 				return
 			}
@@ -40,7 +54,7 @@ func (n *Node) EnableBond(size int64) {
 			n.logf(ports.LogWarn, "bond plot load error; re-plotting", "err", err)
 		}
 	}
-	n.bond = bond.Seal(n.id, size)
+	n.bond = bond.Seal(bondSecret(signer), size)
 	if n.plotStore != nil {
 		if err := n.plotStore.Save(n.id, n.bond.Root, n.bond.Blocks()); err != nil {
 			n.logf(ports.LogWarn, "bond plot persist failed", "err", err)
@@ -87,7 +101,7 @@ func (n *Node) bondAuditOnce(now uint64) {
 	// still verify our bond independently over the wire, so a self-assertion
 	// buys nothing with the quorum — only real held storage does.
 	if n.bond != nil {
-		n.ledger.RecordBondChallenge(n.id, n.bond.Size, true, now)
+		n.ledger.RecordBondChallenge(n.id, n.bond.Root, n.bond.Size, true, now)
 	}
 	// Snapshot: the callbacks below mutate nothing here, but a peer could be
 	// learned mid-sweep — challenge the set we knew at sweep start.
@@ -122,7 +136,10 @@ func (n *Node) bondAuditOnce(now uint64) {
 				ok := derr == nil && bond.VerifySpaceTime(info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay)
 				// Replied-but-can't-prove is a FAIL (a liar advertising a bond
 				// it doesn't hold) → standing zeroed; a valid answer earns it.
-				n.ledger.RecordBondChallenge(id, info.size, ok, now)
+				// The root binds standing to the plot: a shared root credits
+				// only its first owner (credit dedup), so co-located Sybils
+				// pointing at one plot earn one bond's standing, not many.
+				n.ledger.RecordBondChallenge(id, info.root, info.size, ok, now)
 			})
 	}
 }

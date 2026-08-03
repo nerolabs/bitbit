@@ -43,7 +43,7 @@ func TestTrainingWheelsShedThroughTheNodeLoop(t *testing.T) {
 		MatureValidators: 3,
 	}
 	for _, id := range ids { // everyone is bonded (clears the bar)
-		ledger.RecordBondChallenge(id, 8<<20, true, 1)
+		ledger.RecordBondChallenge(id, synthRoot(id), 8<<20, true, 1)
 	}
 
 	var nodes []*node.Node
