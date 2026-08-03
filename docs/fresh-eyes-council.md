@@ -57,20 +57,22 @@ wrongdoing and actively supports takedown.
 ## Security
 
 **Biggest concern — this is unaudited, largely single-author
-cryptographic and trust-plane code.** The *design* target for V1 is the
-real mechanism — real proof-of-retrieval, a memory-hard bond, and
-unlinkable standing — but the **current code is an explicit first cut on
-labeled placeholders**: a space-lite in-RAM bond, a toy proof-of-retrieval,
-and a reputation signal that is still gameable (self-reported serving),
-proven only sim + e2e on a single host. Any of these could fail badly at
-real scale if shipped as-is.
+cryptographic and trust-plane code.** The V1 M0 mechanism is now **built**
+(Gate 4): a verify-without-fetch proof-of-retrieval, a proof-of-space-time
+bond (a space-hard identity-bound plot × a VDF, persisted), standing composed
+only from bond + audit (self-reported serving deliberately buys none), with
+fork-choice reconciliation and equivocation slashing — proven at unit +
+in-process sim + real-daemon e2e. **What it has not had is independent
+review**, and any of it could fail at real scale until it does.
 
-**Mitigations.** An **independent security audit and a written threat
-model before any "production" claim**; keep the "first cut / not
-production-hardened" labeling honest until then; a coordinated-disclosure
-policy and a bug-bounty; harden the DHT against Sybil/eclipse attacks;
-land and multi-machine-prove the *real* proof-of-retrieval, bond, and
-unlinkable-standing mechanisms before real economic value rides on them.
+**Mitigations.** An **independent adversarial review before any "production"
+claim** — now scheduled, and the standing that concern most wants: a fresh,
+memory-less acceptance pass and then a red-team pass, from the public repo
+only (see [`docs/reviews/`](reviews/)). Keep the "not production-hardened /
+review-pending" labeling honest until a clean pass and, ideally, a human
+bug-bounty; a coordinated-disclosure policy; harden the DHT against
+Sybil/eclipse; and run the multi-machine field test (#52) before real
+economic value rides on it.
 
 ## PR
 

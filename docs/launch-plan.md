@@ -15,9 +15,10 @@ plane, in a space thick with "AI/web3 storage" noise — reads as a *poser
 build* and burns the one first impression we get with the exact technical
 audience we need. So the tenets are **field-proven — floors and pillars
 both — before we launch**: the durability floors, the DoS resistance,
-cross-network hole-punching, and a *real* (non-toy) proof-of-retrieval and
-memory-hard bond behind the trust plane, with publishing that stays
-cryptographically unlinkable from the reputation that earns it.
+cross-network hole-punching, and a *real* verify-without-fetch proof-of-retrieval
+and a proof-of-space-time bond behind the trust plane — now **built and pending
+independent review** (Gate 4) — with publishing that stays cryptographically
+unlinkable from the reputation that earns it.
 
 Feedback is still the point of the first release — market for technical
 people to **break it and tell us what's wrong**, especially the weaknesses

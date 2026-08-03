@@ -86,10 +86,13 @@ longer free.** A validator earns write standing only by proving an
 identity-bound **storage bond** that peers challenge over the wire (T1/#82), so
 N sybils cost N real bonds on N disks, and a young network additionally requires
 **anchor sign-off that sheds on measured decentralization** (T2/#83 training
-wheels). So Sybil→*quorum-capture* is now priced, not free. Still open: cheap
-identity minting itself (PoW/stake deferred), DHT-level eclipse/lookup hardening,
-and the bond is space-lite (in-RAM, not memory-hard). **Eclipse hardening is the
-weakness we now most want review on.**
+wheels). So Sybil→*quorum-capture* is now priced, not free — and the bond is now a real
+**proof-of-space-time** (a space-hard identity-bound plot × a VDF, persisted),
+not the earlier space-lite in-RAM seal, with equivocation slashed and forks
+reconciled (Gate 4). Still open: cheap identity minting itself (PoW/stake
+deferred), DHT-level eclipse/lookup hardening, and the bond is not yet a
+formally depth-robust / memory-hard label function. **Eclipse hardening and the
+pending independent review are what we now most want review on.**
 
 ### Free-rider / leech
 Consumes without serving. **Mitigated** by the credit economy: serving

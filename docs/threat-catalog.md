@@ -16,10 +16,14 @@ A few structural through-lines, stated once:
   "an attacker with many cheap identities." Minting stays free, but consensus
   **standing** now costs token-less, work-backed, identity-bound storage
   (the challenged bond — T1/#82), so the downstream reputation risks (D1/D3)
-  are priced rather than free. This is a **first cut on honestly-labeled
-  placeholders** (bond seal is space-lite/in-RAM, not memory-hard; proof-of-
-  retrieval is challenge-time toy; single-host only, multi-machine #52 not
-  done) — the V1 target replaces these with the real, proven mechanism. A
+  are priced rather than free. The **real mechanism is now built** (Gate 4):
+  the bond is a proof-of-**space-time** (a space-hard identity-bound plot × a
+  Wesolowski VDF, persisted, N Sybils cost N real disks); the proof-of-retrieval
+  verifies possession **without fetching**; equivocation is slashed and forks
+  reconcile to the heavier-standing chain — proven at unit + sim + real-daemon
+  e2e, with independent review + the multi-machine field test (#52) the
+  remaining bar (residuals labelled: not yet formally depth-robust/memory-hard;
+  §6). A
   hard proof-of-work / space primitive on *minting* stays deferred; we say so
   loudly.
 - **Day one is a security parameter.** Nearly every attack is easiest on a
@@ -76,7 +80,7 @@ limits operator-configurable with sane defaults.
 - A16 **Relay slot exhaustion / free-CDN abuse** ~ — hold the per-peer splice slots (default raised 8→16, global 64→128 for #65 fan-out), or pump bulk NAT↔NAT bytes on someone else's dime → per-identity slot + byte quotas, throughput timeouts, credit-metering. **Structural relief now BUILT: hole-punching** (#27) upgrades a relay path to a direct connection through cone NAT (proven, CI-gated), so bulk bytes leave the relay entirely — the relay is demoted to rendezvous. Symmetric-NAT peers still relay; per-identity abuse quotas still open.
 
 ## B. Sybil / eclipse (the taproot — top open weakness)
-- B1 **Bulk identity minting** ~ — minting keypairs is still free, BUT consensus STANDING now costs challenged, held storage (T1/#82 bond): a fresh identity has no standing until it proves an identity-bound storage bond peers can challenge, so the downstream (D1/D3) is much reduced. PoW/stake on *minting* still deferred; bond is space-lite (in-RAM, not memory-hard) — labeled.
+- B1 **Bulk identity minting** ~ — minting keypairs is still free, BUT consensus STANDING now costs challenged, held storage (T1/#82 bond): a fresh identity has no standing until it proves an identity-bound storage bond peers can challenge, so the downstream (D1/D3) is much reduced. PoW/stake on *minting* still deferred; the bond is now a real proof-of-space-time (persisted, identity-bound so N ids need N plots), not yet a formally depth-robust / memory-hard label function — labeled.
 - B2 **Eclipse a key's neighborhood** ✗ — surround a chunk's key to suppress its provider records (censor discovery of one file).
 - B3 **Size-estimate bias** ~ — skew XOR-density estimate via placed identities (the #43 family; partly fixed for ephemeral clients).
 - B4 **Eclipse of new nodes** ✗ — feed a joining node a poisoned peer set (see discovery D-layer, F14).
@@ -184,10 +188,12 @@ deferred.
 - **Sybil answer: token-less, work-backed, identity-bound reputation.**
   Standing costs a challenged storage bond (T1/#82); a young network also
   gates commits behind maturity-scaled anchor sign-off (T2/#83 training
-  wheels). This landed as a **first cut on placeholders** (space-lite/in-RAM
-  bond, toy PoR, single-host), so Sybil (B) and its downstream (D1/D3) are
-  *priced, not closed* — hardening to the real, multi-machine mechanism is
-  V1 work. A hard PoW / proof-of-space primitive on identity minting stays
+  wheels). The **real mechanism is now built** (Gate 4: a proof-of-space-time
+  bond, a verify-without-fetch PoR, fork-choice reconciliation, and equivocation
+  slashing), so Sybil (B) and its downstream (D1/D3) are priced by real
+  space-time held over time; **independent review + the multi-machine field test
+  remain before it is *proven***. A hard PoW / proof-of-space primitive on
+  identity minting stays
   deferred.
 - **Update enforcement: criticality-graded, signed, recallable** (see
   [`network-protection.md`](network-protection.md) and TENETS).

@@ -54,10 +54,12 @@ hide behind. So the core is defended natively:
 Honest gap: minting an identity is still cheap. What is no longer free is
 **consensus standing** — it now costs a token-less, work-backed,
 identity-bound storage bond that peers can challenge (T1/#82), so bulk
-identities can't farm reputation or capture a quorum on the cheap. This is a
-**first cut on honestly-labeled placeholders** (the bond seal is
-space-lite/in-RAM, not memory-hard; proof-of-retrieval is a challenge-time
-toy; proven single-host only — multi-machine hardening, #52, is not done), so
+identities can't farm reputation or capture a quorum on the cheap. The **real
+mechanism is now built** (Gate 4: a proof-of-space-time bond — a space-hard
+identity-bound plot × a Wesolowski VDF, persisted; a verify-without-fetch
+proof-of-retrieval; fork-choice reconciliation; equivocation slashing), proven
+at unit + sim + real-daemon e2e — with independent review + the multi-machine
+field test (#52) the remaining bar, so
 Sybil-driven attacks (bulk identities to eclipse, or evade per-identity
 limits) remain our **top open weakness** and the real primitive is V1 work.
 A hard proof-of-work / proof-of-space primitive on *minting* stays deferred.
@@ -120,8 +122,8 @@ majority against the unpatched*, so on a small early network it is weak
 Nearly every attack is easiest on a tiny network. We treat the early network
 as **training wheels**, honestly labeled: seeded/anchored trust that is
 time-boxed and pre-committed to shed, a gated reputation ramp, and
-maturity-scaled quorum thresholds. A **first cut is built** (T2/#83:
-maturity-gated anchor sign-off on commits, on placeholder mechanics), and
+maturity-scaled quorum thresholds. This is **built** (T2/#83:
+maturity-gated anchor sign-off on commits, now over the real Gate-4 bond), and
 crucially the wheels come off on **measured decentralization thresholds**
 (reusing the Gini/observatory metrics), not on a political flag-day — so
 shedding them is mechanical. Hardening this to the real, multi-machine
