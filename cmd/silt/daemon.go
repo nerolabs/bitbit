@@ -579,16 +579,11 @@ func cmdDaemon(args []string) error {
 				fmt.Println("reachability: no peers to check with — assuming NATed; leaning on the -relay-via relay")
 				leanOnRelay(viaID, viaAddr)
 			}
-			if *validator && len(attesterIDs) > 0 {
-				nd.SyncChain(attesterIDs, func(added int, _ error) {
-					if added > 0 {
-						fmt.Printf("chain: synced %d block(s) from peers\n", added)
-						chainstore.Save(chainPath, nd.Chain().Blocks(0))
-					}
-				})
-			}
 			// Start challenging peers' storage bonds (and refreshing our own
 			// standing): consensus writes are gated on earned, held storage.
+			// This comes BEFORE chain sync on purpose — a restarted node re-earns
+			// its view of peer reputation here, and SyncChain needs that view to
+			// judge which fork carries real standing (F1).
 			if *validator {
 				nd.StartBondAudit()
 				// Fetch the other validators' token-issuer keys so we can verify
@@ -596,6 +591,17 @@ func cmdDaemon(args []string) error {
 				for _, aid := range attesterIDs {
 					nd.FetchIssuerKey(aid, func(error) {})
 				}
+				// Catch up on any blocks committed while we were down — and keep
+				// retrying, because peer standing (above) is re-earned live and
+				// isn't ready the instant we boot. NOT gated on -attesters: a node
+				// restarted with only -bootstrap still discovers validators via
+				// gossip and rejoins (F1). Persist each catch-up.
+				nd.StartChainSync(attesterIDs, func(added int) {
+					fmt.Printf("chain: caught up %d block(s) from peers\n", added)
+					if err := chainstore.Save(chainPath, nd.Chain().Blocks(0)); err != nil {
+						fmt.Fprintln(os.Stderr, "chain save:", err)
+					}
+				})
 			}
 			nd.AnnounceHeld(func(count int) {
 				if count > 0 {

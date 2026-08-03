@@ -1,7 +1,11 @@
 // Package chainstore persists a chain replica to disk (canonical CBOR,
 // atomic replace) so a restarted validator daemon rejoins with its
-// history — and re-validates every block on load, because trusting your
-// own disk is still trusting.
+// history. On load it re-verifies every block's cryptographic integrity —
+// hashes and signatures — because trusting your own disk is still trusting;
+// but it does NOT re-gate our own committed history on the live reputation
+// view (which is empty at boot), or a restart would be stranded at genesis
+// (F1). Reputation is re-earned live via bond audits; catch-up on blocks
+// missed while down is a separate, peer-facing path (Node.SyncChain).
 package chainstore
 
 import (
@@ -33,17 +37,14 @@ func Save(path string, blocks []chain.Block) error {
 	return os.Rename(tmp, path)
 }
 
-// Replay loads path into c, re-validating every block. Returns how many
-// blocks were restored.
+// Replay loads path into c and reloads our own persisted history via
+// chain.Reload — re-verifying each block's structure and signatures, but not
+// the live reputation gate (see the package doc and chain.appendStructural).
+// Returns how many blocks were restored.
 func Replay(path string, c *chain.Chain) (int, error) {
 	blocks, err := Load(path)
 	if err != nil {
 		return 0, err
 	}
-	for i, b := range blocks {
-		if err := c.Append(b); err != nil {
-			return i, err
-		}
-	}
-	return len(blocks), nil
+	return c.Reload(blocks)
 }

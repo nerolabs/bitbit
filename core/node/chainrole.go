@@ -254,6 +254,63 @@ func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) 
 	ask(0)
 }
 
+// StartChainSync begins the periodic reconciliation sweep in which this
+// validator catches its replica up against the validators it knows — the
+// restart/partition recovery path (F1). It fires once now and then reschedules
+// on ChainSyncInterval. Catch-up MUST retry rather than fire once at boot: a
+// restarted node re-earns its view of peer reputation live via bond audits, so
+// the peers whose blocks it needs to adopt may not clear the qualification bar
+// the instant the daemon starts — a later sweep, once audits have landed,
+// succeeds. seed is the explicit -attesters set (may be empty); every validator
+// this node has since learned a bond from is also a target, so a node restarted
+// WITHOUT -attesters still catches up. onCatchUp fires (added > 0) after an
+// adoption so the caller can persist the grown chain.
+func (n *Node) StartChainSync(seed []ports.NodeID, onCatchUp func(added int)) {
+	if n.chain == nil || n.chainSyncRunning {
+		return
+	}
+	n.chainSyncRunning = true
+	n.chainSyncSeed = seed
+	n.chainSyncOnCatchUp = onCatchUp
+	n.chainSyncTick()
+}
+
+func (n *Node) chainSyncTick() {
+	peers := n.syncTargets()
+	if len(peers) > 0 {
+		n.SyncChain(peers, func(added int, _ error) {
+			if added > 0 && n.chainSyncOnCatchUp != nil {
+				n.chainSyncOnCatchUp(added)
+			}
+		})
+	}
+	n.clock.AfterFunc(n.cfg.ChainSyncInterval, n.chainSyncTick)
+}
+
+// syncTargets is the set of validators to reconcile against this sweep: the
+// explicit seed plus every peer we've learned a storage bond from (a bond is
+// what a validator advertises), minus ourselves. Learned lazily from gossip, so
+// the set fills in as the swarm comes into view — a node restarted with only a
+// -bootstrap peer still discovers the rest and catches up.
+func (n *Node) syncTargets() []ports.NodeID {
+	set := make(map[ports.NodeID]bool, len(n.chainSyncSeed)+len(n.peerBonds))
+	for _, id := range n.chainSyncSeed {
+		if id != n.id {
+			set[id] = true
+		}
+	}
+	for id := range n.peerBonds {
+		if id != n.id {
+			set[id] = true
+		}
+	}
+	out := make([]ports.NodeID, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+	return out
+}
+
 // attestations share the block CBOR mode via small wrappers. The wrapper
 // is a chain.Block, so it carries the current version like any other —
 // chain.Decode (used by attDecode) requires it.

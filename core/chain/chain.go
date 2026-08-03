@@ -410,6 +410,87 @@ func (c *Chain) Append(b Block) error {
 	return nil
 }
 
+// Reload rebuilds this replica from THIS node's OWN persisted history — the
+// genesis first, then each committed block — re-verifying every block's
+// cryptographic integrity but NOT the live reputation gate (see
+// appendStructural for why). It is how a restarted validator rejoins at its
+// persisted height instead of being stranded at genesis by an empty reputation
+// view (F1). Returns how many blocks were restored. A PEER's chain is a
+// different trust class and still goes through Reconcile, which re-validates
+// reputation in full — Reload is only ever fed our own disk.
+func (c *Chain) Reload(blocks []Block) (int, error) {
+	for i, b := range blocks {
+		var err error
+		if i == 0 && b.Height == 0 {
+			err = c.AppendGenesis(b)
+		} else {
+			err = c.appendStructural(b)
+		}
+		if err != nil {
+			return i, err
+		}
+	}
+	return len(blocks), nil
+}
+
+// appendStructural re-applies a block from our own persisted history, verifying
+// ancestry, the proposer signature, and a quorum of distinct, verifying,
+// non-proposer attester signatures — everything a corrupt disk could break —
+// but deliberately NOT the reputation gate. Reputation is a live, local,
+// time-varying view that is EMPTY at boot (bond audits have not run yet); it is
+// not an integrity property of the block, and re-gating our own already-
+// committed history on it would strand a restarted validator at genesis (F1).
+// Because the proposer and attester signatures cover the whole block hash, any
+// tampering, bit-rot, or truncation is still caught (B7 — persisted state is
+// re-verified on load, not trusted). What we skip is re-litigating a policy
+// decision — proposer/attester qualification, publish-token and Publisher
+// policy — that the quorum already made when this node committed the block.
+func (c *Chain) appendStructural(b Block) error {
+	if err := c.validateStructural(&b); err != nil {
+		return err
+	}
+	c.apply(b)
+	return nil
+}
+
+func (c *Chain) validateStructural(b *Block) error {
+	prev, height := c.Head()
+	if b.Height != height || b.Prev != prev {
+		return fmt.Errorf("%w: got height %d prev %s, want height %d prev %s",
+			ErrWrongParent, b.Height, b.Prev, height, prev)
+	}
+	if len(b.Proposer) != ed25519.PublicKeySize {
+		return ErrBadSignature
+	}
+	h := b.Hash()
+	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
+		return fmt.Errorf("%w: proposer", ErrBadSignature)
+	}
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 {
+		return errors.New("chain: empty block")
+	}
+	seen := make(map[ports.NodeID]bool)
+	valid := 0
+	for _, a := range b.Atts {
+		if len(a.PubKey) != ed25519.PublicKeySize {
+			continue
+		}
+		id := a.AttesterID()
+		if seen[id] || id == b.ProposerID() {
+			continue // duplicates and self-attestation don't count
+		}
+		if !ed25519.Verify(ed25519.PublicKey(a.PubKey), h[:], a.Sig) {
+			return fmt.Errorf("%w: attester %s", ErrBadSignature, id)
+		}
+		seen[id] = true
+		valid++
+	}
+	if valid < c.cfg.Quorum {
+		return fmt.Errorf("%w: %d valid, need %d", ErrNoQuorum, valid, c.cfg.Quorum)
+	}
+	return nil
+}
+
 // AppendGenesis seeds the height-0 founding block. Unlike every later
 // block it needs NO quorum and NO proposer reputation — a genesis is
 // accepted because it is identical on every node (declared, not agreed),

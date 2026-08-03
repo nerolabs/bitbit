@@ -8,6 +8,49 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Gate 4 (#52, acceptance F1): a restarted validator rejoins the chain instead
+  of being stranded at its pre-restart height** (2026-08-03, D2) — the M0
+  acceptance field test found the one blocker: kill a validator, let the network
+  commit a block without it, restart it on the same `-store`, and it never caught
+  up — it sat at its old height forever while the live set advanced, so over time
+  the validator set could only shrink. Two compounding causes, both rooted in the
+  same mistake — treating *reputation* (a live, local, NON-persisted view, re-earned
+  by bond audits) as if it were a property of a *persisted* block. **(1) Reloading
+  our own chain** re-ran every block — including the genesis — through the full
+  commit gate (`chainstore.Replay` called `chain.Append`), so at boot, before any
+  bond audit had run, the empty reputation view failed the very first block:
+  `reputation below threshold: proposer <genesis-id> has 0, needs 100`. The genesis
+  is designed to *bypass* that gate (`AppendGenesis`); replaying it through the gate
+  cannot work. **(2) Catching up on missed blocks** fired `SyncChain` exactly once,
+  at boot, gated on `-attesters`, and BEFORE `StartBondAudit` — so it ran against an
+  empty reputation view (adopting nothing, since it can't yet tell which fork carries
+  real standing) and then never retried. The in-process `consensus` sim hid both
+  because it PRE-POPULATES reputation before the latecomer syncs. **The fix draws the
+  trust boundary at whose disk it is.** Our OWN committed history is reloaded by
+  `Chain.Reload`, which re-verifies each block's cryptographic integrity — hash
+  ancestry, the proposer signature, and a quorum of distinct verifying non-proposer
+  attester signatures (so bit-rot, truncation, or tampering is still caught, B7) —
+  but NOT the time-varying reputation gate, which a validator already satisfied when
+  it committed the block live; genesis reloads via `AppendGenesis` as it always
+  should have. A PEER's fork is a different trust class and still goes through
+  `Reconcile` with full reputation re-validation. Catch-up is now a periodic,
+  retrying `StartChainSync` loop (`ChainSyncInterval`, default 30s), UNGATED on
+  `-attesters` (it targets the explicit set plus every validator learned from a
+  gossiped bond, so a node restarted with only `-bootstrap` still rejoins), and the
+  daemon runs it AFTER `StartBondAudit` so peer standing is being re-earned — a later
+  sweep, once audits land, adopts the missed blocks and persists them. Tested (V5):
+  unit — replaying our own `[genesis, block1]` with an EMPTY ledger now rejoins at
+  height, while a tampered block is still rejected (`ErrBadSignature`); node — a
+  restarted validator adopts NOTHING while its standing view is empty and catches up
+  the instant bond audits restore peer standing, and `syncTargets` includes a
+  bond-learned validator with no `-attesters` given. Honestly labelled: fork-choice
+  weight is still the locally-qualified reputation view (fully-objective,
+  partition-independent on-chain PoST-bond weight remains the recorded D2 hardening),
+  and a bespoke multi-daemon restart harness is deferred to the acceptance re-run —
+  the field test roadmap #52 exists to prove. Traces to **M0**, **B7**, **D2**,
+  **#52**. See `docs/design/gate4-m0-mechanism.md` §3e.
+
 ### Added
 - **Gate 4d (#93): the publish-token issuer key persists across restarts**
   (2026-08-03) — a validator that issues blind-signed publish tokens generated a
