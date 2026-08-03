@@ -95,13 +95,22 @@ Two things worth trying:
   same root, ~zero new bytes stored (identical content addresses to
   identical chunks).
 - **Erasure, by hand.** The file is split into stripes of 16 shards; any
-  10 rebuild each stripe. Delete a few shards and fetch again — it heals
-  from parity, and fails *loudly* only past the 6-per-stripe budget:
+  10 rebuild each stripe. Objects are sharded one level deep by a 2-hex
+  prefix — `.silt/objects/<xx>/<hash>`, not flat. `silt info … -shards`
+  lists the data/parity shard hashes (those are the safe ones to delete);
+  remove a few from **one** stripe and re-fetch — it heals from parity, and
+  fails *loudly* only past the 6-per-stripe budget:
   ```sh
-  ls .silt/objects | head
-  rm .silt/objects/<a-few-of-them>
-  silt get silt:v1:<root>:<key> -o out2.bin   # still bit-perfect
+  silt info silt:v1:<root>:<key> -shards      # note ~6 shard hashes from ONE stripe
+  for h in <hash1> <hash2> <hash3> <hash4> <hash5> <hash6>; do
+    rm ".silt/objects/${h:0:2}/$h"
+  done
+  silt get silt:v1:<root>:<key> -o out2.bin   # still bit-perfect (rebuilt from parity)
   ```
+  On a **single** node the file's one manifest chunk is *not* replicated —
+  it lives in the same tree but don't delete it, or `get` can't even start.
+  (Real erasure durability is the swarm demo below and `silt sim run churn`;
+  this is just the math made tangible on one disk.)
 
 ## Tier 2 — a real swarm on your machine
 

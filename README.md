@@ -121,11 +121,12 @@ disk stores and survive restarts (they re-announce what they hold). The
 `-serve-registry` "single honest instance" is the seam a chain replaces
 someday.
 
-Chunks land in `.silt/objects/` named by SHA-256. Add the same file
-twice in (default) convergent mode and you get the same root with zero
-new bytes stored. Delete or corrupt up to n−k shards per stripe
-(default: any 6 of 16) and `get` silently reconstructs them from parity;
-one loss beyond that and it names the dead stripe and refuses.
+Chunks land in `.silt/objects/<xx>/<hash>` — sharded one level deep by a
+2-hex prefix, each file named by its SHA-256. Add the same file twice in
+(default) convergent mode and you get the same root with zero new bytes
+stored. Delete or corrupt up to n−k shards per stripe (default: any 6 of
+16) and `get` silently reconstructs them from parity; one loss beyond that
+and it names the dead stripe and refuses.
 
 ## Layout
 

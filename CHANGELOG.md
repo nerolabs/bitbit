@@ -9,6 +9,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Docs & UX polish (acceptance re-run new-F3/F4/F5/F6)** (2026-08-03) — four
+  minor/cosmetic gaps the passing re-run surfaced, each a small correctness or
+  clarity fix, no mechanism change. **(F3)** the Tier-1 "erasure by hand"
+  walkthrough listed objects as flat under `.silt/objects/` and told you to
+  `rm .silt/objects/<a-few>` — but objects nest one level under a 2-hex prefix
+  (`.silt/objects/<xx>/<hash>`), so that command targets a whole prefix
+  directory, and it could delete the single-copy manifest chunk and brick `get`;
+  rewritten to use `silt info … -shards` to pick real data/parity shard hashes,
+  delete them by their true path, and warn the manifest is single-copy on one
+  node (`README.md`, `docs/local-test-network.md`). **(F4)** `silt daemon -h`
+  described `-registry` as `http://host:port` — the exact form the key-pinning
+  contract *refuses*; the flag help now reads `ID@https://host:port (key-pinned —
+  copy the daemon's 'registry:' line verbatim)`. **(F5)** the website's feature
+  list didn't mention NAT traversal (thoroughly documented in the repo but
+  invisible to a site visitor); added a "Reaches across NATs" card. **(F6)**
+  `silt get <siltcare:…>` refused with `link: not a silt:v1: link`, which reads
+  like a typo rather than an intentional capability boundary; `link.Parse` now
+  recognises a care link and says so, and `silt get` points to `silt info` /
+  `silt daemon -care` and the full link (unit test pins the clearer error).
+  Traces to **S5**. See the M0 acceptance re-run report.
 - **Gate 4 (#52, acceptance F1): a restarted validator rejoins the chain instead
   of being stranded at its pre-restart height** (2026-08-03, D2) — the M0
   acceptance field test found the one blocker: kill a validator, let the network

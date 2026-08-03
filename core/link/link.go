@@ -89,8 +89,14 @@ func decodePart(s string) ([32]byte, error) {
 
 // Parse reads a full link.
 func Parse(s string) (Handle, error) {
-	body, ok := strings.CutPrefix(strings.TrimSpace(s), fullPrefix)
+	s = strings.TrimSpace(s)
+	body, ok := strings.CutPrefix(s, fullPrefix)
 	if !ok {
+		// A care link is a valid link, just the wrong capability for fetching —
+		// say so, rather than "not a link" (which reads like a typo).
+		if strings.HasPrefix(s, carePrefix) {
+			return Handle{}, fmt.Errorf("link: this is a %s care link — repair/audit only, it cannot decrypt content; fetching the bytes needs the full %s link", carePrefix, fullPrefix)
+		}
 		return Handle{}, fmt.Errorf("link: not a %s link", fullPrefix)
 	}
 	root, key, err := splitBody(body)
