@@ -188,6 +188,10 @@ type CreditLedger interface {
 	// signed two different blocks at the same height; see chain.Equivocation),
 	// burying the culprit's standing so it can no longer influence consensus.
 	SlashEquivocation(id NodeID)
+	// Reputation is a node's current consensus standing — the same number the
+	// chain gates proposals and attestations on. Read so a validator can
+	// narrate standing accrual/decay in the field (acceptance F7).
+	Reputation(n NodeID) int64
 	Balance(n NodeID) int64
 	CanPublish(n NodeID) bool
 	// ChargePublish deducts the publish fee, or returns

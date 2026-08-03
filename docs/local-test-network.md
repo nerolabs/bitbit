@@ -188,18 +188,35 @@ dashboard (pledge, chunks held, roots) update live.
 
 Killing a node degrades redundancy; a *caretaker* rebuilds it. `swarm add`
 printed a **care link** (`siltcare:...`) — repair rights with no ability
-to decrypt. Start a fourth daemon that repairs this file:
+to decrypt. Start a fourth daemon that repairs this file (add `-log info`
+so you can watch it work — see below):
 
 ```sh
 silt daemon -listen 127.0.0.1:7104 -store d4 -ui 127.0.0.1:8084 -capacity 2G \
   -bootstrap <SEED_ID>@127.0.0.1:7101 -registry <SEED_ID>@https://127.0.0.1:7100 \
-  -care <the-care-link>
+  -care <the-care-link> -log info
 ```
 
-Kill a couple of holders and watch redundancy recover on its own before
-you retrieve — the caretaker fetches surviving shards, reconstructs the
-lost ones from parity, and re-seeds them, all without ever seeing your
-plaintext.
+Each sweep, the caretaker narrates what it sees in `d4/debug.log`. What you
+observe depends on **how much** you kill, because redundancy is layered:
+every shard is replicated (default 3 copies) *and* a stripe reconstructs from
+any k of its n erasure shards, so a stripe only needs rebuilding once losses
+exceed the repair slack (default 2) with no surviving replica. So:
+
+- **Kill one or two holders.** The other replicas still cover every stripe,
+  so nothing is stranded and the caretaker *correctly* rebuilds nothing — but
+  it now says so: `stripe degraded, within repair slack — watching`. That is
+  the mechanism working, not stalling; acting sooner would be premature.
+- **Kill enough holders to actually strand a stripe** (drop every copy of more
+  than `slack` of its columns). Now the caretaker fetches the k survivors,
+  reconstructs the lost shards from parity, re-seeds them to fresh nodes, and
+  logs `stripe repaired` — all without ever seeing your plaintext. If the swarm
+  has dropped *below* k reachable shards for a stripe, it cannot yet
+  reconstruct and says `repair below k`, retrying each sweep as nodes return.
+
+For a dense, deterministic version of the whole loop (many stripes stranded and
+rebuilt in seconds), run `silt sim run churn` — it reports the exact repair and
+shard-rebuild counts.
 
 ## Bonus — the observatory
 

@@ -50,6 +50,33 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   and a bespoke multi-daemon restart harness is deferred to the acceptance re-run —
   the field test roadmap #52 exists to prove. Traces to **M0**, **B7**, **D2**,
   **#52**. See `docs/design/gate4-m0-mechanism.md` §3e.
+- **Gate 4 (acceptance F2/F7): the trust plane narrates itself — an operator can
+  SEE standing, bond reload, and caretaker sweeps** (2026-08-03, S5) — the M0
+  mechanisms worked but ran silent, so the acceptance operator had to read source
+  to confirm the earned-standing and self-heal claims. Four honest-observability
+  fixes, all at `-log info`: **(standing)** a validator now narrates its own
+  consensus standing every bond-audit sweep and the verdict of every peer bond
+  challenge (`standing`, `bond challenge`), so the earned-standing mechanism the
+  whole of M0 rests on is visible rising and decaying rather than inferred from a
+  diffed `chain.cbor`; **(bond reload)** a restart that RELOADS its plot now says
+  `reloaded the … bond (no re-plot)` instead of the identical `sealed …` wording a
+  first-time plot uses — the "no re-plot" guarantee held, but the log had actively
+  suggested the expensive path ran (`EnableBond` now reports reloaded-vs-sealed);
+  **(caretaker)** the repair sweep logs `stripe degraded, within repair slack —
+  watching` when it sees a loss that parity/replication still covers, so an
+  operator who kills a holder sees the caretaker NOTICE rather than apparent
+  silence — repair fires (`stripe repaired`) only once losses exceed the slack,
+  which with the default replication takes more than "a couple" of deaths, and
+  `repair below k` already marks the can't-yet-reconstruct case; **(default on)** a
+  validator with no `-log` flag now defaults to `-log info` — the M0 stakes mean
+  the normal path should narrate itself in the field, not stay dark until someone
+  knows to ask (non-validators are unchanged: logging stays off). The flagship
+  self-heal walkthrough (`docs/local-test-network.md`) is rewritten to set honest
+  expectations (why killing "a couple" of holders correctly heals nothing visible,
+  how to actually strand a stripe, and `silt sim run churn` for the dense version).
+  A read-only `Reputation` accessor was added to the `CreditLedger` port for the
+  narration. No mechanism changed — this is pure observability. Traces to **M0**,
+  **S5** (honest observability), **B5**. See the M0 acceptance report.
 
 ### Added
 - **Gate 4d (#93): the publish-token issuer key persists across restarts**

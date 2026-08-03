@@ -147,7 +147,7 @@ func cmdDaemon(args []string) error {
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
 	// bootstrap) to the same artifact the node and transport narrate to.
-	level, logOn, err := resolveLogLevel(*logLevel, *debug)
+	level, logOn, err := resolveLogLevel(*logLevel, *debug, *validator)
 	if err != nil {
 		return err
 	}
@@ -279,8 +279,14 @@ func cmdDaemon(args []string) error {
 		}
 		nd.EnableChain(ch, ident.Signer())
 		if sz, perr := parseSize(*bondSize); perr == nil && sz > 0 {
-			nd.EnableBond(ident.Signer(), sz)
-			fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
+			if nd.EnableBond(ident.Signer(), sz) {
+				// Reloaded the existing plot — a restart reuses it, no re-plot
+				// (#93). Say so; logging "sealed" would falsely suggest the
+				// expensive one-time plotting ran again (acceptance F7).
+				fmt.Printf("bond: reloaded the %s storage bond for consensus standing (no re-plot)\n", *bondSize)
+			} else {
+				fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
+			}
 		}
 		// Publisher privacy (T3): this validator issues blind-signed publish
 		// tokens, and (when -require-tokens) the chain accepts only entries that
@@ -628,10 +634,14 @@ func cmdDaemon(args []string) error {
 }
 
 // resolveLogLevel turns the -log/-debug flags into (level, on): -log
-// wins when set, -debug is shorthand for the debug firehose, and
-// neither means logging stays off (LogError is a harmless placeholder
-// the caller ignores when on is false).
-func resolveLogLevel(name string, debug bool) (ports.LogLevel, bool, error) {
+// wins when set, -debug is shorthand for the debug firehose. A VALIDATOR
+// with neither flag defaults to info — the M0 trust plane (standing accrual,
+// commits, catch-up, caretaker sweeps) is exactly what an operator must be
+// able to see, so it narrates the normal path by default rather than staying
+// silent until someone knows to ask (acceptance F7). A non-validator with
+// neither flag keeps logging off (LogError is a harmless placeholder the
+// caller ignores when on is false).
+func resolveLogLevel(name string, debug, validatorDefault bool) (ports.LogLevel, bool, error) {
 	if name != "" {
 		lvl, err := ports.ParseLevel(name)
 		if err != nil {
@@ -641,6 +651,9 @@ func resolveLogLevel(name string, debug bool) (ports.LogLevel, bool, error) {
 	}
 	if debug {
 		return ports.LogDebug, true, nil
+	}
+	if validatorDefault {
+		return ports.LogInfo, true, nil
 	}
 	return ports.LogError, false, nil
 }
