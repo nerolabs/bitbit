@@ -8,10 +8,12 @@
 
 ## What you get
 
-Only the **public surface**, exactly what a real attacker would have:
+Only the **public surface**, exactly what a real attacker would have — start
+from these two, everything else is reachable from them:
 
-- the GitHub repository (clone it, read it, build it, run it, test it);
-- the website and any published artifacts.
+- **the repository — <https://github.com/nerolabs/silt>** — clone it, read it,
+  build it (`go build ./cmd/silt`), run it, run its tests;
+- **the website — <https://silthq.com>** — and anything it links.
 
 You get **nothing** from the builders — no design rationale beyond what is in
 the repo, no "here's why it's safe." Treat every reassuring comment in the code
