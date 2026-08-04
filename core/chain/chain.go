@@ -297,6 +297,10 @@ var (
 	// self-verifying double-sign proof — so a forged slash cannot evict an honest
 	// validator (F2; forged-slash griefing stays denied).
 	ErrBadSlash = errors.New("chain: invalid equivocation slash proof")
+	// ErrGenesisTakedown rejects a genesis block carrying revocation/un-revocation
+	// records — a genesis has no prior history to check a takedown against, so
+	// allowing one would be a pre-emptive takedown of never-published content (F3).
+	ErrGenesisTakedown = errors.New("chain: genesis must not carry takedowns (pre-emptive revocation forbidden)")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -836,6 +840,15 @@ func (c *Chain) AppendGenesis(b Block) error {
 	}
 	if len(b.Entries) == 0 {
 		return fmt.Errorf("chain: empty genesis")
+	}
+	// A genesis seeds entries (and declared launch bonds) — never takedowns.
+	// AppendGenesis skips validateTakedowns (there is no prior history to check a
+	// revocation against), so allowing Revocations here would let whoever controls
+	// genesis PRE-EMPTIVELY revoke a never-published root, exactly what immutable
+	// #5 forbids (red-team F3). Reject them outright; a takedown must go through
+	// the governed normal path, where ErrRevokeUnknownRoot enforces existence.
+	if len(b.Revocations) > 0 || len(b.Unrevocations) > 0 {
+		return ErrGenesisTakedown
 	}
 	c.apply(b)
 	return nil

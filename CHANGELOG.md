@@ -9,6 +9,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Blind red-team F3 (Accountability): genesis can no longer pre-emptively revoke
+  a never-published root** (2026-08-04) — `AppendGenesis` calls `apply()` directly
+  and skips `validateTakedowns`, so a genesis block could carry `Revocations`
+  naming a root never published — a pre-emptive takedown, exactly what immutable #5
+  forbids ("a takedown is never pre-emptive"), honored forever by any node running
+  `-honor-chain-revocations`. `AppendGenesis` now **rejects** any genesis carrying
+  `Revocations` or `Unrevocations` (`ErrGenesisTakedown`): a genesis seeds entries
+  and declared launch bonds only; a takedown must go through the governed normal
+  path where `ErrRevokeUnknownRoot` enforces that the root already exists.
+  Regression `core/chain/redteam_verify_censor_0_test.go` (inverted PoC: genesis
+  takedown rejected; the normal-path existence guard still fires).
 - **Blind red-team F1 (Sybil, Critical) + F2 (equivocation slash inert): the
   objective validator set now honors the two defenses it was bypassing**
   (2026-08-04) — a second, blind red-team pass (`ae005e9`) found that promoting
