@@ -72,6 +72,7 @@ func cmdDaemon(args []string) error {
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (persisted to disk; a restart reloads it) — a bigger bond earns more standing")
 	minBondFloor := fs.String("min-bond-floor", "0", "anti-release floor (M0 F1/F2): a bond smaller than this earns NO standing, because it could be released and re-plotted inside the challenge window. Set it ABOVE (challenge-window × plot-throughput): at ~270 MB/s and this daemon's ~2s window that is ~540 MiB, so a real open deployment sets e.g. 1G. 0 = off (safe only for a trusted/demo swarm)")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
+	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. 0 = off (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
@@ -277,10 +278,15 @@ func cmdDaemon(args []string) error {
 				fmt.Println("consensus: WARNING — objective fork-choice (the default M0 path) needs -anchors (the launch validator set) and -mature-validators>0 to bootstrap a MULTI-validator quorum; without them such a swarm will not commit. Pass them, or -min-rep 0 for a trusted swarm, or -objective=false for the legacy (non-M0) path.")
 			}
 		}
+		// The objective anti-release floor and re-challenge cadence (retest G4)
+		// ride the same knobs as the node-side floor: a sub-floor bond earns no
+		// on-chain standing, and standing lapses without a fresh proof within the
+		// TTL. cfg.MinBondBytes is 0 unless -min-bond-floor was set.
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
+			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: *bondTTL,
 		}, ledger.Reputation)
 		if *allowPublisher {
 			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
