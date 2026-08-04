@@ -29,6 +29,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -68,6 +69,17 @@ type Config struct {
 	// entries. Genesis is exempt (it seeds via AppendGenesis, and its
 	// proposer is public by design).
 	AllowPublisher bool
+	// MinBond turns on OBJECTIVE fork-choice (D2 / red-team F6). When > 0 (and a
+	// bond verifier is wired, SetBondVerifier), proposer/attester eligibility,
+	// the quorum count, and the fork-choice WEIGHT are all decided by ON-CHAIN
+	// bond registrations (Block.BondRegs) — a quantity every replica recomputes
+	// identically from the blocks — instead of the local, per-node reputation
+	// view. That is what stops two honest replicas with different audited sets
+	// from computing different winners and forking permanently. A validator
+	// qualifies iff its committed bonded size ≥ MinBond. Zero (default) keeps the
+	// legacy reputation-gated path unchanged, so existing deployments and the
+	// permissive/sim configs are unaffected.
+	MinBond int64
 }
 
 func DefaultConfig() Config {
@@ -111,6 +123,15 @@ type Block struct {
 	// tenets require — takedown must not be a one-way, permanent asymmetry —
 	// and, like a revocation, it is quorum-gated and replicated.
 	Unrevocations []ports.Hash `cbor:"9,keyasint,omitempty"`
+	// BondRegs are on-chain PoST-bond registrations that make fork-choice
+	// OBJECTIVE (D2 / red-team F6): each records a validator's bonded size with a
+	// fresh space-time proof any replica re-verifies, so "who is a qualified
+	// validator, and how heavy is their attestation" is a function of the chain,
+	// not of the local reputation view. Only meaningful when Config.MinBond > 0;
+	// omitempty keeps this additive (a block with no registrations hashes exactly
+	// as before, so no BlockVersion bump). Committed by Hash so attesters sign
+	// over them.
+	BondRegs []BondReg `cbor:"10,keyasint,omitempty"`
 }
 
 // Attestation is a validator's signature over the block hash. The
@@ -118,6 +139,39 @@ type Block struct {
 type Attestation struct {
 	PubKey []byte `cbor:"1,keyasint"`
 	Sig    []byte `cbor:"2,keyasint"`
+}
+
+// BondReg registers (or renews) a validator's on-chain PoST bond for objective
+// fork-choice (F6). Validator is the ed25519 public key; Root/Size are the bond
+// commitment; Answer is a CBOR-encoded bond space-time answer for the fresh
+// nonce derived from the block's parent (bondRegNonce), so it cannot be replayed
+// to another height or fork; Sig is the validator's signature binding the claim
+// to its identity. A non-genesis registration is accepted only if Sig verifies
+// and the injected bond verifier accepts (Root, Size, nonce, Answer) — i.e. the
+// validator PROVED it holds the bond NOW. Genesis registrations are declared
+// (like the genesis block itself), seeding the launch validator set.
+type BondReg struct {
+	Validator []byte     `cbor:"1,keyasint"`
+	Root      ports.Hash `cbor:"2,keyasint"`
+	Size      int64      `cbor:"3,keyasint"`
+	Answer    []byte     `cbor:"4,keyasint,omitempty"`
+	Sig       []byte     `cbor:"5,keyasint,omitempty"`
+}
+
+// ValidatorID is the NodeID (hash of the public key) that a registration bonds.
+func (r BondReg) ValidatorID() ports.NodeID { return sha256.Sum256(r.Validator) }
+
+// signingBytes is the message a validator signs to claim a registration: the
+// root, size, and fresh nonce, domain-separated. Binding the nonce stops a
+// signature made for one position being replayed at another.
+func (r BondReg) signingBytes(nonce uint64) []byte {
+	b := make([]byte, 0, 32+len(r.Root)+8+8)
+	b = append(b, []byte("silt/chain/bondreg/v1")...)
+	b = append(b, r.Root[:]...)
+	var sz [16]byte
+	binary.BigEndian.PutUint64(sz[:8], uint64(r.Size))
+	binary.BigEndian.PutUint64(sz[8:], nonce)
+	return append(b, sz[:]...)
 }
 
 var encMode cbor.EncMode
@@ -134,7 +188,7 @@ func init() {
 // proposer, and both takedown and undo records. Signing the hash therefore
 // signs the block's entire content and its place in history.
 func (b *Block) Hash() ports.Hash {
-	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations, Unrevocations: b.Unrevocations}
+	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations, Unrevocations: b.Unrevocations, BondRegs: b.BondRegs}
 	raw, err := encMode.Marshal(&unsigned)
 	if err != nil {
 		panic(err) // canonical encoding of our own struct cannot fail
@@ -227,6 +281,10 @@ var (
 	// ErrUnrevokeNotRevoked rejects an un-revoke of a root that is not
 	// currently revoked — the reversibility record only clears a live takedown.
 	ErrUnrevokeNotRevoked = errors.New("chain: un-revocation names a root that is not currently revoked")
+	// ErrBadBondReg rejects an on-chain bond registration whose validator
+	// signature or space-time proof does not verify (objective fork-choice, F6):
+	// a forged registration cannot buy objective weight.
+	ErrBadBondReg = errors.New("chain: invalid on-chain bond registration")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -247,6 +305,13 @@ type Chain struct {
 	tokenQuorum int
 	issuerKey   func(ports.NodeID) *rsa.PublicKey
 	spent       map[string]bool
+	// bonded is the OBJECTIVE validator set for fork-choice (F6): NodeID → the
+	// bonded size from its latest on-chain BondReg. A pure function of the blocks,
+	// so every replica computes it identically — which is the whole point.
+	// Populated only when Config.MinBond > 0. verifyBond re-checks a registration's
+	// space-time proof (injected so core/chain stays decoupled from core/bond).
+	bonded     map[ports.NodeID]int64
+	verifyBond func(root ports.Hash, size int64, nonce uint64, answer []byte) bool
 }
 
 // New starts an empty replica. rep is the local reputation view —
@@ -258,8 +323,83 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 		byRoot:         make(map[ports.Hash]ports.Entry),
 		revoked:        make(map[ports.Hash]bool),
 		validatorsSeen: make(map[ports.NodeID]bool),
-		spent:          make(map[string]bool)}
+		spent:          make(map[string]bool),
+		bonded:         make(map[ports.NodeID]int64)}
 }
+
+// SetBondVerifier wires the objective-fork-choice bond check (F6): given a
+// registration's (root, size, nonce, answer), it re-verifies the space-time
+// proof (typically bond.VerifySpaceTime with the node's VDF params). Required
+// for Config.MinBond > 0 to take effect; injected so core/chain does not depend
+// on core/bond or core/vdf.
+func (c *Chain) SetBondVerifier(f func(root ports.Hash, size int64, nonce uint64, answer []byte) bool) {
+	c.verifyBond = f
+}
+
+// objective reports whether fork-choice runs on on-chain bonds (F6) rather than
+// the local reputation view. It needs both a positive MinBond and a wired
+// verifier — without the verifier we could not re-check a registration, so we
+// fall back to the legacy rep path rather than trust an unproven bond.
+func (c *Chain) objective() bool { return c.cfg.MinBond > 0 && c.verifyBond != nil }
+
+// attesterQualified reports whether id may have its attestation counted toward
+// quorum and weight. Objective mode: its committed bonded size clears MinBond
+// (identical on every replica). Legacy mode: the local reputation view.
+func (c *Chain) attesterQualified(id ports.NodeID) bool {
+	if c.objective() {
+		return c.bonded[id] >= c.cfg.MinBond
+	}
+	return c.rep(id) >= c.cfg.MinAttesterRep
+}
+
+// proposerQualified reports whether id may propose. Objective mode reuses the
+// bond gate (a bonded validator proposes); legacy mode uses MinProposerRep.
+func (c *Chain) proposerQualified(id ports.NodeID) bool {
+	if c.objective() {
+		return c.bonded[id] >= c.cfg.MinBond
+	}
+	return c.rep(id) >= c.cfg.MinProposerRep
+}
+
+// bondRegNonce is the fresh challenge a non-genesis bond registration must
+// answer, derived from the parent hash the block extends — so a registration
+// proves possession AT this position and cannot be replayed to another height
+// or fork.
+func bondRegNonce(prev ports.Hash) uint64 {
+	h := sha256.Sum256(append([]byte("silt/chain/bondreg/nonce/v1"), prev[:]...))
+	return binary.BigEndian.Uint64(h[:8])
+}
+
+// validateBondRegs verifies a non-genesis block's bond registrations: each must
+// carry a validator signature over its (root, size, nonce) and a space-time
+// proof the injected verifier accepts for the fresh per-position nonce. Only
+// enforced in objective mode; a legacy chain ignores BondRegs entirely.
+func (c *Chain) validateBondRegs(b *Block) error {
+	if !c.objective() {
+		return nil
+	}
+	nonce := bondRegNonce(b.Prev)
+	for _, r := range b.BondRegs {
+		if len(r.Validator) != ed25519.PublicKeySize {
+			return fmt.Errorf("%w: bond registration has no valid validator key", ErrBadBondReg)
+		}
+		if !ed25519.Verify(ed25519.PublicKey(r.Validator), r.signingBytes(nonce), r.Sig) {
+			return fmt.Errorf("%w: validator %s signature", ErrBadBondReg, r.ValidatorID())
+		}
+		if r.Size < c.cfg.MinBond {
+			return fmt.Errorf("%w: validator %s size %d below MinBond %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBond)
+		}
+		if !c.verifyBond(r.Root, r.Size, nonce, r.Answer) {
+			return fmt.Errorf("%w: validator %s space-time proof", ErrBadBondReg, r.ValidatorID())
+		}
+	}
+	return nil
+}
+
+// BondedSize reports the objective on-chain bonded size for id (0 if none).
+// Exposed for observability and tests; it is the fork-choice weight of one of
+// id's attestations in objective mode.
+func (c *Chain) BondedSize(id ports.NodeID) int64 { return c.bonded[id] }
 
 // RequireTokens turns on publisher-privacy publish tokens (F1): every entry
 // must carry a PublishToken blind-signed by `quorum` distinct qualified
@@ -331,14 +471,21 @@ func (c *Chain) ValidateProposal(b *Block) error {
 	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
 		return fmt.Errorf("%w: proposer", ErrBadSignature)
 	}
-	if got := c.rep(b.ProposerID()); got < c.cfg.MinProposerRep {
+	if !c.proposerQualified(b.ProposerID()) {
+		if c.objective() {
+			return fmt.Errorf("%w: proposer %s bonded %d, needs %d",
+				ErrLowReputation, b.ProposerID(), c.bonded[b.ProposerID()], c.cfg.MinBond)
+		}
 		return fmt.Errorf("%w: proposer %s has %d, needs %d",
-			ErrLowReputation, b.ProposerID(), got, c.cfg.MinProposerRep)
+			ErrLowReputation, b.ProposerID(), c.rep(b.ProposerID()), c.cfg.MinProposerRep)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 {
 		return errors.New("chain: empty block")
 	}
 	if err := c.validateTakedowns(b); err != nil {
+		return err
+	}
+	if err := c.validateBondRegs(b); err != nil {
 		return err
 	}
 	seen := make(map[ports.Hash]bool)
@@ -361,7 +508,7 @@ func (c *Chain) ValidateProposal(b *Block) error {
 			if e.Token == nil {
 				return fmt.Errorf("%w: entry %s", ErrTokenRequired, e.Root)
 			}
-			qualified := func(v ports.NodeID) bool { return c.rep(v) >= c.cfg.MinAttesterRep }
+			qualified := func(v ports.NodeID) bool { return c.attesterQualified(v) }
 			if err := publishtoken.Verify(*e.Token, c.tokenQuorum, c.issuerKey, qualified); err != nil {
 				return fmt.Errorf("chain: entry %s: %w", e.Root, err)
 			}
@@ -418,7 +565,7 @@ func (c *Chain) ValidateCommit(b *Block) error {
 		if !ed25519.Verify(ed25519.PublicKey(a.PubKey), h[:], a.Sig) {
 			return fmt.Errorf("%w: attester %s", ErrBadSignature, id)
 		}
-		if c.rep(id) < c.cfg.MinAttesterRep {
+		if !c.attesterQualified(id) {
 			continue // unqualified signatures are ignored, not fatal
 		}
 		seen[id] = true
@@ -509,7 +656,7 @@ func (c *Chain) validateStructural(b *Block) error {
 	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
 		return fmt.Errorf("%w: proposer", ErrBadSignature)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 {
 		return errors.New("chain: empty block")
 	}
 	if err := c.validateTakedowns(b); err != nil {
@@ -581,11 +728,19 @@ func (c *Chain) apply(b Block) {
 	for _, r := range b.Unrevocations {
 		delete(c.revoked, r)
 	}
+	// Record on-chain bond registrations (objective validator set, F6). Verified
+	// already (validateBondRegs) for non-genesis; genesis registrations are
+	// declared. The latest registration wins, so a validator can renew or resize.
+	for _, r := range b.BondRegs {
+		if len(r.Validator) == ed25519.PublicKeySize {
+			c.bonded[r.ValidatorID()] = r.Size
+		}
+	}
 	// Track distinct qualified validators for the maturity metric — a
 	// monotonic, chain-internal, auditable measure of decentralization.
 	for _, a := range b.Atts {
 		id := a.AttesterID()
-		if id != b.ProposerID() && c.rep(id) >= c.cfg.MinAttesterRep {
+		if id != b.ProposerID() && c.attesterQualified(id) {
 			c.validatorsSeen[id] = true
 		}
 	}
@@ -607,9 +762,13 @@ func (c *Chain) Weight() int64 {
 	return w
 }
 
-// blockWeight counts the distinct, qualified, non-proposer attesters whose
-// signatures verify over this block — the same rule ValidateCommit counts a
-// quorum by, so a committed block's weight is exactly its qualified support.
+// blockWeight is the fork-choice weight this block contributes. In OBJECTIVE
+// mode (F6) it sums the on-chain bonded SIZE of each distinct, non-proposer
+// attester whose signature verifies — a quantity every replica recomputes
+// identically from the chain, so honest replicas can never disagree on which
+// fork is heavier. In legacy mode it COUNTS those attesters, gated by the local
+// reputation view (which is what could diverge under a partition). Either way it
+// is the same rule ValidateCommit counts support by.
 func (c *Chain) blockWeight(b *Block) int64 {
 	h := b.Hash()
 	seen := make(map[ports.NodeID]bool)
@@ -625,11 +784,15 @@ func (c *Chain) blockWeight(b *Block) int64 {
 		if !ed25519.Verify(ed25519.PublicKey(a.PubKey), h[:], a.Sig) {
 			continue
 		}
-		if c.rep(id) < c.cfg.MinAttesterRep {
+		if !c.attesterQualified(id) {
 			continue
 		}
 		seen[id] = true
-		n++
+		if c.objective() {
+			n += c.bonded[id] // objective weight = summed on-chain bond
+		} else {
+			n++ // legacy weight = count of qualified attesters
+		}
 	}
 	return n
 }
@@ -656,6 +819,7 @@ func (c *Chain) Reconcile(fork []Block) (bool, error) {
 	// Re-validate the candidate history end to end in a fresh replica.
 	tmp := New(c.cfg, c.rep)
 	tmp.tokenQuorum, tmp.issuerKey = c.tokenQuorum, c.issuerKey
+	tmp.verifyBond = c.verifyBond // so the fork's bond registrations re-verify (F6)
 	if err := tmp.AppendGenesis(fork[0]); err != nil {
 		return false, err
 	}
@@ -702,6 +866,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.revoked = t.revoked
 	c.validatorsSeen = t.validatorsSeen
 	c.spent = t.spent
+	c.bonded = t.bonded
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {
