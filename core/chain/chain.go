@@ -32,6 +32,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/fxamacker/cbor/v2"
 
@@ -400,6 +401,43 @@ func (c *Chain) validateBondRegs(b *Block) error {
 // Exposed for observability and tests; it is the fork-choice weight of one of
 // id's attestations in objective mode.
 func (c *Chain) BondedSize(id ports.NodeID) int64 { return c.bonded[id] }
+
+// CanonicalIssuers returns the objective issuer set for privacy-preserving token
+// acquisition (M0 privacy D3 / F4 §2c): the on-chain bonded validators in a
+// DETERMINISTIC order — bonded size descending, then NodeID ascending — so every
+// publisher asks the SAME validators, and the subset it chose leaks nothing to a
+// colluding issuer minority correlating who-asked-whom. Because it reads the
+// on-chain bond (not the local reputation view), every replica computes the
+// identical set — the same objectivity that heals fork-choice (F6). Returns at
+// most max entries (all if max <= 0). Empty when no on-chain bonds are recorded
+// (objective mode off, or an immature chain): the caller then falls back to its
+// own peer list, which is the pre-D3 behavior.
+func (c *Chain) CanonicalIssuers(max int) []ports.NodeID {
+	type bonded struct {
+		id   ports.NodeID
+		size int64
+	}
+	list := make([]bonded, 0, len(c.bonded))
+	for id, size := range c.bonded {
+		if size >= c.cfg.MinBond && size > 0 {
+			list = append(list, bonded{id, size})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].size != list[j].size {
+			return list[i].size > list[j].size // heavier bond first
+		}
+		return bytesLess(list[i].id[:], list[j].id[:]) // deterministic tiebreak
+	})
+	if max > 0 && len(list) > max {
+		list = list[:max]
+	}
+	out := make([]ports.NodeID, len(list))
+	for i, e := range list {
+		out[i] = e.id
+	}
+	return out
+}
 
 // RequireTokens turns on publisher-privacy publish tokens (F1): every entry
 // must carry a PublishToken blind-signed by `quorum` distinct qualified
