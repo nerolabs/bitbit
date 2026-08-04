@@ -183,6 +183,58 @@ func TestRedteamF6_LegacyWeightDivergesAcrossReplicas(t *testing.T) {
 	}
 }
 
+// F4 §2c (privacy): the canonical issuer set is DETERMINISTIC and OBJECTIVE —
+// two replicas with maximally-divergent local reputation views produce the
+// identical ordered set (bonded size desc, NodeID tiebreak), so every publisher
+// asks the same validators and the subset it chose leaks nothing.
+func TestCanonicalIssuersDeterministicAndObjective(t *testing.T) {
+	prop := key(1)
+	vals := []ed25519.PrivateKey{key(2), key(3), key(4), key(5)}
+	build := func(rep func(ports.NodeID) int64) *Chain {
+		c := New(Config{Quorum: 3, MinBond: 1 << 20}, rep)
+		c.SetBondVerifier(objectiveVerify)
+		g := &Block{Version: BlockVersion, Height: 0, Entries: []ports.Entry{entry(0)}}
+		g.BondRegs = []BondReg{
+			bondReg(prop, 5<<20, ports.Hash{}),
+			bondReg(vals[0], 4<<20, ports.Hash{}),
+			bondReg(vals[1], 3<<20, ports.Hash{}),
+			bondReg(vals[2], 2<<20, ports.Hash{}), // tie at 2 MiB with vals[3]
+			bondReg(vals[3], 2<<20, ports.Hash{}),
+		}
+		Sign(g, prop)
+		if err := c.AppendGenesis(*g); err != nil {
+			panic(err)
+		}
+		return c
+	}
+	r1 := build(func(ports.NodeID) int64 { return 0 })
+	r2 := build(func(ports.NodeID) int64 { return 1_000_000 })
+
+	a, b := r1.CanonicalIssuers(0), r2.CanonicalIssuers(0)
+	if len(a) != 5 || len(b) != 5 {
+		t.Fatalf("canonical set should hold all 5 bonded validators, got %d/%d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatal("F4 §2c: canonical issuer set differs across divergent replicas — subset choice would leak")
+		}
+	}
+	if a[0] != idOf(prop) {
+		t.Fatal("the heaviest bond must come first")
+	}
+	// The 2 MiB tie between vals[2] and vals[3] breaks by lower NodeID.
+	lo, hi := idOf(vals[2]), idOf(vals[3])
+	if bytesLess(hi[:], lo[:]) {
+		lo, hi = hi, lo
+	}
+	if a[3] != lo || a[4] != hi {
+		t.Fatal("a bonded-size tie must break by lower NodeID, deterministically")
+	}
+	if got := r1.CanonicalIssuers(2); len(got) != 2 || got[0] != a[0] || got[1] != a[1] {
+		t.Fatal("max should cap to the top-N by bonded weight")
+	}
+}
+
 // A forged on-chain bond registration cannot buy objective weight: neither a
 // bad space-time proof nor a bad signature is accepted, so a validator cannot
 // register standing it did not prove.

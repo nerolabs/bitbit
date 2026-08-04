@@ -24,6 +24,17 @@ func (n *Node) EnableChain(ch *chain.Chain, priv ed25519.PrivateKey) {
 // Chain exposes the local replica (dashboards, tests).
 func (n *Node) Chain() *chain.Chain { return n.chain }
 
+// CanonicalIssuers is the deterministic, on-chain-bonded issuer set a publisher
+// should acquire tokens/credits from for privacy (M0 D3 / F4 §2c): every
+// publisher asks the SAME validators, so the subset chosen leaks nothing. Empty
+// if there is no chain or no on-chain bonds (caller falls back to its peer list).
+func (n *Node) CanonicalIssuers(max int) []ports.NodeID {
+	if n.chain == nil {
+		return nil
+	}
+	return n.chain.CanonicalIssuers(max)
+}
+
 // handleChain processes validator messages; returns false if the kind
 // isn't chain-related.
 func (n *Node) handleChain(from ports.NodeID, msg ports.Message) bool {

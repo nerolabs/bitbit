@@ -55,6 +55,20 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Privacy (red-team F4 §2c): a canonical, on-chain issuer set so the validator
+  subset a publisher asks leaks nothing** (2026-08-04) — a publisher previously
+  acquired publish tokens from whatever validator subset its `-peers` gave it, so
+  a colluding issuer minority could narrow the anonymity set by *which* validators
+  a given publish asked. `Chain.CanonicalIssuers` (and `Node.CanonicalIssuers`)
+  now derives a **deterministic** issuer set from the **on-chain bond** (the same
+  objective `bonded` map that heals fork-choice, F6): bonded validators ordered by
+  size then NodeID, identical on every replica. Every publisher asks the same
+  validators, so the subset choice carries no signal. Regression
+  (`core/chain/redteam_consensus_test.go`) proves two maximally-divergent replicas
+  produce the identical ordered set. This is one of the three network-layer parts
+  of D3; the transport parts (routing issuance over the content-blind relay from
+  an ephemeral identity, epoch batching) are still pending, so IP+timing
+  correlation remains until they land. See `docs/design/m0-privacy-issuance.md`.
 - **Privacy corner (red-team F4): the per-publish fee no longer links a publish
   to its standing key** (2026-08-04) — token issuance de-anonymized the publisher
   two independent ways: over a non-anonymous transport (IP+timing) and via
