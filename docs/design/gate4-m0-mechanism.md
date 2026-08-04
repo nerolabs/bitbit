@@ -25,7 +25,7 @@
 > |---|---|---|
 > | Privacy (D3 issuance-mixing) | Resolved | 🔴 **BROKEN** — issuance-mixing never shipped; a colluding validator minority de-anonymizes the publisher at token acquisition (F4). |
 > | Accountability | Resolved | 🟢 **FIXED (2026-08-04, #136)** — on-chain revocation was a global, ownership-unchecked, irreversible switch (F5); now existence-checked, per-operator opt-in, and reversible. |
-> | Sybil (D1 bond) | Resolved | 🔴 **BROKEN** — the plot binds only the 32-byte block *leaves*, so a prover holds 1/128 of what it charges (→0 for small bonds); the VDF "time" half gates nothing because its input is public (F1/F2/F3). |
+> | Sybil (D1 bond) | Resolved | 🟢 **FIXED (2026-08-04) — structural** — the plot now binds the full block *bytes* over a proven depth-robust graph (DRSample), closing the 1/128 leaves-only gap, and the VDF is seeded from a plot block **read before it runs**, so releasing the space forfeits the answer (F1/F2). Residual: the quantitative min-bond-size/delay floor is a tuning follow-up. See `m0-sybil-bond.md`. |
 > | Consensus D2 (fork-choice) | Resolved | 🔴 **BROKEN** — fork-choice weight is subjective local reputation, not objective on-chain bond; two honest replicas diverge permanently (F6). Cross-height double-backing evades the equivocation slash (F7). |
 >
 > **Status line: primitives real, composition unproven, M0 not yet held.** The

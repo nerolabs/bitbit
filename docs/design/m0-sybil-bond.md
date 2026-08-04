@@ -1,10 +1,13 @@
 # M0 fix — the Sybil bond made real (red-team F1 / F2 / F3)
 
-> **Status: design doc, ahead of code (the design turn).** The external M0
+> **Status: F1/F2/F3 structural fix SHIPPED (2026-08-04) in `core/bond` +
+> `adapters/diskplot`; this doc is the spec it was built to.** The external M0
 > red-team broke the Sybil corner *in the composition* — the Wesolowski VDF and
-> the Shacham–Waters PoR were attacked and held; the **bond** did not. This doc
-> specifies the fix a skeptic can read and the red-team can re-target. It fixes
-> the "get this wrong and re-architect" decisions; it is not the line-level patch.
+> the Shacham–Waters PoR were attacked and held; the **bond** did not. The
+> byte-binding (DRSample depth-robust graph) and the pre-VDF plot-read seed are in
+> code with inverted-PoC regressions; the remaining item is the **quantitative
+> tuning floor** (§6) — a min bond size + `BondVDFDelay` such that even the
+> smallest bond cannot re-plot within one challenge window.
 >
 > Report: `docs/reviews/M0-REDTEAM-REPORT.md` §1–§3. Findings F1/F2/F3.
 > Supersedes the "Resolved by D1" language in `gate4-m0-mechanism.md` §3b.

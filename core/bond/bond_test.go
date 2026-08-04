@@ -120,6 +120,43 @@ func intsToBytes(xs []int) []byte {
 
 func secret(b byte) []byte { h := ports.HashBytes([]byte{b}); return h[:] }
 
+// BenchmarkSeal reports the plot (and therefore re-plot) cost per bond size —
+// the constant behind the F2 tuning claim "re-plot ≫ one epoch." Run with
+// `go test ./core/bond -run x -bench Seal -benchmem`. Byte-binding over the
+// depth-robust graph makes each block hash its parents' full bytes, so plotting
+// is deliberately more expensive than the old leaves-only labeling; that expense
+// is the Sybil cost and the anti-release floor.
+func BenchmarkSeal(b *testing.B) {
+	for _, size := range []int64{1 << 20, 4 << 20} {
+		b.Run(sizeLabel(size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = Seal(secret(byte(i)), size)
+			}
+		})
+	}
+}
+
+func sizeLabel(size int64) string {
+	switch {
+	case size >= 1<<20:
+		return itoa(size>>20) + "MiB"
+	default:
+		return itoa(size>>10) + "KiB"
+	}
+}
+
+func itoa(x int64) string {
+	if x == 0 {
+		return "0"
+	}
+	var b []byte
+	for x > 0 {
+		b = append([]byte{byte('0' + x%10)}, b...)
+		x /= 10
+	}
+	return string(b)
+}
+
 // The plot must be a deterministic function of identity: the same node
 // regenerates the same bond (so it can re-plot on setup), and two identities
 // get genuinely distinct plots (so N Sybils are N distinct blobs on disk).
@@ -135,40 +172,48 @@ func TestPlotDeterministicAndIdentityBound(t *testing.T) {
 	}
 }
 
-// The space-hardness lever: a block depends on EARLIER blocks, so it cannot
-// be recomputed in isolation — perturbing a predecessor's leaf changes the
-// block. If blocks were independent (the old placeholder), this would not
-// hold and a prover could recompute any single block on demand instead of
-// storing the plot.
-func TestPlotBlockDependsOnEarlierBlocks(t *testing.T) {
+// The space-hardness lever (M0 F1 fix): a block depends on the BYTES of earlier
+// blocks, so it cannot be recomputed in isolation — perturbing a predecessor's
+// or a parent's block bytes changes the block. Binding to bytes (not the
+// 32-byte leaves) is what stops a prover from storing only leaves and
+// recomputing any single block on demand instead of storing the plot.
+func TestPlotBlockDependsOnEarlierBlockBytes(t *testing.T) {
 	id := secret(7)
-	// Build honest leaves for a small plot.
+	// Build an honest small plot (full blocks, as Seal does).
 	const n = 64
-	leaves := make([]ports.Hash, n)
+	blocks := make([][]byte, n)
 	for i := 0; i < n; i++ {
-		leaves[i] = ports.HashBytes(plotBlock(id, i, leaves))
+		blocks[i] = plotBlock(id, i, blocks)
 	}
 	const target = n - 1 // a late block: depends on its predecessor + parents
 
-	honest := plotBlock(id, target, leaves)
+	honest := plotBlock(id, target, blocks)
 
-	// Flip the immediate predecessor's leaf; the block must change.
-	perturbed := append([]ports.Hash(nil), leaves...)
+	// Flip a byte of the immediate predecessor's BLOCK; the block must change.
+	perturbed := cloneBlocks(blocks)
 	perturbed[target-1][0] ^= 0xff
 	if bytes.Equal(honest, plotBlock(id, target, perturbed)) {
-		t.Fatal("block does not depend on its predecessor — plot is not chained")
+		t.Fatal("block does not depend on its predecessor's bytes — plot is not byte-chained")
 	}
 
-	// Flip one of its long-range parents' leaves; the block must change too.
+	// Flip a byte of one long-range parent's BLOCK; the block must change too.
 	parents := parentIndices(id, target)
 	if len(parents) == 0 {
 		t.Fatal("expected long-range parents for a late block")
 	}
-	perturbed2 := append([]ports.Hash(nil), leaves...)
+	perturbed2 := cloneBlocks(blocks)
 	perturbed2[parents[0]][0] ^= 0xff
 	if bytes.Equal(honest, plotBlock(id, target, perturbed2)) {
-		t.Fatal("block does not depend on its long-range parent — no depth to the graph")
+		t.Fatal("block does not depend on its long-range parent's bytes — no depth to the graph")
 	}
+}
+
+func cloneBlocks(in [][]byte) [][]byte {
+	out := make([][]byte, len(in))
+	for i, b := range in {
+		out[i] = append([]byte(nil), b...)
+	}
+	return out
 }
 
 // Dependency indices are always earlier blocks (a DAG, never a cycle) and
