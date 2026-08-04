@@ -19,14 +19,24 @@ import (
 // SetDenylist gives the node an operator-loaded denylist (may be nil).
 func (n *Node) SetDenylist(d *denylist.Set) { n.denylist = d }
 
-// isDenied is the node's effective takedown check: the union of the
-// operator's local list and the roots its chain replica has committed as
-// revoked. Neither source is controlled by any central party.
+// SetHonorChainRevocations subscribes (or unsubscribes) this operator to the
+// chain's on-chain takedown records. It defaults to OFF (red-team F5): a node
+// that follows the chain does not thereby inherit every quorum-committed
+// revocation — honoring is a per-operator choice, "proportional to who trusts
+// you" (TENETS §9), never a global switch. An operator that wants to enforce
+// on-chain takedowns opts in with this. The operator-local denylist
+// (SetDenylist) is always honored regardless.
+func (n *Node) SetHonorChainRevocations(honor bool) { n.honorChainRevocations = honor }
+
+// isDenied is the node's effective takedown check: the operator's local list
+// (always), plus — only if the operator has subscribed — the roots its chain
+// replica has committed as revoked. Neither source is controlled by any
+// central party, and chain revocations are opt-in.
 func (n *Node) isDenied(root ports.Hash) bool {
 	if n.denylist.Denied(root) {
 		return true
 	}
-	return n.chain != nil && n.chain.Revoked(root)
+	return n.honorChainRevocations && n.chain != nil && n.chain.Revoked(root)
 }
 
 // chunkDenied reports whether a held chunk belongs to a denied root

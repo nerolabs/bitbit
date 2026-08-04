@@ -251,8 +251,12 @@ type Node struct {
 	chainSyncOnCatchUp func(added int)
 	chainSyncRunning   bool
 	// denylist is the operator's local takedown list (nil = none). The
-	// effective set also includes on-chain revocations; see isDenied.
+	// effective set also includes on-chain revocations, but ONLY if the
+	// operator subscribed via SetHonorChainRevocations; see isDenied.
 	denylist *denylist.Set
+	// honorChainRevocations opts this operator in to enforcing the chain's
+	// on-chain takedown records (default off — per-operator, not global; F5).
+	honorChainRevocations bool
 
 	// lg narrates through the observability port; nil = off. The sim
 	// leaves it nil, so determinism and benchmarks are untouched.
