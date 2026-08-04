@@ -68,6 +68,7 @@ func cmdDaemon(args []string) error {
 	minBond := fs.String("min-bond", "1M", "objective mode: the minimum bonded size a validator must prove on-chain to qualify (its -bond must clear this)")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (persisted to disk; a restart reloads it) — a bigger bond earns more standing")
+	minBondFloor := fs.String("min-bond-floor", "0", "anti-release floor (M0 F1/F2): a bond smaller than this earns NO standing, because it could be released and re-plotted inside the challenge window. Set it ABOVE (challenge-window × plot-throughput): at ~270 MB/s and this daemon's ~2s window that is ~540 MiB, so a real open deployment sets e.g. 1G. 0 = off (safe only for a trusted/demo swarm)")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
@@ -145,6 +146,12 @@ func cmdDaemon(args []string) error {
 	cfg := node.DefaultConfig()
 	cfg.RequestTimeout = ports.Duration(2 * time.Second) // patient vs the 500ms default (real WAN)
 	cfg.BondAuditInterval = ports.Duration(*bondAudit)
+	if floor, ferr := parseSize(*minBondFloor); ferr == nil && floor > 0 {
+		cfg.MinBondBytes = floor
+		if bsz, _ := parseSize(*bondSize); bsz < floor {
+			fmt.Printf("bond: WARNING — -bond (%s) is below -min-bond-floor (%s); this validator will earn NO standing\n", *bondSize, *minBondFloor)
+		}
+	}
 	nd := node.New(id, cfg, walltime.New(loop), tr, store)
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,

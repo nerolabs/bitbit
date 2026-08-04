@@ -55,6 +55,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Added
+- **Anti-release bond floor (`-min-bond-floor` / `Node.MinBondBytes`): a bond too
+  small to be safe against release + re-plot earns no standing (M0 Sybil F1/F2)**
+  (2026-08-04) — the byte-binding + read-bound-VDF plot makes a released prover
+  recompute (memory-hard) before it can answer, but that only bites if re-plotting
+  the pledged size takes LONGER than the challenge window. At the measured plot
+  throughput (~270 MB/s, `bond.BenchmarkSeal`) a 500 ms window re-plots ~135 MiB
+  and this daemon's ~2 s window ~540 MiB — so a bond at or below that could be
+  released and recomputed just-in-time. A bond below `Node.MinBondBytes` now earns
+  **no standing**, self or peer, at the live audit: `bondAuditOnce` gates both the
+  self-credit and the peer-credit on the floor, so a valid answer for a sub-floor
+  plot proves nothing about sustained possession. Exposed as `silt daemon
+  -min-bond-floor` (default `0` = off, since every fast test/demo/NAT config uses
+  tiny bonds; an open deployment sets it above window × throughput, e.g. `1G`, and
+  the daemon warns if `-bond` is below it). Coverage: **unit**
+  (`core/node/bondfloor_test.go` — a sub-floor bond earns 0, an at-floor bond earns
+  standing) and **integration** (`sim/bond_floor_test.go` — a sub-floor validator
+  is denied standing over the live audit wire while an at-floor one earns it).
+  `BondVDFDelay` remains the complementary time-floor knob. See
+  `docs/design/m0-sybil-bond.md`.
 - **`silt daemon -objective`: run consensus on objective on-chain-bond fork-choice
   (F6), with an e2e proof** (2026-08-04) — a validator can now enable objective
   mode from the binary: `-objective` (with `-min-bond`, and requiring `-anchors` +
