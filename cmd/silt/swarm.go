@@ -16,22 +16,43 @@ import (
 	"github.com/nerolabs/silt/ports"
 )
 
-// acquirePublishToken fetches the validators' token-issuer keys, then collects
-// k blind signatures into an unlinkable publish token (T3). Runs on the node's
-// loop; cont fires once with the token or an error.
+// acquirePublishToken fetches the validators' token-issuer keys, then assembles
+// an unlinkable publish token (T3) over the PREPAID-CREDIT path (M0 privacy F4):
+// it mints one prepaid credit per validator — the fee is charged HERE, at mint —
+// and then SPENDS those credits for the k blind signatures, so the publish itself
+// records no per-publish fee debit tying it to the requester. The whole flow runs
+// from the swarm client's ephemeral identity. Runs on the node's loop; cont fires
+// once with the token or an error.
 func acquirePublishToken(nd *node.Node, validators []ports.NodeID, k int, cont func(*ports.PublishToken, error)) {
 	var fetchNext func(i int)
 	fetchNext = func(i int) {
-		if i >= len(validators) {
+		if i < len(validators) {
+			nd.FetchIssuerKey(validators[i], func(error) { fetchNext(i + 1) }) // best-effort
+			return
+		}
+		// Keys in hand: mint one credit per validator (charged at mint), then
+		// spend them for the token (no charge at the spend).
+		credits := map[ports.NodeID]ports.PublishCredit{}
+		var mintNext func(j int)
+		mintNext = func(j int) {
+			if j < len(validators) {
+				v := validators[j]
+				nd.AcquireCredits(rand.Reader, v, 1, nd.IssuerKeyOf, func(cs []ports.PublishCredit, _ error) {
+					if len(cs) == 1 {
+						credits[v] = cs[0] // best-effort per issuer; spend handles a shortfall
+					}
+					mintNext(j + 1)
+				})
+				return
+			}
 			serial, err := blindtoken.NewSerial(rand.Reader)
 			if err != nil {
 				cont(nil, err)
 				return
 			}
-			nd.AcquireToken(rand.Reader, serial, validators, nd.IssuerKeyOf, k, cont)
-			return
+			nd.AcquireTokenWithCredits(rand.Reader, serial, validators, nd.IssuerKeyOf, credits, k, cont)
 		}
-		nd.FetchIssuerKey(validators[i], func(error) { fetchNext(i + 1) }) // best-effort; AcquireToken handles shortfall
+		mintNext(0)
 	}
 	fetchNext(0)
 }
