@@ -6,6 +6,10 @@
 // missing Sybil cost the reputation-quorum chain has always assumed but
 // never charged (threat-catalog B1/D3).
 //
+// ⚠️ As of 2026-08-04 this "N identities cost N×size" claim is DISPROVEN by the
+// M0 red-team (F1/F3) — see the RED-TEAM note below: the real cost is ~size/128
+// (→0 for small bonds). The paragraphs here describe the INTENDED design.
+//
 // IDENTITY BINDING (Gate 4b). The plot is sealed from a per-identity SECRET
 // (derived from the node's signing key), not its public NodeID, so:
 //   - only the identity's owner can generate its plot — an outsider cannot
@@ -44,6 +48,7 @@
 //     PUBLIC challenge seed, so a zero-resident prover runs the VDF, learns the
 //     probed indices, then re-derives exactly those blocks. Releasing the space
 //     does not forfeit the answer.
+//
 // The fix (design turn): make each block depend on the full parent BYTES (a
 // memory-hard label / proven depth-robust graph), and bind the sampling
 // challenge to a plot read BEFORE the VDF so releasing the space forfeits it.
