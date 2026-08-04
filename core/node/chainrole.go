@@ -138,6 +138,16 @@ func (n *Node) ProposeRevocation(roots []ports.Hash, attesters, broadcast []port
 // proposeBlock signs b, gathers attestations to quorum, commits locally,
 // and broadcasts — shared by entry and revocation proposals.
 func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID, quorum int, done func(error)) {
+	// Objective fork-choice (F6): a proposer attaches its own live bond
+	// registration, so proposing IS registering — an anchor bootstrapping the
+	// network records its real bond in its first block, and every validator
+	// renews as it proposes. No-op in legacy mode (BondRegs are ignored) and when
+	// the node holds no bond.
+	if n.chain.Objective() && n.bond != nil {
+		if reg, ok := n.RegisterBondReg(b.Prev); ok {
+			b.BondRegs = append(b.BondRegs, reg)
+		}
+	}
 	chain.Sign(b, n.signer)
 	if err := n.chain.ValidateProposal(b); err != nil {
 		done(fmt.Errorf("propose: local pre-check: %w", err))
