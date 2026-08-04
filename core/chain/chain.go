@@ -133,6 +133,13 @@ type Block struct {
 	// as before, so no BlockVersion bump). Committed by Hash so attesters sign
 	// over them.
 	BondRegs []BondReg `cbor:"10,keyasint,omitempty"`
+	// Slashes are on-chain equivocation records (red-team F2): a self-verifying
+	// proof that a validator double-signed. On commit, the culprit is EVICTED from
+	// the objective bonded set (its `c.bonded` weight → 0) and permanently barred
+	// from re-earning it — so a proven double-sign costs standing in objective
+	// mode, not only in the reputation ledger the objective set never reads.
+	// Committed by Hash (attesters sign over them); omitempty keeps it additive.
+	Slashes []Equivocation `cbor:"11,keyasint,omitempty"`
 }
 
 // Attestation is a validator's signature over the block hash. The
@@ -189,7 +196,7 @@ func init() {
 // proposer, and both takedown and undo records. Signing the hash therefore
 // signs the block's entire content and its place in history.
 func (b *Block) Hash() ports.Hash {
-	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations, Unrevocations: b.Unrevocations, BondRegs: b.BondRegs}
+	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations, Unrevocations: b.Unrevocations, BondRegs: b.BondRegs, Slashes: b.Slashes}
 	raw, err := encMode.Marshal(&unsigned)
 	if err != nil {
 		panic(err) // canonical encoding of our own struct cannot fail
@@ -286,6 +293,10 @@ var (
 	// signature or space-time proof does not verify (objective fork-choice, F6):
 	// a forged registration cannot buy objective weight.
 	ErrBadBondReg = errors.New("chain: invalid on-chain bond registration")
+	// ErrBadSlash rejects an on-chain equivocation record that is not a valid,
+	// self-verifying double-sign proof — so a forged slash cannot evict an honest
+	// validator (F2; forged-slash griefing stays denied).
+	ErrBadSlash = errors.New("chain: invalid equivocation slash proof")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -313,6 +324,17 @@ type Chain struct {
 	// space-time proof (injected so core/chain stays decoupled from core/bond).
 	bonded     map[ports.NodeID]int64
 	verifyBond func(root ports.Hash, size int64, nonce uint64, answer []byte) bool
+	// bondRootOwner enforces, in the OBJECTIVE set, the same per-root dedup the
+	// credit ledger has (credit.rootOwner): a bond Root builds standing for AT
+	// MOST ONE identity, so a colluding operator pointing N identities at one
+	// shared plot earns one bond's standing, not N (red-team F1). The space-time
+	// proof is not identity-bound, so without this a single plot's answer would
+	// verify — and be credited — for every identity that copies it.
+	bondRootOwner map[ports.Hash]ports.NodeID
+	// slashed is the set of validators evicted for a proven equivocation (F2). A
+	// slashed id is disqualified and cannot re-earn bonded standing, so a proven
+	// double-sign costs standing in the OBJECTIVE set, not only the rep ledger.
+	slashed map[ports.NodeID]bool
 }
 
 // New starts an empty replica. rep is the local reputation view —
@@ -325,7 +347,9 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 		revoked:        make(map[ports.Hash]bool),
 		validatorsSeen: make(map[ports.NodeID]bool),
 		spent:          make(map[string]bool),
-		bonded:         make(map[ports.NodeID]int64)}
+		bonded:         make(map[ports.NodeID]int64),
+		bondRootOwner:  make(map[ports.Hash]ports.NodeID),
+		slashed:        make(map[ports.NodeID]bool)}
 }
 
 // SetBondVerifier wires the objective-fork-choice bond check (F6): given a
@@ -368,6 +392,9 @@ func (c *Chain) launchAnchor(id ports.NodeID) bool {
 // bonded size clears MinBond, OR it is a launch anchor bootstrapping an immature
 // network. Legacy mode: the local reputation view.
 func (c *Chain) attesterQualified(id ports.NodeID) bool {
+	if c.slashed[id] {
+		return false // evicted for a proven equivocation (F2)
+	}
 	if c.objective() {
 		return c.bonded[id] >= c.cfg.MinBond || c.launchAnchor(id)
 	}
@@ -378,6 +405,9 @@ func (c *Chain) attesterQualified(id ports.NodeID) bool {
 // validator, or a launch anchor while the network is immature. Legacy mode uses
 // MinProposerRep.
 func (c *Chain) proposerQualified(id ports.NodeID) bool {
+	if c.slashed[id] {
+		return false // evicted for a proven equivocation (F2)
+	}
 	if c.objective() {
 		return c.bonded[id] >= c.cfg.MinBond || c.launchAnchor(id)
 	}
@@ -436,10 +466,27 @@ func (c *Chain) validateBondRegs(b *Block) error {
 	return nil
 }
 
+// validateSlashes verifies a block's on-chain equivocation records (F2): each
+// must be a self-verifying double-sign proof — the culprit's own signatures over
+// two DIFFERENT blocks at the SAME height. A forged accusation fails
+// VerifyEquivocation, so an honest validator cannot be evicted (forged-slash
+// griefing stays denied). Enforced on every write path.
+func (c *Chain) validateSlashes(b *Block) error {
+	for i := range b.Slashes {
+		if !VerifyEquivocation(&b.Slashes[i]) {
+			return fmt.Errorf("%w: proof %d", ErrBadSlash, i)
+		}
+	}
+	return nil
+}
+
 // BondedSize reports the objective on-chain bonded size for id (0 if none).
 // Exposed for observability and tests; it is the fork-choice weight of one of
 // id's attestations in objective mode.
 func (c *Chain) BondedSize(id ports.NodeID) int64 { return c.bonded[id] }
+
+// IsSlashed reports whether id has been evicted for a proven equivocation (F2).
+func (c *Chain) IsSlashed(id ports.NodeID) bool { return c.slashed[id] }
 
 // CanonicalIssuers returns the objective issuer set for privacy-preserving token
 // acquisition (M0 privacy D3 / F4 §2c): the on-chain bonded validators in a
@@ -556,13 +603,16 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		return fmt.Errorf("%w: proposer %s has %d, needs %d",
 			ErrLowReputation, b.ProposerID(), c.rep(b.ProposerID()), c.cfg.MinProposerRep)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 && len(b.Slashes) == 0 {
 		return errors.New("chain: empty block")
 	}
 	if err := c.validateTakedowns(b); err != nil {
 		return err
 	}
 	if err := c.validateBondRegs(b); err != nil {
+		return err
+	}
+	if err := c.validateSlashes(b); err != nil {
 		return err
 	}
 	seen := make(map[ports.Hash]bool)
@@ -733,10 +783,13 @@ func (c *Chain) validateStructural(b *Block) error {
 	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
 		return fmt.Errorf("%w: proposer", ErrBadSignature)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 && len(b.BondRegs) == 0 && len(b.Slashes) == 0 {
 		return errors.New("chain: empty block")
 	}
 	if err := c.validateTakedowns(b); err != nil {
+		return err
+	}
+	if err := c.validateSlashes(b); err != nil {
 		return err
 	}
 	seen := make(map[ports.NodeID]bool)
@@ -808,10 +861,32 @@ func (c *Chain) apply(b Block) {
 	// Record on-chain bond registrations (objective validator set, F6). Verified
 	// already (validateBondRegs) for non-genesis; genesis registrations are
 	// declared. The latest registration wins, so a validator can renew or resize.
+	// PER-ROOT DEDUP (red-team F1): a bond Root credits AT MOST ONE identity — the
+	// first to claim it. A later registration on an already-claimed root by a
+	// DIFFERENT identity earns nothing, so a colluding operator cannot back N
+	// Sybil standings off one shared plot. The first owner may re-register (renew
+	// or resize) its own root freely.
 	for _, r := range b.BondRegs {
-		if len(r.Validator) == ed25519.PublicKeySize {
-			c.bonded[r.ValidatorID()] = r.Size
+		if len(r.Validator) != ed25519.PublicKeySize {
+			continue
 		}
+		id := r.ValidatorID()
+		if c.slashed[id] {
+			continue // a slashed equivocator cannot re-earn bonded standing (F2)
+		}
+		if owner, claimed := c.bondRootOwner[r.Root]; claimed && owner != id {
+			continue // shared root already backs another identity → no standing
+		}
+		c.bondRootOwner[r.Root] = id
+		c.bonded[id] = r.Size
+	}
+	// Apply on-chain equivocation slashes (F2): evict the culprit from the
+	// objective bonded set and bar it from re-earning standing. Verified already
+	// (validateSlashes) on the write paths; genesis slashes are declared.
+	for i := range b.Slashes {
+		culprit := b.Slashes[i].CulpritID()
+		c.slashed[culprit] = true
+		delete(c.bonded, culprit)
 	}
 	// Track distinct qualified validators for the maturity metric — a
 	// monotonic, chain-internal, auditable measure of decentralization.
@@ -944,6 +1019,8 @@ func (c *Chain) adopt(t *Chain) {
 	c.validatorsSeen = t.validatorsSeen
 	c.spent = t.spent
 	c.bonded = t.bonded
+	c.bondRootOwner = t.bondRootOwner
+	c.slashed = t.slashed
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {

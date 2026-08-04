@@ -8,6 +8,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Blind red-team F1 (Sybil, Critical) + F2 (equivocation slash inert): the
+  objective validator set now honors the two defenses it was bypassing**
+  (2026-08-04) — a second, blind red-team pass (`ae005e9`) found that promoting
+  objective on-chain-bond fork-choice to the M0 default (#154) made it authoritative
+  for standing, but it skipped two defenses that lived only in the
+  non-authoritative `core/credit` reputation ledger. Both are now carried into
+  `core/chain`. **F1 — per-root bond dedup:** the objective set never checked that
+  a bond `Root` was unclaimed, and the space-time proof is not identity-bound, so N
+  cheap identities could register the *same* plot's root+answer and each earn full
+  `MinBond` fork-choice weight — one 4 MiB disk buying a whole write quorum.
+  `apply`/`validateBondRegs` now enforce a `bondRootOwner` map (a root credits AT
+  MOST ONE identity, the first to claim it; the owner may renew), so N Sybils cost
+  N independent bonds again. **F2 — on-chain equivocation slash:** `SlashEquivocation`
+  only mutated the reputation ledger, which objective mode never reads, so a proven
+  double-signer kept full eligibility and weight. Slashing is now an **on-chain
+  record** (`Block.Slashes`, a self-verifying equivocation proof) that on commit
+  **evicts** the culprit from `c.bonded` and bars it from re-earning standing —
+  applied in lockstep on every replica; a forged slash is rejected
+  (`ErrBadSlash`), so forged-slash griefing stays denied. The node records
+  detected equivocations on-chain in the next block it proposes. Regressions:
+  `core/chain/redteam_verify_*` (shared-root denied, slash evicts, forged slash
+  rejected) and `core/node/objective_slash_test.go` (over the loop: a node detects,
+  records, and every replica evicts).
+
 ### Security
 - **M0 composition: every red-team finding (F1–F7) fixed and covered by tests —
   awaiting external re-verification** (2026-08-04) — following the red-team break

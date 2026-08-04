@@ -256,6 +256,10 @@ type Node struct {
 	chain    *chain.Chain
 	signer   ed25519.PrivateKey
 	onCommit func(chain.Block)
+	// pendingSlashes are equivocation proofs this node detected (during Reconcile)
+	// and has not yet recorded on-chain; proposeBlock drains them into Block.Slashes
+	// so every replica evicts the culprit from the objective set in lockstep (F2).
+	pendingSlashes []chain.Equivocation
 	// attested records the block hash this validator has signed at each height,
 	// so it NEVER signs a second, different block at a height it already
 	// attested — an honest validator does not equivocate, even if two competing
