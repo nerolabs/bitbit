@@ -32,9 +32,9 @@
   <p class="dim" style="font-size:0.9rem">Pre-V1: the storage plane is
   field-proven; the trust plane now runs real mechanisms (a space-time storage
   bond, objective on-chain-bond fork-choice, unlinkable publishing, per-operator
-  takedowns) that an independent red-team broke in the composition and that are
-  now hardened against every finding — covered at the unit, simulation, and
-  real-daemon end-to-end tiers, but not yet externally <i>re</i>-verified, so treat
+  takedowns), hardened through independent adversarial review and covered at the
+  unit, simulation, and real-daemon end-to-end tiers, but not yet externally
+  <i>re</i>-verified, so treat
   it as unaudited. Build from source; see the <a href="roadmap.html">roadmap</a>
   for the 0.x → 0.9.0 (RC) → 1.0.0 (V1) track.</p>
 
@@ -46,16 +46,6 @@
     watch it survive a node death.
   </div>
 
-  <div style="margin:0 0 1.4rem;padding:1rem 1.2rem;border:1px solid var(--ochre);border-radius:8px">
-    <b style="color:var(--ochre)">▶ Reviewing the security?</b>
-    An independent red-team broke all three M0 corners in the composition and
-    every finding is now fixed. The
-    <a href="https://github.com/nerolabs/silt/blob/main/docs/reviews/M0-REDTEAM-REPORT.md">red-team report</a>
-    and the per-finding fix + how-to-verify guide
-    (<a href="https://github.com/nerolabs/silt/blob/main/docs/reviews/M0-REDTEAM-VERIFICATION.md">M0-REDTEAM-VERIFICATION.md</a>)
-    are the fastest way in — each fix ships the attacker's own PoC, inverted, as a
-    runnable regression.
-  </div>
 
   <h2>Architecture in one paragraph</h2>
   <p>The core is pure logic — chunking, encryption, erasure coding, manifests,
