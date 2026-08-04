@@ -87,6 +87,17 @@ type Config struct {
 	// deployment for a stronger elapsed-time floor; the modest default keeps
 	// the deterministic sim fast. 0 disables the time binding (space-only).
 	BondVDFDelay uint64
+	// MinBondBytes is the anti-release floor (M0 Sybil, red-team F1/F2): a bond
+	// smaller than this earns NO standing, self or peer. The read-bound plot makes
+	// a released prover recompute (memory-hard) before it can answer, but that
+	// only bites if re-plotting the pledged size takes LONGER than the challenge
+	// window (RequestTimeout). At the measured plot throughput (~270 MB/s, see
+	// bond.BenchmarkSeal) a 500 ms window re-plots ~135 MiB, so a bond at or below
+	// that can be released and recomputed just-in-time. Setting this floor above
+	// that threshold (with margin) makes storing the plot the only viable
+	// strategy. 0 = no floor (the deterministic sim uses small bonds); a real
+	// deployment sets it — the daemon defaults it safely.
+	MinBondBytes int64
 }
 
 func DefaultConfig() Config {

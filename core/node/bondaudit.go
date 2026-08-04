@@ -122,12 +122,16 @@ func (n *Node) bondAuditOnce(now uint64) {
 	// challenges itself (each validator judges by its own ledger). PEERS
 	// still verify our bond independently over the wire, so a self-assertion
 	// buys nothing with the quorum — only real held storage does.
-	if n.bond != nil {
+	if n.bond != nil && n.bond.Size >= n.cfg.MinBondBytes {
 		n.ledger.RecordBondChallenge(n.id, n.bond.Root, n.bond.Size, true, now)
 		// Narrate our own standing every sweep so an operator can SEE the
 		// earned-standing mechanism the whole of M0 rests on actually working —
 		// rising as bonds prove out, decaying if they lapse (acceptance F7).
 		n.logf(ports.LogInfo, "standing", "self", n.id, "reputation", n.ledger.Reputation(n.id))
+	} else if n.bond != nil {
+		// Below the anti-release floor: too small to be safe against release +
+		// just-in-time re-plot, so it earns nothing (F1/F2).
+		n.logf(ports.LogWarn, "bond below anti-release floor — earns no standing", "size", n.bond.Size, "floor", n.cfg.MinBondBytes)
 	}
 	// Snapshot: the callbacks below mutate nothing here, but a peer could be
 	// learned mid-sweep — challenge the set we knew at sweep start.
@@ -159,7 +163,12 @@ func (n *Node) bondAuditOnce(now uint64) {
 					return // unreachable this round; DecayStale handles sustained absence
 				}
 				ans, derr := bond.DecodeAnswer(resp.Data)
-				ok := derr == nil && bond.VerifySpaceTime(info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay)
+				// A bond below the anti-release floor earns no standing however
+				// well it answers: it is small enough to release and re-plot inside
+				// the challenge window (F1/F2), so a valid answer proves nothing
+				// about sustained possession.
+				ok := info.size >= n.cfg.MinBondBytes &&
+					derr == nil && bond.VerifySpaceTime(info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay)
 				// Replied-but-can't-prove is a FAIL (a liar advertising a bond
 				// it doesn't hold) → standing zeroed; a valid answer earns it.
 				// The root binds standing to the plot: a shared root credits

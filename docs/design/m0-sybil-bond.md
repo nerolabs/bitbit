@@ -5,9 +5,13 @@
 > red-team broke the Sybil corner *in the composition* — the Wesolowski VDF and
 > the Shacham–Waters PoR were attacked and held; the **bond** did not. The
 > byte-binding (DRSample depth-robust graph) and the pre-VDF plot-read seed are in
-> code with inverted-PoC regressions; the remaining item is the **quantitative
-> tuning floor** (§6) — a min bond size + `BondVDFDelay` such that even the
-> smallest bond cannot re-plot within one challenge window.
+> code with inverted-PoC regressions. The **anti-release floor** is now enforced
+> too: `Node.MinBondBytes` denies standing to a bond small enough to release and
+> re-plot inside the challenge window — floor ≥ (challenge-window × plot-throughput);
+> at ~270 MB/s (`bond.BenchmarkSeal`) and a 2 s window that is ~540 MiB, so an open
+> deployment sets `-min-bond-floor` (e.g. `1G`). It is a **config knob** (default
+> off, since every fast test/demo/NAT config uses tiny bonds), enforced with unit +
+> integration coverage. `BondVDFDelay` remains the complementary time-floor knob.
 >
 > Report: `docs/reviews/M0-REDTEAM-REPORT.md` §1–§3. Findings F1/F2/F3.
 > Supersedes the "Resolved by D1" language in `gate4-m0-mechanism.md` §3b.
