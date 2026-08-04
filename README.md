@@ -26,19 +26,24 @@ silent-loss failure shapes fixed (#46/#60/#64), and cross-network
 publish/fetch proven through cone NAT via TCP hole-punching (CI Docker
 harness). The **trust plane** — consensus-secured registry, reputation,
 and revocation — is where the M0 trilemma lives, and its **real mechanism
-is now built and internally adversarially tested** (Gate 4): a real
-verify-without-fetch proof-of-retrieval, a proof-of-**space-time** bond
-(a space-hard identity-bound plot × a Wesolowski VDF, persisted, with the
-per-identity binding that makes N Sybils cost N real disks), standing
-composed as the time-integral of bond+audit, fork-choice reconciliation so
-partitions heal to the heavier-standing chain, and provable equivocation
-that slashes a double-signer. It is proven at the unit, in-process
-simulation, and real-daemon end-to-end tiers (including a two-validator
-consensus commit over TCP). What it is **not** yet: **independently
-reviewed**. Before the trust plane can be called *proven*, it faces a
-separate adversarial red-team and an operator acceptance pass — see
-[`docs/reviews/`](docs/reviews/) for the handoff briefs — and some hardening
-items remain honestly recorded in the CHANGELOG and the design doc's §6. M0
+is built, independently red-teamed, and hardened against every finding**
+(Gate 4): a real verify-without-fetch proof-of-retrieval, a
+proof-of-**space-time** bond (a space-hard identity-bound plot over a proven
+depth-robust graph, with the VDF seeded from a plot read so releasing the
+space forfeits the answer), objective on-chain-bond fork-choice so partitions
+heal to the heavier-standing chain, publisher-unlinkable publishing (ephemeral
+identity + prepaid blind-signed credits + a canonical issuer set), and
+per-operator, existence-checked, reversible takedowns. An **independent
+external red-team broke all three corners in the composition**
+([`docs/reviews/M0-REDTEAM-REPORT.md`](docs/reviews/M0-REDTEAM-REPORT.md));
+**every finding (F1–F7) now has a shipped fix with unit + in-process
+simulation + real-daemon end-to-end coverage** — the per-finding fix and
+how-to-verify guide is
+[`docs/reviews/M0-REDTEAM-VERIFICATION.md`](docs/reviews/M0-REDTEAM-VERIFICATION.md).
+What it is **not** yet: **externally *re*-verified**. M0 is *held* only when a
+fresh red-team denies all three failure modes; the fixes await that pass (plus
+an operator acceptance round). One privacy refinement (public-IP issuance
+IP+timing) and the objective-mode launch default remain honestly recorded. M0
 ships proven or it does not ship.
 
 The 0.x releases are **experimental learning releases**, not steps to

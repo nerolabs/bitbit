@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Security
+- **M0 composition: every red-team finding (F1–F7) fixed and covered by tests —
+  awaiting external re-verification** (2026-08-04) — following the red-team break
+  below, all seven findings now have a shipped fix with unit + in-process
+  simulation coverage, and real-TCP e2e where a daemon surface exists. Sybil
+  (byte-binding over a depth-robust graph + read-bound VDF + anti-release floor),
+  Privacy (ephemeral publish identity + prepaid Chaumian credits + canonical
+  issuer set), Accountability (existence-checked, per-operator, reversible
+  takedowns), Consensus (objective on-chain-bond fork-choice with an anchor
+  cold-start; F7 resolved by F6 + sound same-height slashing). **The per-finding
+  fix + how-to-verify guide for the next reviewer is
+  `docs/reviews/M0-REDTEAM-VERIFICATION.md`.** This is the builder's response, NOT
+  a self-certification: M0 is *held* only when a fresh external red-team denies all
+  three failure modes. Deliberately deferred residuals (honestly recorded): the
+  public-IP issuance IP+timing refinement (F4; the stronger NodeID/fee/subset links
+  are severed and NATed clients already relay), and flipping the objective-mode
+  default (a launch-config decision).
 - **M0 external red-team: primitives real, composition unproven, M0 not yet
   held** (2026-08-04) — the independent M0 red-team ran against shipped code
   (`c1397e0`) and **broke all three corners in the novel composition**. The

@@ -13,28 +13,31 @@
 > (2026-08-02); `Block.Version` (#98) is the hard-fork guard every record change
 > below rides on.
 
-> ## ⚠️ LIVE RED-TEAM VERDICT (2026-08-04) — supersedes the "Resolved" language below
+> ## RED-TEAM VERDICT + BUILDER RESPONSE (updated 2026-08-04) — supersedes the "Resolved" language below
 >
-> The external M0 red-team ran against shipped code (`c1397e0`) and **broke all
-> three corners in the composition** (the adopted primitives — the Wesolowski VDF
-> and the Shacham–Waters PoR — held). Where §3/§4 below say a constraint is
-> "Resolved by D1/D2/D3," read it as **design intent, not shipped reality** unless
-> this banner says otherwise. Full report: `docs/reviews/M0-REDTEAM-REPORT.md`.
+> The external M0 red-team ran against `c1397e0` and **broke all three corners in
+> the composition** (the adopted primitives — Wesolowski VDF, Shacham–Waters PoR —
+> held). **Every finding F1–F7 now has a shipped fix with unit + integration
+> coverage (and, where a daemon surface exists, real-TCP e2e).** Where §3/§4 below
+> say "Resolved by D1/D2/D3," treat this banner as the source of truth. Report:
+> `docs/reviews/M0-REDTEAM-REPORT.md`; **per-finding fix + how-to-verify:
+> `docs/reviews/M0-REDTEAM-VERIFICATION.md`.**
 >
-> | Corner | Design says | **Live verdict** |
-> |---|---|---|
-> | Privacy (D3 issuance-mixing) | Resolved | 🟡 **fee-link FIXED (2026-08-04), network-link pending** — prepaid publish credits (online Chaumian e-cash) sever the per-publish fee debit: the fee is charged in bulk at mint, a publish spends a credit with no durable-identity debit (`core/blindtoken`+`core/node`). Residual: relay/ephemeral/epoch network-layer link still open, so IP+timing correlation remains (F4). See `m0-privacy-issuance.md`. |
-> | Accountability | Resolved | 🟢 **FIXED (2026-08-04, #136)** — on-chain revocation was a global, ownership-unchecked, irreversible switch (F5); now existence-checked, per-operator opt-in, and reversible. |
-> | Sybil (D1 bond) | Resolved | 🟢 **FIXED (2026-08-04) — structural** — the plot now binds the full block *bytes* over a proven depth-robust graph (DRSample), closing the 1/128 leaves-only gap, and the VDF is seeded from a plot block **read before it runs**, so releasing the space forfeits the answer (F1/F2). Residual: the quantitative min-bond-size/delay floor is a tuning follow-up. See `m0-sybil-bond.md`. |
-> | Consensus D2 (fork-choice) | Resolved | 🟢 **F6 FIXED + wired (`-objective`, e2e), F7 RESOLVED (2026-08-04)** — objective on-chain PoST-bond fork-choice (`Block.BondRegs`) makes divergent replicas agree and forks heal, with an anchor-bootstrapped cold-start and a daemon flag. F7 (cross-height double-backing) is resolved by F6 + sound same-height slashing: the pattern is indistinguishable from an honest reorg-follow (so slashing it would hit honest validators) and is neutralized by F6 anyway (`core/chain/redteam_f7_test.go`). Residual: flip the shipped default to objective (a launch-config decision). See `m0-consensus.md`. |
+> | Corner | **Status (builder)** |
+> |---|---|
+> | Sybil (F1/F2/F3) | 🟢 **FIXED** — plot binds full block *bytes* over a proven depth-robust graph (DRSample), closing the 1/128 leaves-only gap; the VDF is seeded from a plot block **read before it runs** (release forfeits the answer); and an **anti-release floor** (`-min-bond-floor`) denies standing to a bond small enough to re-plot inside the challenge window. Unit + integration. |
+> | Privacy (F4) | 🟢 **FIXED (strong links); one refinement residual** — durable NodeID never leaks (CLI publishes from an ephemeral identity), the per-publish **fee** link is severed by prepaid Chaumian credits, and the **subset-choice** channel by a canonical on-chain issuer set. Unit + integration. Residual (deliberately deferred, option B): the **IP+timing** link for *public-IP* clients (NATed clients already relay) — relay-forced issuance + epoch batching. |
+> | Accountability (F5) | 🟢 **FIXED** — on-chain revocation is existence-checked, **per-operator opt-in** (`-honor-chain-revocations`, default off), and reversible; `-revoke` proposes a quorum-gated takedown. Unit + integration + **e2e**. |
+> | Consensus D2 (F6/F7) | 🟢 **FIXED** — objective on-chain PoST-bond fork-choice (`Block.BondRegs`) makes divergent replicas agree and forks heal, with an anchor cold-start + `-objective` flag. F7 is resolved by F6 + sound same-height slashing (cross-height double-backing is indistinguishable from an honest reorg-follow, so unslashable without regressing, and F6 neutralizes it). Unit + integration + **e2e**. |
 >
-> **Status line: primitives real, composition unproven, M0 not yet held.** The
-> Sybil (F1/F2), privacy (F4), and consensus (F6/F7) fixes are the mechanism
-> **design turn** that follows; accountability (F5) is done. The design turn is
-> written up per corner:
-> - **Sybil bond (F1/F2/F3)** — [`m0-sybil-bond.md`](m0-sybil-bond.md) *(keystone; F6 depends on it)*
-> - **Privacy issuance / D3 (F4)** — [`m0-privacy-issuance.md`](m0-privacy-issuance.md) *(independent)*
-> - **Consensus fork-choice + slashing (F6/F7)** — [`m0-consensus.md`](m0-consensus.md) *(depends on the bond)*
+> **Status line: primitives real; every composition finding (F1–F7) now fixed and
+> covered by tests; awaiting EXTERNAL RE-VERIFICATION.** M0 is *held* only when a
+> fresh external red-team denies all three failure modes (TENETS Part 0) — this
+> banner is the builder's response, **not** a self-certification that M0 is held.
+> Per-corner design + reasoning:
+> - **Sybil bond (F1/F2/F3)** — [`m0-sybil-bond.md`](m0-sybil-bond.md)
+> - **Privacy issuance / D3 (F4)** — [`m0-privacy-issuance.md`](m0-privacy-issuance.md)
+> - **Consensus fork-choice + slashing (F6/F7)** — [`m0-consensus.md`](m0-consensus.md)
 
 ## 0. The three decisions this design is built on
 

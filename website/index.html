@@ -164,16 +164,21 @@
     <div class="stratum-label">Get Silt · one binary, every platform</div>
     <div style="margin:0 0 1.6rem;padding:1rem 1.2rem;border:1px solid var(--ochre);border-radius:8px;max-width:60ch">
       <b style="color:var(--ochre)">Pre-V1 — build from source.</b>
-      <span class="dim">Silt is early and unaudited, and there is no official
-      release yet. The storage plane is field-proven; the trust plane is a first
-      cut on honestly-labeled placeholders (an in-memory bond, a toy
-      proof-of-retrieval) — sim and single-host only, not production. The march
-      is learning-phase 0.x (experimental) → feature-complete 0.9.0 (RC) →
-      1.0.0 = V1, cut only when it's field-proven across machines and signed.
-      Build it from source (below), don't store anything you can't afford to
-      lose, and please
-      <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">read the threat model</a>
-      — the weaknesses it names are exactly the review we most want.</span>
+      <span class="dim">Silt is early and there is no official release yet. The
+      storage plane is field-proven; the trust plane now runs real mechanisms — a
+      space-time storage bond, objective on-chain-bond fork-choice, unlinkable
+      publishing, per-operator takedowns — that an <b>independent red-team broke in
+      the composition</b> and that are now <b>hardened against every finding</b>,
+      covered at the unit, in-process-simulation, and real-daemon end-to-end tiers.
+      What it has <b>not</b> had yet is external <i>re</i>-verification, so treat it
+      as unaudited. The march is learning-phase 0.x → feature-complete 0.9.0 (RC) →
+      1.0.0 = V1, cut only when it's field-proven across machines and signed. Build
+      it from source (below), don't store anything you can't afford to lose, and
+      please read the
+      <a href="https://github.com/nerolabs/silt/blob/main/docs/reviews/M0-REDTEAM-VERIFICATION.md">red-team verification guide</a>
+      and the
+      <a href="https://github.com/nerolabs/silt/blob/main/docs/threat-model.md">threat model</a>
+      — the weaknesses they name are exactly the review we most want.</span>
     </div>
     <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:16ch">Run the client. It serves while it fetches.</h2>
     <p class="dim" style="margin-top:1rem;max-width:58ch">One self-contained binary — no runtime, no install. The desktop client
