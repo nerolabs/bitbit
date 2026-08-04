@@ -1,4 +1,4 @@
-# M0 fix — objective fork-choice + sound cross-fork slashing (red-team F6 / F7)
+# M0 fix — objective fork-choice (F6) + F7 resolved (red-team F6 / F7)
 
 > **Status: F6 objective fork-choice SHIPPED (2026-08-04, mechanism, opt-in) in
 > `core/chain`; F7 surround-slashing still pending.** The external M0 red-team
@@ -114,36 +114,40 @@ heaviest chain and the partition heals.
 sham, an attacker with 1/128 storage forges arbitrary on-chain weight — objective
 but worthless. Hence the coupling: land `m0-sybil-bond.md` first (or together).
 
-### 2b. F7 — adopt Casper-FFG slashing conditions (double-vote + surround)
+### 2b. F7 — resolved by F6 + sound same-height slashing (Casper-FFG surround NOT adopted)
 
-The sound way to catch cross-height double-backing *without* punishing honest
-reorg-followers is the **standard finality-gadget slashing conditions** (Casper
-FFG / Tendermint) — adopt, don't invent (B8). Votes gain a `(source, target)`
-structure over checkpoints, and two conditions are slashable:
+> **Revised 2026-08-04, after F6 shipped and the analysis was validated in code
+> (`core/chain/redteam_f7_test.go`).** The pre-F6 plan below was to adopt Casper-FFG
+> surround-vote slashing. Building F6 changed the picture, and working the attack
+> through precisely shows surround-slashing is both **unnecessary and, for this
+> exact pattern, ineffective**. F7 is resolved without a finality gadget.
 
-1. **Double vote** — two distinct votes with the **same target height**. This is
-   today's same-height rule (`equivocation.go:39`), kept as-is.
-2. **Surround vote** — a vote whose `(source, target)` span **surrounds** (or is
-   surrounded by) another of the culprit's votes. This is *exactly*
-   cross-height double-backing: backing fork A across a span, then fork B across a
-   span that surrounds or nests inside it, provably means abandoning a fork you
-   were still committing to.
+Three facts, each locked by a test:
 
-An **honest reorg-follower is never slashed**: following a legitimately heavier
-fork produces sequential, *non-surrounding* votes (each new vote's source is the
-prior justified checkpoint). Only a validator committing to two live, competing
-spans surrounds — and the surround relation is a compact, self-verifying proof
-built from the culprit's own two signatures, so forged-slash griefing still can't
-fabricate it. That is why F7 rides on F6: the `(source, target)` checkpoint
-structure and the notion of a "justified" ancestor come from the objective
-finality machinery 2a introduces. `slashEquivocators` (`chainrole.go:197`) already
-derives slashing from two chains locally during `Reconcile`, so evidence can use
-ancestry — the change is *which* relation counts (add surround), not where it runs.
+1. **Same-height double-signing is slashed** (the distinguishable misbehavior) —
+   `FindEquivocations` catches a validator that signs two different blocks at the
+   same height on competing forks (`equivocation.go`, `TestF7_SameHeightDoubleSignIsCaught`).
+2. **Cross-height double-backing is provably indistinguishable from an honest
+   reorg-follow** from the blocks alone. A validator that attested A@1, then
+   followed a heavier fork and attested B@2 (B not containing A@1), produced the
+   *identical* evidence to a malicious double-backer. So any rule that slashed
+   "signed two incompatible forks" would slash **honest reorg-followers** — a
+   regression of the forged-slash-griefing corner that holds. `FindEquivocations`
+   therefore correctly does **not** flag it (`TestF7_HonestReorgFollowerNotSlashed`
+   — the guard).
+3. **F6 neutralizes it.** Even unslashed, the double-backer cannot make both
+   histories stand: objective fork-choice adopts the heavier-bond fork on every
+   replica, so the fork carrying its extra attestation is abandoned on reconcile
+   (`TestF7_ObjectiveForkChoiceNeutralizesDoubleBacker`).
 
-Ancestry: F7 detection needs to walk `Prev` (`Block.Prev`, `chain.go:92`) to
-establish the `(source, target)` spans and the surround relation. No such
-walk-back API exists today (validation only checks `b.Prev == Head()`); add a
-minimal ancestor-path helper used only by the slash evidence path.
+Why *not* adopt Casper-FFG surround-slashing after all: it would be a large
+architectural addition (a `(source, target)` finality gadget) for a threat F6
+already neutralizes — and, decisively, the specific F7 pattern (A@1, B@2) produces
+spans `(0→1)` and `(1→2)` that **do not surround**, so even the surround condition
+would not flag it. The sound, minimal resolution is: slash the distinguishable
+misbehavior (same-height), let F6 neutralize the rest, and never slash an honest
+reorg-follower. If a future finality gadget is added for other reasons, the
+surround condition can ride on it then — but M0 does not need it.
 
 ## 3. The composition, after the fix
 
