@@ -55,6 +55,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Test coverage backfill (build-immutable): the Accountability fix (F5) now has
+  the integration tier** (2026-08-04) — the F5 fix (on-chain revocation is
+  existence-checked, per-operator opt-in, reversible) had unit + node-white-box
+  coverage; this adds the integration tier over the full node loop
+  (`sim/revocation_test.go`): a bonded quorum publishes a root, then commits an
+  on-chain revocation of it over the wire, and — the load-bearing property — the
+  takedown is honored **per operator**: a subscribing node
+  (`SetHonorChainRevocations`) denies the root while a node on the **identical
+  chain** that did not subscribe does **not** (never a global switch); and a
+  quorum cannot revoke a root the chain never committed (`ErrRevokeUnknownRoot`).
+  Adds `Node.WouldDeny` — operator-facing observability for the effective,
+  per-operator takedown decision. **e2e is explicitly deferred:** the daemon does
+  not yet expose chain-revocation *proposing* (no revoke command / auto-propose)
+  or the honor-subscription flag, so the full quorum-revocation-honoring flow is
+  not drivable end-to-end; it lands when those daemon features do. A stated tier
+  choice, not a silent gap.
 - **Test coverage backfill (build-immutable): the Privacy fixes (F4) now have the
   integration tier** (2026-08-04) — the fee-decoupling and canonical-issuer-set
   fixes shipped unit-only; this adds the outcome-driven integration tier.
