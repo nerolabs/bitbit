@@ -94,14 +94,23 @@ type Block struct {
 	Proposer    []byte        `cbor:"4,keyasint"` // Ed25519 public key
 	ProposerSig []byte        `cbor:"5,keyasint,omitempty"`
 	Atts        []Attestation `cbor:"6,keyasint,omitempty"`
-	// Revocations are append-only takedown records: opaque roots that
-	// compliant nodes must no-op on. Deletion is impossible on an
-	// immutable chain, so takedown is an ADDITION — a tombstone — that
-	// replicates and is tamper-evident like any other block.
+	// Revocations are append-only takedown records: opaque roots that a
+	// SUBSCRIBING node no-ops on (honoring is per-operator — see
+	// node.SetHonorChainRevocations / ReplicaRegistry.HonorRevocations — not a
+	// global switch). Each named root must already be committed on this chain
+	// (ValidateProposal enforces existence), so a quorum cannot revoke content
+	// it never published. Deletion is impossible on an immutable chain, so a
+	// takedown is an ADDITION — a tombstone — that replicates and is
+	// tamper-evident like any other block.
 	Revocations []ports.Hash `cbor:"7,keyasint,omitempty"`
 	// Version is the block's rule era (see BlockVersion). Committed by Hash
 	// and required at decode; every minted block sets it.
 	Version uint64 `cbor:"8,keyasint"`
+	// Unrevocations reverse a prior takedown: each names a currently-revoked
+	// root and clears it on commit (apply). This is the governance undo the
+	// tenets require — takedown must not be a one-way, permanent asymmetry —
+	// and, like a revocation, it is quorum-gated and replicated.
+	Unrevocations []ports.Hash `cbor:"9,keyasint,omitempty"`
 }
 
 // Attestation is a validator's signature over the block hash. The
@@ -122,10 +131,10 @@ func init() {
 }
 
 // Hash covers everything except signatures: height, ancestry, entries,
-// proposer. Signing the hash therefore signs the block's entire
-// content and its place in history.
+// proposer, and both takedown and undo records. Signing the hash therefore
+// signs the block's entire content and its place in history.
 func (b *Block) Hash() ports.Hash {
-	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations}
+	unsigned := Block{Version: b.Version, Height: b.Height, Prev: b.Prev, Entries: b.Entries, Proposer: b.Proposer, Revocations: b.Revocations, Unrevocations: b.Unrevocations}
 	raw, err := encMode.Marshal(&unsigned)
 	if err != nil {
 		panic(err) // canonical encoding of our own struct cannot fail
@@ -209,6 +218,15 @@ var (
 	ErrEmptyFork      = errors.New("chain: cannot reconcile an empty fork")
 	ErrNoGenesis      = errors.New("chain: local replica has no genesis to anchor a reconcile")
 	ErrForeignGenesis = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
+	// ErrRevokeUnknownRoot rejects a takedown that names a root the chain has
+	// never committed. Without this a quorum could revoke a competitor's
+	// unpublished hash, or a hash that never existed — arbitrary censorship of
+	// content that isn't on the ledger (red-team F5). A revocation must point
+	// at a real prior publication record.
+	ErrRevokeUnknownRoot = errors.New("chain: revocation names a root never published on this chain")
+	// ErrUnrevokeNotRevoked rejects an un-revoke of a root that is not
+	// currently revoked — the reversibility record only clears a live takedown.
+	ErrUnrevokeNotRevoked = errors.New("chain: un-revocation names a root that is not currently revoked")
 )
 
 // Chain is a validator's replica plus the rules for growing it.
@@ -317,8 +335,11 @@ func (c *Chain) ValidateProposal(b *Block) error {
 		return fmt.Errorf("%w: proposer %s has %d, needs %d",
 			ErrLowReputation, b.ProposerID(), got, c.cfg.MinProposerRep)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 {
 		return errors.New("chain: empty block")
+	}
+	if err := c.validateTakedowns(b); err != nil {
+		return err
 	}
 	seen := make(map[ports.Hash]bool)
 	seenSerial := make(map[string]bool)
@@ -351,6 +372,28 @@ func (c *Chain) ValidateProposal(b *Block) error {
 			seenSerial[s] = true
 		}
 		seen[e.Root] = true
+	}
+	return nil
+}
+
+// validateTakedowns enforces the accountability tenet on a block's revocation
+// and un-revocation records (red-team F5): a revocation may only name a root
+// this chain has already committed (no censoring content that isn't on the
+// ledger), and an un-revocation may only name a root that is currently
+// revoked. Called from both the attester pre-check (ValidateProposal) and the
+// commit path (validateStructural) so a malicious quorum cannot slip either
+// past. Roots published within the SAME block are not yet committed, so
+// same-block revoke-what-you-publish is (correctly) refused as nonsensical.
+func (c *Chain) validateTakedowns(b *Block) error {
+	for _, r := range b.Revocations {
+		if _, ok := c.byRoot[r]; !ok {
+			return fmt.Errorf("%w: %s", ErrRevokeUnknownRoot, r)
+		}
+	}
+	for _, r := range b.Unrevocations {
+		if !c.revoked[r] {
+			return fmt.Errorf("%w: %s", ErrUnrevokeNotRevoked, r)
+		}
 	}
 	return nil
 }
@@ -466,8 +509,11 @@ func (c *Chain) validateStructural(b *Block) error {
 	if !ed25519.Verify(ed25519.PublicKey(b.Proposer), h[:], b.ProposerSig) {
 		return fmt.Errorf("%w: proposer", ErrBadSignature)
 	}
-	if len(b.Entries) == 0 && len(b.Revocations) == 0 {
+	if len(b.Entries) == 0 && len(b.Revocations) == 0 && len(b.Unrevocations) == 0 {
 		return errors.New("chain: empty block")
+	}
+	if err := c.validateTakedowns(b); err != nil {
+		return err
 	}
 	seen := make(map[ports.NodeID]bool)
 	valid := 0
@@ -528,6 +574,12 @@ func (c *Chain) apply(b Block) {
 	}
 	for _, r := range b.Revocations {
 		c.revoked[r] = true
+	}
+	// Un-revocations clear a prior takedown (validated as currently-revoked).
+	// delete rather than set-false so the map stays a clean set and adopt()'s
+	// pure-replay rebuild yields identical state.
+	for _, r := range b.Unrevocations {
+		delete(c.revoked, r)
 	}
 	// Track distinct qualified validators for the maturity metric — a
 	// monotonic, chain-internal, auditable measure of decentralization.

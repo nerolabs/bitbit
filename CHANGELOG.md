@@ -9,6 +9,30 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Accountability corner (red-team F5): on-chain revocation is no longer a
+  global switch** (2026-08-04) — the external M0 red-team broke the
+  accountability tenet three ways through the chain's takedown path: a quorum
+  could revoke a root it never published (no ownership or existence check); the
+  takedown was honored by **every** chain-follower with no opt-out — a global
+  switch the tenets say cannot exist; and it was irreversible. All three are
+  fixed. **(1)** `ValidateProposal` and the commit path now reject a block whose
+  `Revocations` name a root never committed on this chain (`ErrRevokeUnknownRoot`)
+  — a quorum cannot censor content that isn't on the ledger, nor a competitor's
+  unpublished hash. **(2)** Honoring on-chain revocations is now a **per-operator
+  subscription** — `ReplicaRegistry.HonorRevocations` and
+  `node.SetHonorChainRevocations`, both default **off** — so following the chain
+  never silently imposes someone else's takedowns; the effect is "proportional to
+  who trusts you" (TENETS §9), the same voluntary stance as the operator-local
+  denylist, never a universal switch. **(3)** Added an **un-revoke** record
+  (`Block.Unrevocations`, quorum-gated and committed in the block hash) so a
+  takedown is reversible by the same governance that imposed it, not a permanent
+  asymmetry. The red-teamer's own PoC now fails at its ownership check; adopted
+  inverted as `core/chain/redteam_f5_accountability_test.go` and
+  `core/node/redteam_f5_subscription_test.go` (unit + node-integration; the
+  operator-local takedown sim remains the e2e). Traces to immutable #5, Don't #2,
+  S4. **The other red-team breaks (Sybil bond F1/F2, privacy issuance F4,
+  subjective fork-choice F6, cross-height equivocation F7) remain open — see the
+  M0 status note below — this fix closes the accountability corner only.**
 - **Doc-truth reconciliation + a token round-trip playbook (acceptance round 3)**
   (2026-08-03) — the third acceptance re-run PASSED again (all 9 flows, all 8
   tenets, **zero code defects**); its findings were stale docs and one

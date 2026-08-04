@@ -308,13 +308,36 @@ func TestRevocationByQuorum(t *testing.T) {
 	if _, ok := w.c.LookupRoot(entry(1).Root); !ok {
 		t.Fatal("the immutable publication record must persist")
 	}
-	// But the registry view no-ops on it.
-	reg := ReplicaRegistry{C: w.c}
-	if _, ok, _ := reg.Lookup(nil, entry(1).Root); ok {
-		t.Fatal("revoked root must be unresolvable via the registry")
+	// Honoring is PER-OPERATOR (F5), not a global switch. A bare registry —
+	// one that did NOT subscribe — still resolves the revoked root: following
+	// the chain does not silently impose someone else's takedown.
+	bare := ReplicaRegistry{C: w.c}
+	if _, ok, _ := bare.Lookup(nil, entry(1).Root); !ok {
+		t.Fatal("a non-subscribing registry must still resolve a revoked root (pluralism)")
 	}
-	// A non-revoked entry is unaffected.
+	// A registry that OPTS IN no-ops on it.
+	reg := ReplicaRegistry{C: w.c, HonorRevocations: true}
+	if _, ok, _ := reg.Lookup(nil, entry(1).Root); ok {
+		t.Fatal("revoked root must be unresolvable via a subscribing registry")
+	}
+	// A non-revoked entry is unaffected either way.
 	if _, ok, _ := reg.Lookup(nil, entry(2).Root); !ok {
 		t.Fatal("non-revoked entry must still resolve")
+	}
+
+	// Reversibility (F5): a quorum-committed un-revocation clears the takedown,
+	// so it is not a permanent, one-way asymmetry.
+	prev2, height2 := w.c.Head()
+	unrev := &Block{Version: BlockVersion, Height: height2, Prev: prev2, Unrevocations: []ports.Hash{entry(1).Root}}
+	Sign(unrev, w.prop)
+	w.attestAll(unrev)
+	if err := w.c.Append(*unrev); err != nil {
+		t.Fatalf("un-revocation must commit with quorum: %v", err)
+	}
+	if w.c.Revoked(entry(1).Root) {
+		t.Fatal("root must be un-revoked after a committed un-revocation")
+	}
+	if _, ok, _ := reg.Lookup(nil, entry(1).Root); !ok {
+		t.Fatal("un-revoked root must resolve again even for a subscribing registry")
 	}
 }
