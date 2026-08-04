@@ -55,6 +55,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Consensus (red-team F6): objective fork-choice is now wired into the node,
+  with integration + unit coverage** (2026-08-04) — the F6 objective-weight
+  mechanism (on-chain `BondRegs`) previously existed only in `core/chain` behind a
+  verifier a caller had to supply. A node now wires it in one call:
+  `Node.EnableObjectiveChain` injects the real space-time bond verifier
+  (`bond.VerifySpaceTime`, the same check the audit loop runs), and
+  `Node.RegisterBondReg` mints a signed registration from the node's held bond for
+  live entry into the objective set (`chain.NewBondReg` / exported
+  `chain.BondRegNonce`; `EnableBond` now records the identity signer so a bonded
+  node can register before it joins consensus). Coverage now spans all three
+  tiers per the build-immutable rule: **unit** — a live registration round-trips
+  through the real verifier and a tampered space-time proof is rejected
+  (`core/node/objectivechain_test.go`); **integration** — the red-team's
+  non-healing-partition scenario inverted, with a **separate empty ledger per
+  node** (so the local reputation view is useless, unlike `sim/reorg_test.go`'s
+  shared ledger): the partition still commits and heals to the heavier-bond fork
+  on every replica (`sim/objective_consensus_test.go`). **Residual:** turning
+  objective mode on by default in the daemon (a genesis/anchor-seeded validator
+  cold-start plus a live-registration submission path), and an e2e multi-process
+  run, remain; see `docs/design/m0-consensus.md`.
 - **Privacy (red-team F4 §2c): a canonical, on-chain issuer set so the validator
   subset a publisher asks leaks nothing** (2026-08-04) — a publisher previously
   acquired publish tokens from whatever validator subset its `-peers` gave it, so

@@ -145,7 +145,7 @@ type Attestation struct {
 // BondReg registers (or renews) a validator's on-chain PoST bond for objective
 // fork-choice (F6). Validator is the ed25519 public key; Root/Size are the bond
 // commitment; Answer is a CBOR-encoded bond space-time answer for the fresh
-// nonce derived from the block's parent (bondRegNonce), so it cannot be replayed
+// nonce derived from the block's parent (BondRegNonce), so it cannot be replayed
 // to another height or fork; Sig is the validator's signature binding the claim
 // to its identity. A non-genesis registration is accepted only if Sig verifies
 // and the injected bond verifier accepts (Root, Size, nonce, Answer) — i.e. the
@@ -362,13 +362,30 @@ func (c *Chain) proposerQualified(id ports.NodeID) bool {
 	return c.rep(id) >= c.cfg.MinProposerRep
 }
 
-// bondRegNonce is the fresh challenge a non-genesis bond registration must
+// BondRegNonce is the fresh challenge a non-genesis bond registration must
 // answer, derived from the parent hash the block extends — so a registration
 // proves possession AT this position and cannot be replayed to another height
-// or fork.
-func bondRegNonce(prev ports.Hash) uint64 {
+// or fork. A registrant (see NewBondReg) computes its space-time answer for this
+// nonce; the chain re-derives it identically at validation.
+func BondRegNonce(prev ports.Hash) uint64 {
 	h := sha256.Sum256(append([]byte("silt/chain/bondreg/nonce/v1"), prev[:]...))
 	return binary.BigEndian.Uint64(h[:8])
+}
+
+// NewBondReg builds a signed registration for a validator's bond at the position
+// following prev. answer is the CBOR-encoded space-time proof (bond.EncodeAnswer)
+// for BondRegNonce(prev); the chain re-verifies it via the injected bond verifier
+// (SetBondVerifier). The signature binds the (root, size, nonce) claim to the
+// validator's key so a non-holder cannot register a bond it does not own.
+func NewBondReg(signer ed25519.PrivateKey, root ports.Hash, size int64, answer []byte, prev ports.Hash) BondReg {
+	r := BondReg{
+		Validator: append([]byte(nil), signer.Public().(ed25519.PublicKey)...),
+		Root:      root,
+		Size:      size,
+		Answer:    answer,
+	}
+	r.Sig = ed25519.Sign(signer, r.signingBytes(BondRegNonce(prev)))
+	return r
 }
 
 // validateBondRegs verifies a non-genesis block's bond registrations: each must
@@ -379,7 +396,7 @@ func (c *Chain) validateBondRegs(b *Block) error {
 	if !c.objective() {
 		return nil
 	}
-	nonce := bondRegNonce(b.Prev)
+	nonce := BondRegNonce(b.Prev)
 	for _, r := range b.BondRegs {
 		if len(r.Validator) != ed25519.PublicKeySize {
 			return fmt.Errorf("%w: bond registration has no valid validator key", ErrBadBondReg)
