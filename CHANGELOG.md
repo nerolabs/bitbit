@@ -54,6 +54,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   depends on it); privacy is independent. Linked from
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
+### Fixed
+- **Consensus (red-team F7): cross-height double-backing resolved — by F6 plus
+  sound same-height slashing, without slashing honest reorg-followers**
+  (2026-08-04) — the report's F7 (sign fork A@1, sit out B@1, sign B@2 — never the
+  same height on both, evading the same-height equivocation slash) is now resolved,
+  and the resolution is the honest one rather than a wrong slashing rule. Worked
+  through precisely and locked in `core/chain/redteam_f7_test.go`: **(1)**
+  same-height double-signing is still slashed (`FindEquivocations`, the
+  distinguishable misbehavior); **(2)** cross-height double-backing is *provably
+  indistinguishable* from an honest reorg-follow from the blocks alone (a validator
+  that attested A@1 then followed a heavier fork to attest B@2 produced identical
+  evidence), so any rule slashing "signed two incompatible forks" would slash
+  honest validators — a regression — and detection correctly does not flag it (the
+  guard test); **(3)** objective fork-choice (F6) neutralizes it anyway — the
+  double-backer cannot make both histories stand, the heavier-bond fork wins on
+  every replica. The pre-F6 design had planned Casper-FFG surround-vote slashing;
+  the analysis shows it is unnecessary here (F6 neutralizes) and, for this exact
+  pattern, ineffective (the spans do not surround), so a finality gadget is not
+  added for M0. `docs/design/m0-consensus.md` §2b carries the reasoning.
+
 ### Added
 - **Anti-release bond floor (`-min-bond-floor` / `Node.MinBondBytes`): a bond too
   small to be safe against release + re-plot earns no standing (M0 Sybil F1/F2)**
