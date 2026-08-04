@@ -335,6 +335,15 @@ type Chain struct {
 	// proof is not identity-bound, so without this a single plot's answer would
 	// verify — and be credited — for every identity that copies it.
 	bondRootOwner map[ports.Hash]ports.NodeID
+	// bondRootProven records whether a root's current owner claimed it with a
+	// VERIFIED space-time proof (a height>0 registration, gated by
+	// validateBondRegs) rather than a mere DECLARED genesis registration
+	// (applied without a proof). A proof of possession displaces a declaration,
+	// so a malicious genesis cannot pre-squat an honest validator's real plot
+	// root and, via the F1 first-owner dedup, lock the true holder out when it
+	// later registers with a genuine proof (retest G3). Once proven, a root
+	// stays proven, so first-proven-owner still wins among real bonds (F1).
+	bondRootProven map[ports.Hash]bool
 	// slashed is the set of validators evicted for a proven equivocation (F2). A
 	// slashed id is disqualified and cannot re-earn bonded standing, so a proven
 	// double-sign costs standing in the OBJECTIVE set, not only the rep ledger.
@@ -353,6 +362,7 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 		spent:          make(map[string]bool),
 		bonded:         make(map[ports.NodeID]int64),
 		bondRootOwner:  make(map[ports.Hash]ports.NodeID),
+		bondRootProven: make(map[ports.Hash]bool),
 		slashed:        make(map[ports.NodeID]bool)}
 }
 
@@ -883,14 +893,16 @@ func (c *Chain) apply(b Block) {
 	for _, r := range b.Unrevocations {
 		delete(c.revoked, r)
 	}
-	// Record on-chain bond registrations (objective validator set, F6). Verified
-	// already (validateBondRegs) for non-genesis; genesis registrations are
-	// declared. The latest registration wins, so a validator can renew or resize.
+	// Record on-chain bond registrations (objective validator set, F6). A
+	// height>0 registration was already VERIFIED by validateBondRegs (real
+	// space-time proof); a genesis (height 0) registration is merely DECLARED.
+	// The latest registration wins, so a validator can renew or resize.
 	// PER-ROOT DEDUP (red-team F1): a bond Root credits AT MOST ONE identity — the
 	// first to claim it. A later registration on an already-claimed root by a
 	// DIFFERENT identity earns nothing, so a colluding operator cannot back N
 	// Sybil standings off one shared plot. The first owner may re-register (renew
 	// or resize) its own root freely.
+	proven := b.Height > 0 // genesis regs are declared; height>0 went through validateBondRegs
 	for _, r := range b.BondRegs {
 		if len(r.Validator) != ed25519.PublicKeySize {
 			continue
@@ -900,9 +912,20 @@ func (c *Chain) apply(b Block) {
 			continue // a slashed equivocator cannot re-earn bonded standing (F2)
 		}
 		if owner, claimed := c.bondRootOwner[r.Root]; claimed && owner != id {
-			continue // shared root already backs another identity → no standing
+			// PROOF BEATS DECLARATION (retest G3): a verified registration displaces
+			// an unproven genesis-DECLARED claim, so a malicious genesis cannot
+			// pre-squat an honest validator's real root and lock the true holder out
+			// via the dedup above. Any other collision (proven-vs-proven, or an
+			// unproven challenger) earns nothing, preserving F1.
+			if !(proven && !c.bondRootProven[r.Root]) {
+				continue // shared root already backs another identity → no standing
+			}
+			delete(c.bonded, owner) // strip the displaced squatter's unproven standing
 		}
 		c.bondRootOwner[r.Root] = id
+		if proven {
+			c.bondRootProven[r.Root] = true
+		}
 		c.bonded[id] = r.Size
 	}
 	// Apply on-chain equivocation slashes (F2): evict the culprit from the
@@ -1045,6 +1068,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.spent = t.spent
 	c.bonded = t.bonded
 	c.bondRootOwner = t.bondRootOwner
+	c.bondRootProven = t.bondRootProven
 	c.slashed = t.slashed
 }
 
