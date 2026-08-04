@@ -275,6 +275,83 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	_ = b
 }
 
+// TestObjectiveConsensusCommitsOverTCP is the e2e tier for objective fork-choice
+// (F6): two validators run `-objective`, so eligibility, quorum, and fork-choice
+// weight are decided by on-chain bond registrations rather than the local
+// reputation view. The launch set bootstraps via -anchors; each validator
+// registers its real bond LIVE as it proposes. A `swarm add` drives a real
+// objective quorum commit over real TCP, and the file round-trips bit-perfect —
+// the fixed protocol (bond registration + verification on the wire) works end to
+// end, not just in the sim.
+func TestObjectiveConsensusCommitsOverTCP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	idA := identity.FromSeed(2001).NodeID().String()
+	idB := identity.FromSeed(2002).NodeID().String()
+	anchors := idA + "," + idB // the declared launch set that bootstraps objective mode
+
+	a := startDaemon(t, "A",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-serve-registry", "127.0.0.1:0", "-validator",
+		"-objective", "-min-bond", "1M", "-mature-validators", "2",
+		"-anchors", anchors, "-quorum", "1", "-attesters", idB,
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "2001")
+	peer := a.waitFor(t, rePeer, 20*time.Second)
+	addrA := peer[2]
+	regRef := a.waitFor(t, reRegistry, 20*time.Second)[1]
+	bootstrapA := idA + "@" + addrA
+
+	b := startDaemon(t, "B",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-bootstrap", bootstrapA, "-validator",
+		"-objective", "-min-bond", "1M", "-mature-validators", "2",
+		"-anchors", anchors, "-quorum", "1",
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "2002")
+	b.waitFor(t, reBootstrap, 20*time.Second)
+
+	src := filepath.Join(t.TempDir(), "payload.bin")
+	want := make([]byte, 256<<10)
+	rand.New(rand.NewSource(0x0B1EC)).Read(want)
+	if err := os.WriteFile(src, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Publish → a real objective quorum commit (A proposes + self-registers its
+	// bond, B attests as a launch anchor). Retry a few rounds while B joins.
+	reAnyLink := regexp.MustCompile(`silt:v1:\S+`)
+	var link, lastOut string
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		out, err := runClientAllowErr(t, "swarm", "add", src,
+			"-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+		lastOut = out
+		if err == nil {
+			if link = reAnyLink.FindString(out); link != "" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("objective validators never committed a publish:\n%s", lastOut)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	a.waitFor(t, reCommitted, 10*time.Second)
+
+	dst := filepath.Join(t.TempDir(), "fetched.bin")
+	runClient(t, "swarm", "get", link, "-o", dst, "-peers", bootstrapA, "-registry", regRef)
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) || !bytes.Equal(got, want) {
+		t.Fatalf("objective-committed file round-trip corrupted: got %d bytes, want %d", len(got), len(want))
+	}
+	_ = b
+}
+
 // TestUnlinkablePublishOverTCP is the e2e tier for publisher privacy (T3,
 // #14/F1): three validators issue and REQUIRE publish tokens; a `swarm add`
 // acquires a 2-of-3 token over real TCP (paying the fee with its identity, the
