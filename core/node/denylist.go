@@ -39,6 +39,14 @@ func (n *Node) isDenied(root ports.Hash) bool {
 	return n.honorChainRevocations && n.chain != nil && n.chain.Revoked(root)
 }
 
+// WouldDeny reports this node's EFFECTIVE, per-operator takedown decision for
+// root: its operator-local denylist (always), plus on-chain revocations ONLY if
+// the operator subscribed (SetHonorChainRevocations). Operator-facing
+// observability — a dashboard answering "does my node take this hash down?" —
+// and the outcome the F5 accountability regression asserts: honoring is
+// proportional to who trusts you, never a global switch.
+func (n *Node) WouldDeny(root ports.Hash) bool { return n.isDenied(root) }
+
 // chunkDenied reports whether a held chunk belongs to a denied root
 // (known via the storage proof the chunk arrived with).
 func (n *Node) chunkDenied(id ports.ChunkID) bool {
