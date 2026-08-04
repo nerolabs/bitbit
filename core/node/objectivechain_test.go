@@ -17,6 +17,57 @@ func pubOf(id *identity.Identity) []byte {
 	return append([]byte(nil), id.Signer().Public().(ed25519.PublicKey)...)
 }
 
+// Integration (node ↔ chain) for the canonical issuer set (F4 §2c): a node
+// surfaces the chain's deterministic on-chain-bonded issuer set, so two nodes on
+// the same objective genesis expose the IDENTICAL set — every publisher asks the
+// same validators and the subset it chose leaks nothing. A node with no chain
+// surfaces nothing (the caller falls back to its peer list).
+func TestNodeCanonicalIssuersMirrorsChain(t *testing.T) {
+	sched := simclock.New()
+	net := simnet.New(sched, 1, simnet.DefaultConfig())
+
+	v0, v1, v2 := identity.FromSeed(30), identity.FromSeed(31), identity.FromSeed(32)
+	g := &chain.Block{Version: chain.BlockVersion, Height: 0, Entries: []ports.Entry{mkEntry("g")},
+		BondRegs: []chain.BondReg{
+			{Validator: pubOf(v0), Size: 5 << 20},
+			{Validator: pubOf(v1), Size: 3 << 20},
+			{Validator: pubOf(v2), Size: 4 << 20},
+		}}
+	chain.Sign(g, v0.Signer())
+
+	mk := func(seed int64) *Node {
+		id := identity.FromSeed(seed)
+		nd := New(id.NodeID(), DefaultConfig(), sched, net.Endpoint(id.NodeID()), memstore.New())
+		ch := chain.New(chain.Config{Quorum: 1, MinBond: 1 << 20}, func(ports.NodeID) int64 { return 0 })
+		if err := ch.AppendGenesis(*g); err != nil {
+			t.Fatal(err)
+		}
+		nd.EnableChain(ch, id.Signer())
+		nd.EnableObjectiveChain()
+		return nd
+	}
+	a, b := mk(40), mk(41)
+
+	sa, sb := a.CanonicalIssuers(0), b.CanonicalIssuers(0)
+	if len(sa) != 3 {
+		t.Fatalf("expected all 3 bonded validators, got %d", len(sa))
+	}
+	for i := range sa {
+		if sa[i] != sb[i] {
+			t.Fatal("two nodes on the same chain must expose the identical canonical issuer set")
+		}
+	}
+	// Ordered by bonded size: v0 (5) > v2 (4) > v1 (3).
+	if sa[0] != v0.NodeID() || sa[1] != v2.NodeID() || sa[2] != v1.NodeID() {
+		t.Fatalf("canonical set must be ordered by bonded size, got %v", sa)
+	}
+
+	bare := New(identity.FromSeed(99).NodeID(), DefaultConfig(), sched, net.Endpoint(identity.FromSeed(99).NodeID()), memstore.New())
+	if bare.CanonicalIssuers(0) != nil {
+		t.Fatal("a node with no chain must surface no canonical set (caller falls back to peers)")
+	}
+}
+
 // Unit coverage for the objective-fork-choice node wiring (F6): a node mints a
 // live on-chain bond registration from its held bond (RegisterBondReg), and a
 // replica with the REAL space-time verifier (EnableObjectiveChain) accepts it —
