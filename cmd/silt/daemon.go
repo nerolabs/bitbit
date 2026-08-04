@@ -149,10 +149,44 @@ func cmdDaemon(args []string) error {
 	cfg := node.DefaultConfig()
 	cfg.RequestTimeout = ports.Duration(2 * time.Second) // patient vs the 500ms default (real WAN)
 	cfg.BondAuditInterval = ports.Duration(*bondAudit)
-	if floor, ferr := parseSize(*minBondFloor); ferr == nil && floor > 0 {
-		cfg.MinBondBytes = floor
-		if bsz, _ := parseSize(*bondSize); bsz < floor {
-			fmt.Printf("bond: WARNING — -bond (%s) is below -min-bond-floor (%s); this validator will earn NO standing\n", *bondSize, *minBondFloor)
+	// The anti-release floor is SAFE-BY-DEFAULT on the objective/open path (M0
+	// retest G4-residual). Shipping the mechanism but defaulting it OFF left a
+	// doc-following open validator admitting a sub-floor, releasable bond to full
+	// standing — "fixed but off by default" is not fixed. So it gets the same
+	// treatment -objective already has: auto-on for an untrusted swarm (-min-rep
+	// > 0), and an operator can still opt out EXPLICITLY with -min-bond-floor 0
+	// (a trusted/demo swarm, where objective mode is off anyway).
+	//
+	// The derived value follows the flag's own arithmetic: a plot must be too big
+	// to re-plot inside one challenge window, else it can be released and
+	// recomputed just-in-time. At the measured ~270 MB/s plot throughput
+	// (bond.BenchmarkSeal) and this daemon's ~2s window that is ~540 MiB, so the
+	// default carries ~2x margin.
+	floorSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "min-bond-floor" {
+			floorSet = true
+		}
+	})
+	explicitFloor, ferr := parseSize(*minBondFloor)
+	if ferr != nil {
+		explicitFloor = 0
+	}
+	// objectivePath mirrors the decision made later for the chain config (see
+	// useObjective): objective fork-choice is the default for an untrusted
+	// VALIDATOR, auto-off when trusted. A non-validator claims no consensus
+	// standing, so the floor never applies to it.
+	objectivePath := *validator && *objective && *minRep > 0
+	effFloor, defaulted := effectiveBondFloor(floorSet, explicitFloor, objectivePath)
+	if defaulted {
+		fmt.Printf("bond: anti-release floor defaulted to %d MiB for this untrusted (objective) swarm — a smaller plot could be released and re-plotted inside the challenge window. Override with -min-bond-floor (0 disables; safe only for a trusted/demo swarm).\n", effFloor>>20)
+	}
+	if effFloor > 0 {
+		cfg.MinBondBytes = effFloor
+		if bsz, _ := parseSize(*bondSize); bsz < effFloor {
+			// Fail closed rather than let the operator run a validator that
+			// silently earns nothing — mirrors the -bond/-min-bond check below.
+			return fmt.Errorf("bond: -bond (%s) is below the anti-release floor (%d MiB), so this validator would earn NO standing: raise -bond, or pass -min-bond-floor 0 to accept sub-floor bonds (trusted/demo swarms only)", *bondSize, effFloor>>20)
 		}
 	}
 	clk := walltime.New(loop)
@@ -876,4 +910,28 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 func (e *ephemeral) close() {
 	e.tr.Close()
 	e.loop.Stop()
+}
+
+// DerivedBondFloor is the anti-release floor an untrusted (objective) validator
+// gets when the operator sets none. A plot must be too big to re-plot inside one
+// challenge window, else it can be released and recomputed just-in-time: at the
+// measured ~270 MB/s plot throughput (bond.BenchmarkSeal) and this daemon's ~2s
+// window that threshold is ~540 MiB, so this default carries ~2x margin.
+const DerivedBondFloor = int64(1) << 30 // 1 GiB
+
+// effectiveBondFloor decides the anti-release floor (M0 retest G4-residual).
+// Shipping the floor mechanism but defaulting it OFF left a doc-following open
+// validator admitting sub-floor, releasable bonds — "fixed but off by default"
+// is not fixed. So the floor is SAFE-BY-DEFAULT on the objective/open path, the
+// same treatment -objective already has, while an operator can still opt out
+// EXPLICITLY (-min-bond-floor 0) for a trusted/demo swarm. defaulted reports
+// whether the value was derived rather than operator-set.
+func effectiveBondFloor(floorSet bool, explicit int64, objectivePath bool) (floor int64, defaulted bool) {
+	if floorSet {
+		return explicit, false // an explicit choice always wins, including 0 (opt out)
+	}
+	if objectivePath {
+		return DerivedBondFloor, true
+	}
+	return explicit, false
 }

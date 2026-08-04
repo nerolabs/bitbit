@@ -9,6 +9,28 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Retest G4-residual: the anti-release floor is now ON BY DEFAULT for an untrusted
+  validator** (2026-08-05) — `#163` shipped the floor + re-challenge mechanism but
+  defaulted both knobs to `0`, and the daemon did not auto-enable them on the
+  earned-standing M0 path (unlike `-objective`, which *is* auto-on when `-min-rep > 0`).
+  So a stock, doc-following open validator still admitted a sub-floor, releasable bond
+  to full objective standing — **fixed but off by default is not fixed.** The
+  anti-release floor now gets the same treatment `-objective` has: it defaults to a
+  **derived 1 GiB** for an untrusted validator (`-validator` + `-min-rep > 0` +
+  objective), the value the flag's own arithmetic implies (~270 MB/s plot throughput ×
+  the ~2 s challenge window ≈ 540 MiB, with ~2× margin). The daemon **fails closed** if
+  `-bond` is under the floor — an actionable refusal beats running a validator that
+  silently earns nothing — and an operator can still opt out **explicitly** with
+  `-min-bond-floor 0` for a trusted/demo swarm. A non-validator is unaffected.
+  Regression: `cmd/silt/bondfloor_default_test.go` (the derived floor exists, exceeds
+  what re-plots inside a challenge window, denies the default 64M bond, and an explicit
+  choice — including `0` — always wins). Docs + the local walkthroughs opt out
+  explicitly and now document the floor.
+  **Known gap, deliberately NOT defaulted on:** `-bond-ttl` (the objective re-challenge
+  cadence) stays off, because bond renewal currently happens only when a validator
+  *proposes* (`chainrole.go`), and proposing is event-driven — an attest-only validator
+  would never renew and would lapse, costing the quorum its standing. Defaulting the TTL
+  on requires a renewal path for non-proposers first; tracked as follow-up.
 - **Retest G4 (Sybil/time, High): the objective validator set now enforces an
   anti-release floor and re-challenges bonds on a cadence** (2026-08-04) — the fresh
   pass found the "time" half of proof-of-space-TIME was not enforced on the OBJECTIVE

@@ -114,14 +114,14 @@ identity you just printed, so the IDs match):
 # as its attester. Copy B's `peer:` line from its output → that's <B> below.
 silt daemon -id-seed 2 -listen 127.0.0.1:7102 -store dB \
   -validator -min-rep 100 -quorum 1 -attesters <ID_A> \
-  -bond 8M -bond-audit 1s -capacity 1G
+  -bond 8M -min-bond-floor 0 -bond-audit 1s -capacity 1G
 
 # Validator A: registry + validator + a storage bond. -min-rep 100 means
 # standing must be EARNED (no -quorum 0 rubber-stamp). Fast bond audit so
 # standing accrues quickly. Names B as its attester and bootstraps to it.
 silt daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store dA \
   -validator -min-rep 100 -quorum 1 -attesters <ID_B> -bootstrap <B> \
-  -bond 8M -bond-audit 1s -capacity 1G
+  -bond 8M -min-bond-floor 0 -bond-audit 1s -capacity 1G
 
 # Publish through consensus: the entry commits only once the bond audits have
 # earned real standing on both sides (a few 1s rounds). A success is a genuine
@@ -130,6 +130,14 @@ silt daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -st
 silt swarm add FILE -peers <A> -registry <regRef>
 ```
 
+> **Why `-min-bond-floor 0` here.** An untrusted validator gets an anti-release
+> floor (1 GiB) by DEFAULT: a plot smaller than that could be released and
+> re-plotted inside one challenge window, so it earns no standing and the daemon
+> refuses to start rather than run a validator that silently earns nothing. This
+> local walkthrough deliberately uses tiny 8 MiB bonds, so it opts out
+> explicitly. **A real open deployment must NOT pass `-min-bond-floor 0`** — leave
+> the default and size `-bond` above it.
+
 For the whole thing as a runnable script (plus 3-validator convergence, fault
 tolerance, and restart), see [`examples/`](../examples/README.md).
 
@@ -137,6 +145,7 @@ tolerance, and restart), see [`examples/`](../examples/README.md).
 |---|---|---|---|
 | Be a validator | `-validator` | keeps a chain replica, proposes/attests | prints `chain: committed block N` on a commit |
 | Seal a bond | `-bond 8M` | plots an identity-bound space-time bond, persists it | `plot/` appears; standing rises after audits |
+| **Anti-release floor** | `-min-bond-floor` (default **1 GiB** for an untrusted validator) | a bond below it earns NO standing — too small to be safe, since it could be released and re-plotted inside a challenge window | the daemon refuses to start if `-bond` is under the floor; pass `0` only for a trusted/demo swarm |
 | Bond audit cadence | `-bond-audit 1s` | how often it challenges peers + refreshes its own standing | standing decays if a peer stops answering |
 | Require earned standing | `-min-rep 100` | proposers/attesters must clear the bar | an unbonded node's publish is **refused** |
 | Quorum | `-quorum K` | attestations (excluding proposer) to commit | fewer than K → no commit |
