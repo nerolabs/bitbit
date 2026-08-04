@@ -254,6 +254,21 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   stock validator flags — the residual the re-verifier asked to close.
 
 ### Added
+- **Design note: rebinding the storage bond to identity and size (M0 Sybil / G2)**
+  (2026-08-05) — `docs/design/m0-sybil-rebind.md`. The Sybil corner is **open**: a
+  red-team pass over the F1 fix code broke it again via **prefix plots** (blocks
+  `0..m-1` of an `n`-block plot are byte-identical to a standalone `m`-block plot, and
+  each prefix has its own distinct Merkle root, so per-root dedup never fires). The
+  root cause is that `VerifySpaceTime` checks only Merkle **inclusion** and never
+  recomputes a **label** — proof-of-storage, not proof-of-space — while identity is
+  asserted by a signature over an attacker-chosen root rather than verified. The note
+  specifies the fix (a public, identity- and size-bound plot seed plus a
+  labeling-consistency challenge the verifier recomputes without holding the plot),
+  its soundness parameters (`k ≥ λ·ln2/ε`), the wire format, the build sequence, and
+  the ordering constraints — including that the public seed must **never** land before
+  the labeling check, and that the G3 "proof beats declaration" fix is load-bearing for
+  its griefing safety. Derived by an independent researcher pass with no build context.
+  **Not yet built; M0 is not held.**
 - **`silt daemon -honor-chain-revocations` and `-revoke`: operate on-chain
   takedowns, with an e2e proof (F5)** (2026-08-04) — the accountability fix's
   per-operator honoring and quorum-gated, existence-checked revocation are now
