@@ -81,6 +81,24 @@ type Config struct {
 	// legacy reputation-gated path unchanged, so existing deployments and the
 	// permissive/sim configs are unaffected.
 	MinBond int64
+	// MinBondBytes is the OBJECTIVE anti-release floor (retest G4), mirroring the
+	// node-side floor the credit ledger already enforces (core/node MinBondBytes,
+	// bondaudit): a bond below it earns NO objective standing, because a plot that
+	// small can be released and re-plotted inside a challenge window, so its
+	// one-time proof does not evidence sustained held space. Distinct from MinBond
+	// (the admission size): a deployment can admit at MinBond yet still deny
+	// fork-choice standing to sub-floor bonds. Zero (default) = no floor.
+	MinBondBytes int64
+	// BondTTLBlocks is the OBJECTIVE re-challenge cadence (retest G4): a bonded
+	// validator's standing LAPSES this many blocks after the block that carried
+	// its latest registration, unless it renews with a FRESH space-time proof
+	// (a new BondReg, bound to a recent parent nonce). This enforces the "time"
+	// half of proof-of-space-TIME on the objective path — a validator that
+	// registers once and then RELEASES its plot cannot answer the fresh challenge
+	// to renew, so its vote decays to nothing instead of persisting forever off a
+	// single one-time proof. Decay is a deterministic function of block height, so
+	// every replica expires standing in lockstep. Zero (default) = no expiry.
+	BondTTLBlocks uint64
 }
 
 func DefaultConfig() Config {
@@ -344,6 +362,12 @@ type Chain struct {
 	// later registers with a genuine proof (retest G3). Once proven, a root
 	// stays proven, so first-proven-owner still wins among real bonds (F1).
 	bondRootProven map[ports.Hash]bool
+	// bondRegHeight records the height of the block carrying each validator's
+	// LATEST bond registration, so objective standing can expire on a cadence
+	// (Config.BondTTLBlocks, retest G4): a bond not renewed with a fresh proof
+	// within the TTL window is pruned from `bonded`. Deterministic (a function of
+	// block height), so every replica decays standing identically.
+	bondRegHeight map[ports.NodeID]uint64
 	// slashed is the set of validators evicted for a proven equivocation (F2). A
 	// slashed id is disqualified and cannot re-earn bonded standing, so a proven
 	// double-sign costs standing in the OBJECTIVE set, not only the rep ledger.
@@ -363,6 +387,7 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 		bonded:         make(map[ports.NodeID]int64),
 		bondRootOwner:  make(map[ports.Hash]ports.NodeID),
 		bondRootProven: make(map[ports.Hash]bool),
+		bondRegHeight:  make(map[ports.NodeID]uint64),
 		slashed:        make(map[ports.NodeID]bool)}
 }
 
@@ -472,6 +497,9 @@ func (c *Chain) validateBondRegs(b *Block) error {
 		}
 		if r.Size < c.cfg.MinBond {
 			return fmt.Errorf("%w: validator %s size %d below MinBond %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBond)
+		}
+		if r.Size < c.cfg.MinBondBytes {
+			return fmt.Errorf("%w: validator %s size %d below anti-release floor %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBondBytes)
 		}
 		if !c.verifyBond(r.Root, r.Size, nonce, r.Answer) {
 			return fmt.Errorf("%w: validator %s space-time proof", ErrBadBondReg, r.ValidatorID())
@@ -907,6 +935,9 @@ func (c *Chain) apply(b Block) {
 		if len(r.Validator) != ed25519.PublicKeySize {
 			continue
 		}
+		if r.Size < c.cfg.MinBondBytes {
+			continue // below the objective anti-release floor → no standing (retest G4)
+		}
 		id := r.ValidatorID()
 		if c.slashed[id] {
 			continue // a slashed equivocator cannot re-earn bonded standing (F2)
@@ -927,6 +958,20 @@ func (c *Chain) apply(b Block) {
 			c.bondRootProven[r.Root] = true
 		}
 		c.bonded[id] = r.Size
+		c.bondRegHeight[id] = b.Height // reset the TTL clock on every (re)registration (G4)
+	}
+	// OBJECTIVE RE-CHALLENGE (retest G4): standing lapses if not renewed with a
+	// fresh proof within BondTTLBlocks. A validator that registers once and then
+	// releases its plot cannot answer the fresh challenge to renew, so its vote
+	// decays to nothing instead of persisting forever off a single one-time proof.
+	// Height-driven, so every replica expires standing in lockstep.
+	if ttl := c.cfg.BondTTLBlocks; ttl > 0 {
+		for id, regH := range c.bondRegHeight {
+			if b.Height-regH > ttl {
+				delete(c.bonded, id)
+				delete(c.bondRegHeight, id)
+			}
+		}
 	}
 	// Apply on-chain equivocation slashes (F2): evict the culprit from the
 	// objective bonded set and bar it from re-earning standing. Verified already
@@ -1069,6 +1114,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.bonded = t.bonded
 	c.bondRootOwner = t.bondRootOwner
 	c.bondRootProven = t.bondRootProven
+	c.bondRegHeight = t.bondRegHeight
 	c.slashed = t.slashed
 }
 

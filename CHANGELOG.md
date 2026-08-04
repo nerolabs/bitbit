@@ -9,6 +9,29 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Retest G4 (Sybil/time, High): the objective validator set now enforces an
+  anti-release floor and re-challenges bonds on a cadence** (2026-08-04) — the fresh
+  pass found the "time" half of proof-of-space-TIME was not enforced on the OBJECTIVE
+  fork-choice path: `c.bonded` was set once at registration on a one-time proof and
+  never decayed or re-challenged, and `chain.Config` had no anti-release floor at all
+  (only `MinBond`). So (a) a sub-floor bond — small enough to release and re-plot
+  inside a challenge window — earned full objective standing, and (c) a validator
+  could prove once, RELEASE its plot, and keep voting forever with zero resident
+  storage (the node-side floor + live re-challenge lived only in the credit ledger the
+  objective set never reads). Two additive, deterministic knobs close it:
+  `Config.MinBondBytes` (an objective anti-release floor — a bond below it earns no
+  standing, rejected on the normal path and uncredited at genesis) and
+  `Config.BondTTLBlocks` (objective standing LAPSES this many blocks after a
+  validator's latest registration unless it renews with a FRESH space-time proof —
+  height-driven, so every replica decays in lockstep). A validator that releases its
+  plot cannot answer the fresh challenge to renew, so its vote decays to nothing. The
+  daemon wires both: the existing `-min-bond-floor` now also feeds the chain floor,
+  and a new `-bond-ttl` sets the cadence. Both default to 0 (off), so legacy/sim
+  configs are unchanged. Regressions: `core/chain/redteam_verify_objective-antirelease_g4_test.go`
+  (sub-floor bonds earn zero standing / are rejected; standing decays without renewal
+  and persists with it) and `core/node/redteam_verify_objective-antirelease_g4_test.go`
+  (through the real `bond.VerifySpaceTime`: a validator that stops renewing lapses; a
+  continuously-renewing one keeps standing).
 - **Retest G3 (Accountability, High regression): a genesis bond-squat can no longer
   lock out an honest validator** (2026-08-04) — the fresh pass found the F1 per-root
   dedup (`#158`) became a griefing lever when combined with the pre-existing
