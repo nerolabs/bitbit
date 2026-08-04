@@ -97,7 +97,11 @@ account — de-anon by IP+timing and by the fee.
   path, not the CLI).
 - **Fee** link severed by **prepaid publish credits** (online Chaumian e-cash,
   `core/blindtoken` domain-separated so a credit ≠ a token): the fee is charged in
-  **bulk at mint**; a publish spends a credit with **no per-publish debit**.
+  **bulk at mint**; a publish spends a credit with **no per-publish debit**. **Now
+  wired into the default publish** — `cmd/silt/swarm.go`'s `acquirePublishToken`
+  mints a credit per validator then spends them, so a default `-token-quorum`
+  publish no longer hits `ChargePublish(from)` (re-verification #4 closed;
+  `e2e/TestUnlinkablePublishOverTCP` exercises it).
 - **Subset-choice** channel severed by a **canonical on-chain issuer set**
   (`Chain.CanonicalIssuers`, from the objective bond) — every publisher asks the
   same validators.
@@ -158,10 +162,13 @@ compute the same weight; a partition heals; forged registration denied);
 `sim/objective_coldstart_test.go` + `core/chain/objective_coldstart_test.go`
 (anchor bootstrap then shed). Live: `e2e/TestObjectiveConsensusCommitsOverTCP`
 (two `-objective` daemons commit a real quorum over real TCP).
-**Residual:** flipping the *shipped default* to objective is a **launch-config
-decision** (who are the public launch anchors?), not a code task. Objective mode
-is opt-in at the daemon today; a reviewer testing default daemons gets the legacy
-reputation path.
+**Now the default** (re-verification #6/#7 closed): `silt daemon -objective`
+defaults to `true` for any untrusted validator (`-min-rep > 0`); a trusted swarm
+(`-min-rep 0`) auto-disables it, and legacy is an explicit `-objective=false`
+opt-out. A multi-validator quorum bootstraps from the declared launch `-anchors`
+(the honest trustless-cold-start boundary — declaring the launch validator set is
+the remaining operational requirement, not a code gap). So "two histories both
+stand" is no longer reachable with stock validator flags.
 
 ## F7 — Cross-height double-backing evades the equivocation slash
 

@@ -91,6 +91,19 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   added for M0. `docs/design/m0-consensus.md` §2b carries the reasoning.
 
 ### Changed
+- **The default `-token-quorum` publish now uses the prepaid-credit path (closes
+  red-team re-verification #4)** (2026-08-04) — the re-verifier confirmed the
+  fee-decoupling credit mechanism works but flagged that `cmd/silt/swarm.go` still
+  acquired tokens via the legacy `AcquireToken`, so a default token-quorum publish
+  still hit `ChargePublish(from)` per publish. `acquirePublishToken` now **mints
+  one prepaid credit per validator** (the fee is charged at mint) and **spends
+  them** for the k blind signatures, so the publish itself records no per-publish
+  fee debit — the credit path the mechanism was built for is now the default
+  publish path, exercised end-to-end over real TCP
+  (`e2e/TestUnlinkablePublishOverTCP`). The whole flow runs from the swarm client's
+  already-ephemeral identity. Residual (deliberately deferred, option B): the
+  IP+timing transport link (relay-forced issuance + epoch batching) — NATed clients
+  already relay; a public-IP client's issuance IP/timing is the last D3 piece.
 - **Objective fork-choice is now the DEFAULT for an untrusted validator (closes
   red-team re-verification #6/#7)** (2026-08-04) — the fix re-verifier confirmed
   objective mode heals divergent replicas but flagged that it was **off by
