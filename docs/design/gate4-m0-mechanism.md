@@ -13,6 +13,25 @@
 > (2026-08-02); `Block.Version` (#98) is the hard-fork guard every record change
 > below rides on.
 
+> ## ⚠️ LIVE RED-TEAM VERDICT (2026-08-04) — supersedes the "Resolved" language below
+>
+> The external M0 red-team ran against shipped code (`c1397e0`) and **broke all
+> three corners in the composition** (the adopted primitives — the Wesolowski VDF
+> and the Shacham–Waters PoR — held). Where §3/§4 below say a constraint is
+> "Resolved by D1/D2/D3," read it as **design intent, not shipped reality** unless
+> this banner says otherwise. Full report: `docs/reviews/M0-REDTEAM-REPORT.md`.
+>
+> | Corner | Design says | **Live verdict** |
+> |---|---|---|
+> | Privacy (D3 issuance-mixing) | Resolved | 🔴 **BROKEN** — issuance-mixing never shipped; a colluding validator minority de-anonymizes the publisher at token acquisition (F4). |
+> | Accountability | Resolved | 🟢 **FIXED (2026-08-04, #136)** — on-chain revocation was a global, ownership-unchecked, irreversible switch (F5); now existence-checked, per-operator opt-in, and reversible. |
+> | Sybil (D1 bond) | Resolved | 🔴 **BROKEN** — the plot binds only the 32-byte block *leaves*, so a prover holds 1/128 of what it charges (→0 for small bonds); the VDF "time" half gates nothing because its input is public (F1/F2/F3). |
+> | Consensus D2 (fork-choice) | Resolved | 🔴 **BROKEN** — fork-choice weight is subjective local reputation, not objective on-chain bond; two honest replicas diverge permanently (F6). Cross-height double-backing evades the equivocation slash (F7). |
+>
+> **Status line: primitives real, composition unproven, M0 not yet held.** The
+> Sybil (F1/F2), privacy (F4), and consensus (F6/F7) fixes are the mechanism
+> **design turn** that follows; accountability (F5) is done.
+
 ## 0. The three decisions this design is built on
 
 Surfaced by the [build-vs-intention audit](../reviews/build-vs-intention-2026-08-02.md)
@@ -262,14 +281,21 @@ The stub's four "sharp edge" constraints, now each resolved or explicitly owned:
 1. **Off-loop, persisted proof work (B2).** **Resolved by D1** — PoST plotting +
    per-epoch proofs run in an adapter; only cheap verify touches the loop; a
    persisted plot blob avoids re-plot on restart (#4d).
-2. **Cross-layer unlinkability.** **Resolved by D3** — severed at ledger (#97),
-   network (ephemeral publish identity), and issuance (mix/relay + epoch
-   batching + canonical validator set) layers. The V3 privacy test spans all
-   three.
-3. **Subjective reputation as the partition boundary.** **Resolved by D2** —
-   fork-choice uses objective on-chain PoST-bond weight, not subjective
-   reputation, so "which chain wins" is globally agreed. Reputation still gates
-   *eligibility* (who may propose/attest); bond weight decides *fork-choice*.
+2. **Cross-layer unlinkability.** **Design intent: D3 — 🔴 NOT shipped (red-team
+   F4).** Layers 1 (Publisher-less ledger, #97) and 2 (ephemeral publish
+   identity) hold, but the issuance layer's mix/relay + epoch batching + canonical
+   validator set **were never built**: `AcquireToken` requests blind signatures
+   directly from the bonded identity's own transport, so a colluding issuer
+   minority ties the publish to the standing key by IP+timing (and by the fee
+   debit). The anonymity set is a *singleton*, not "narrowed." Ships in the
+   privacy design turn.
+3. **Subjective reputation as the partition boundary.** **Design intent: D2 — 🔴
+   NOT shipped (red-team F6).** Fork-choice weight is still the *subjective local
+   reputation view* (`blockWeight` qualifies attesters by `c.rep(id)`), not
+   objective on-chain PoST-bond weight — so two honest replicas with different
+   audited sets compute different winners and diverge permanently. Reputation
+   gates *eligibility* today; making bond weight decide *fork-choice* (and it must
+   be a real bond — see Constraint on D1/F1) is the consensus design turn.
 4. **Permanence — record right before real blocks.** **Landed** — #97 (tokened
    default), #98 (`Block.Version`), #99 (Gated registry fenced). Every record
    change above (PoR authenticators, equivocation evidence) rides the version
