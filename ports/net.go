@@ -162,6 +162,11 @@ type Message struct {
 	// node advertises no bond and is never bond-challenged.
 	BondRoot Hash
 	BondSize int64
+	// Credit optionally rides a MsgTokenRequest: a prepaid publish credit the
+	// issuer verifies and SPENDS instead of charging the requester's durable
+	// identity (M0 privacy D3 / F4). Nil ⇒ the legacy fee-at-request path. Only
+	// honored when the issuer requires credits (Node.RequirePublishCredits).
+	Credit *PublishCredit
 }
 
 func (k MsgKind) String() string {

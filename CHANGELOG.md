@@ -55,6 +55,30 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Privacy corner (red-team F4): the per-publish fee no longer links a publish
+  to its standing key** (2026-08-04) — token issuance de-anonymized the publisher
+  two independent ways: over a non-anonymous transport (IP+timing) and via
+  `ChargePublish(from)`, a **per-request debit of the durable standing account**.
+  This lands the fee decoupling — **prepaid publish credits** (online Chaumian
+  e-cash, Chaum 1982). A credit is a blind signature under the issuer's key but in
+  a **separate FDH domain** (`blindtoken.BlindCredit`/`VerifyCredit`), so a credit
+  can never be presented as a publish token or vice versa even under one key. The
+  fee is charged **in bulk at mint** (a normal, charged token request blinded in
+  the credit domain); at publish the requester **spends a credit** (`Message.Credit`,
+  verified and marked spent in an online double-spend set) and the issuer does
+  **not** charge the durable identity — severing the ledger-level link. The change
+  is purely additive: a request with a credit spends it (no debit), a request with
+  none takes the legacy charged path, so existing token flows are unchanged
+  (whole suite + vet + `-race` green). New helpers `Node.AcquireCredits` (bulk
+  mint) and `Node.AcquireTokenWithCredits` (spend). Regressions in
+  `core/node/redteam_privacy_test.go` show a mint charging once, a publish
+  charging nothing more, a spent credit refused (double-spend), a forged credit
+  refused, and the credit/token domains proven non-interchangeable. **Residual
+  (honest):** the **network-layer link** — routing issuance over the content-blind
+  relay from an ephemeral identity, epoch batching, and a canonical validator set
+  — is **not yet built**, so a colluding issuer minority can still correlate by
+  IP+timing; the privacy corner does not fully hold until that lands. See
+  `docs/design/m0-privacy-issuance.md`.
 - **Consensus corner (red-team F6): fork-choice is now objective — honest
   replicas stop diverging** (2026-08-04) — fork-choice weight, the quorum count,
   and proposer/attester eligibility used the **local reputation view**

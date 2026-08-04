@@ -152,6 +152,18 @@ type PublishToken struct {
 	Sigs   []TokenSig
 }
 
+// PublishCredit is a prepaid, blind-signed publish credit (M0 privacy D3 / F4):
+// a random serial an issuer blind-signed at BULK MINT time (fee charged then).
+// Spending it later buys a publish-token signature from that same issuer WITHOUT
+// a per-publish fee debit — severing the ledger-level link from the durable
+// standing key to a specific publish. The issuer blind-signed the serial, so it
+// cannot tie the revealed credit back to the mint session; a spent-set stops
+// double-spends (online Chaumian e-cash).
+type PublishCredit struct {
+	Serial []byte
+	Sig    []byte
+}
+
 // Registry is the append-only log of published roots. v1 is a single
 // honest in-process instance; the interface is the seam where a
 // chain-backed implementation would slot in later.
