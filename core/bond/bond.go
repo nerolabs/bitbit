@@ -6,6 +6,10 @@
 // missing Sybil cost the reputation-quorum chain has always assumed but
 // never charged (threat-catalog B1/D3).
 //
+// ⚠️ As of 2026-08-04 this "N identities cost N×size" claim is DISPROVEN by the
+// M0 red-team (F1/F3) — see the RED-TEAM note below: the real cost is ~size/128
+// (→0 for small bonds). The paragraphs here describe the INTENDED design.
+//
 // IDENTITY BINDING (Gate 4b). The plot is sealed from a per-identity SECRET
 // (derived from the node's signing key), not its public NodeID, so:
 //   - only the identity's owner can generate its plot — an outsider cannot
@@ -29,27 +33,43 @@
 // nonce picks which blocks, so a prover must hold (nearly) all of them —
 // cost = Size.
 //
-// THE PLOT — why storing beats recomputing (Gate 4b). The bond dataset is a
-// SEQUENTIAL LABELING: block i is derived from the node's identity, its
+// ⚠️ RED-TEAM 2026-08-04 — THIS SCHEME IS BROKEN (F1/F2), fix pending the Sybil
+// design turn. The claims in the next paragraph are FALSE against the shipped
+// code and are kept only so the correction has something to point at:
+//   - plotBlock derives block i from the 32-byte LEAVES of its parents, not the
+//     parents' 4 KiB block BYTES (see plotBlock + leaves[i]=HashBytes(block_i)).
+//     So a prover that stores only the leaves (32 B/block = 1/128 of the bond)
+//     recomputes any probed block in one call and builds its Merkle proof —
+//     passing Verify/VerifySpaceTime while holding 1/128 of what it advertises
+//     (→ 0 resident bytes for bonds small enough to re-plot inside the VDF
+//     window). "Store the S bytes" is NOT the rational strategy; storing the
+//     leaves is.
+//   - the VDF "time" half gates nothing: AnswerSpaceTime seeds the VDF from the
+//     PUBLIC challenge seed, so a zero-resident prover runs the VDF, learns the
+//     probed indices, then re-derives exactly those blocks. Releasing the space
+//     does not forfeit the answer.
+//
+// The fix (design turn): make each block depend on the full parent BYTES (a
+// memory-hard label / proven depth-robust graph), and bind the sampling
+// challenge to a plot read BEFORE the VDF so releasing the space forfeits it.
+// Report: docs/reviews/M0-REDTEAM-REPORT.md §1–§2.
+//
+// THE PLOT — the INTENDED design (Gate 4b), not yet achieved. The bond dataset
+// is a SEQUENTIAL LABELING: block i is derived from the node's identity, its
 // index, its immediate predecessor, and a few pseudo-random EARLIER blocks
-// (a chain plus long-range parents — a directed acyclic graph). Because a
-// block depends on earlier ones, recomputing a single probed block on demand
-// forces recomputing its whole dependency subgraph back toward block 0; and
-// the pseudo-random long-range parents defeat cheap checkpointing (you would
-// have to store enough checkpoints to cover random reaches, i.e. store the
-// plot anyway). So the rational strategy is to STORE the S bytes — which is
-// exactly the space we are charging for. Same identity ⇒ same plot, so an
-// owner can regenerate on setup, but must then hold it to answer cheaply.
+// (a chain plus long-range parents — a directed acyclic graph). The INTENT is
+// that recomputing a probed block forces recomputing its dependency subgraph so
+// the rational strategy is to STORE the S bytes — but as the red-team note above
+// shows, binding to leaves rather than bytes defeats this. Same identity ⇒ same
+// plot, so an owner can regenerate on setup.
 //
 // HONESTLY LABELED — what this does and does not prove:
-//   - It delivers SPACE-hardness heuristically: the labeling makes recompute
-//     cost scale with dependency depth, so holding the plot beats recomputing
-//     it. It is NOT yet a formally depth-robust graph (DRG); a proven-DRG
-//     labeling (Ateniese-style) and/or a memory-hard label function are the
-//     hardening path, and the TIME half — a VDF binding a fresh epoch
-//     challenge to non-parallelisable elapsed work (core/vdf, already built)
-//     so the challenge can't be precomputed and the space must be held ACROSS
-//     time — is wired in the next 4b step.
+//   - It was INTENDED to deliver SPACE-hardness heuristically; the red-team
+//     showed it does not (F1). It is NOT a formally depth-robust graph (DRG);
+//     the fix is a proven-DRG labeling (Ateniese-style) and/or a memory-hard
+//     label function over block BYTES. The TIME half — a VDF meant to bind a
+//     fresh epoch challenge to non-parallelisable elapsed work — does not
+//     currently bind possession (F2), because its input is public.
 //   - No replication proof and no zero-knowledge: it proves "this identity
 //     holds a distinct blob of this size," not "this is a unique replica of
 //     user data." Elevating held REAL network content to standing (so the
@@ -196,11 +216,17 @@ func (c *Commitment) answer(idxs []int) (Answer, bool) {
 }
 
 // AnswerSpaceTime is the proof-of-space-TIME response: it first runs the VDF
-// for `delay` sequential squarings over the fresh challenge (the non-
-// parallelisable elapsed-work floor), then derives the probed block indices
-// from the VDF output — so a prover cannot precompute which blocks to hold,
-// nor release the space and re-plot just in time, since it does not learn the
-// indices until after the delay. delay == 0 falls back to a space-only answer.
+// for `delay` sequential squarings over the fresh challenge, then derives the
+// probed block indices from the VDF output.
+//
+// ⚠️ RED-TEAM 2026-08-04 (F2): the intended guarantee below — "a prover cannot
+// release the space and re-plot just in time" — is FALSE as shipped. The VDF is
+// seeded from challengeSeed(c.Root, nonce), which is PUBLIC, so a zero-resident
+// prover runs the VDF, learns the indices, then re-derives exactly those blocks
+// (which, per Finding 1, it can rebuild from the leaves alone). The delay does
+// not bind possession because nothing about the VDF requires reading the plot.
+// Fix (design turn): seed the sampling from a value that requires reading the
+// plot BEFORE the VDF. delay == 0 falls back to a space-only answer.
 func (c *Commitment) AnswerSpaceTime(nonce uint64, p vdf.Params, delay uint64) (Answer, bool) {
 	if delay == 0 {
 		return c.Answer(nonce)

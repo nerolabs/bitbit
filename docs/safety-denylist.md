@@ -18,8 +18,15 @@ tracking numbers.
 
 You cannot, and should not, rewrite an immutable chain. So takedown is
 not a deletion — it is an **addition**: an append-only *revocation
-record* (a tombstone) is committed to the chain. From that point,
-**compliant nodes no-op on the denied root**:
+record* (a tombstone) is committed to the chain. Two properties keep this
+from becoming a global kill switch (hardened after the M0 red-team, F5):
+the revocation may only name a root **already published on the chain**
+(a quorum cannot censor a hash that was never there), and honoring a
+chain revocation is a **per-operator subscription**
+(`node.SetHonorChainRevocations`, off by default) — following the chain
+does not force you to enforce its takedowns. A takedown is also
+**reversible** by the same quorum (an un-revoke record). From that point,
+**a subscribing node no-ops on the denied root**:
 
 - they **refuse to store** its chunks (a `StoreChunk` carrying a proof
   for a denied root is rejected),
@@ -27,9 +34,11 @@ record* (a tombstone) is committed to the chain. From that point,
   `Challenge` all answer "not found"),
 - they **stop announcing** them as providers,
 - caretakers **stop repairing** the file, so its redundancy decays,
-- the chain-backed **registry stops resolving** the root — you cannot
-  even retrieve the manifest pointers to begin a download,
-- and each node **purges** the denied chunks it already holds.
+- a **subscribing** chain-backed registry stops resolving the root — a
+  reader that opted in cannot retrieve the manifest pointers to begin a
+  download (a non-subscribing reader still resolves it: the effect is
+  proportional to who trusts the takedown, not universal),
+- and each subscribing node **purges** the denied chunks it already holds.
 
 The net effect: the *name* persists in history (harmless — it is just a
 hash), while the *content* becomes unreachable and its chunks rot off

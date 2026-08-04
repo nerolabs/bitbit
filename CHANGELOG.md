@@ -8,6 +8,36 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **M0 external red-team: primitives real, composition unproven, M0 not yet
+  held** (2026-08-04) — the independent M0 red-team ran against shipped code
+  (`c1397e0`) and **broke all three corners in the novel composition**. The
+  adopted primitives held (the Wesolowski VDF and the Shacham–Waters PoR were
+  attacked and denied). Full report: `docs/reviews/M0-REDTEAM-REPORT.md`;
+  live status carried in `docs/design/gate4-m0-mechanism.md`. This supersedes
+  earlier changelog language that presented the corners as resolved.
+  - **Accountability** — 🟢 **FIXED (below, #136).**
+  - **Sybil** — 🔴 **BROKEN (F1/F2/F3):** the PoST plot binds only the 32-byte
+    block *leaves*, not the block bytes, so a prover holds ~1/128 of the storage
+    it is charged for (→0 for small bonds, re-plotted inside the VDF window); and
+    the VDF "time" half gates nothing because its challenge input is public.
+    Earlier entries claiming "N distinct blobs of real storage" and "cannot
+    release the space and re-plot" are **false against this attack** and are
+    corrected in-code (`core/bond/bond.go`). Fix = bind to block bytes
+    (memory-hard/DRG) + a pre-VDF plot read; mechanism design turn.
+  - **Privacy** — 🔴 **BROKEN (F4):** the D3 issuance-mixing layer was never
+    shipped, so `AcquireToken` de-anonymizes the publisher at token acquisition
+    by IP+timing (and the fee debit). The residual was previously described as a
+    "narrowed anonymity set"; in shipped code it is a **singleton** (direct
+    de-anonymization). Fix = route issuance over the content-blind relay, epoch
+    batch, decouple the fee; privacy design turn.
+  - **Consensus (D2)** — 🔴 **BROKEN (F6/F7):** fork-choice weight is the
+    subjective local reputation view, not objective on-chain bond, so two honest
+    replicas diverge permanently; and cross-height double-backing evades the
+    equivocation slash. Fix = objective bond-weighted fork-choice (depends on the
+    Sybil fix) + slashing that distinguishes malicious double-backing from honest
+    reorg-following; consensus design turn.
+
 ### Fixed
 - **Accountability corner (red-team F5): on-chain revocation is no longer a
   global switch** (2026-08-04) — the external M0 red-team broke the
