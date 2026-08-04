@@ -11,10 +11,18 @@
 > fork-choice weight a function of the chain, not the local audit view — gated by
 > `Config.MinBond` so it is additive and opt-in (default stays legacy; no
 > `BlockVersion` bump). Regressions in `core/chain/redteam_consensus_test.go` show
-> divergent replicas now AGREE and forks HEAL. **Residual:** node/daemon wiring to
-> emit registrations + enable objective mode in production (a validator cold-start
-> via genesis-seeded bonds), and **F7** (Casper-FFG surround-vote slashing) —
-> still a follow-up. Report: `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7.
+> divergent replicas now AGREE and forks HEAL. The **cold-start is solved via the
+> training-wheels anchors**: in objective mode a declared anchor is eligible to
+> propose/attest WHILE the network is immature (breaking the "must be bonded to
+> record bonds" chicken-and-egg), validators register their real bonds LIVE as
+> they propose (`Node.RegisterBondReg`, attached in `proposeBlock`), and the anchor
+> eligibility SHEDS at maturity — eligibility only, never fork-choice weight (that
+> is always summed real bond). Covered unit (`core/chain/objective_coldstart_test.go`
+> — anchor bootstraps then sheds) + integration (`sim/objective_coldstart_test.go`
+> — an anchor-only network with empty ledgers bootstraps and validators become
+> really bonded on chain). **Residual:** the daemon `-objective` flag + an e2e run,
+> and **F7** (Casper-FFG surround-vote slashing). Report:
+> `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7.
 > **Depends on the bond fix** (`m0-sybil-bond.md`, shipped) — objective weight is
 > only meaningful if the bond it weighs is real. **F7 folds in here** (not a
 > standalone patch): a naive cross-fork slash wrongly punishes honest

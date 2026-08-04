@@ -55,6 +55,27 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Consensus (F6): the objective-fork-choice cold-start — an anchor-bootstrapped
+  validator set that builds itself from real bonds** (2026-08-04) — objective mode
+  had a chicken-and-egg: a validator must be bonded ON CHAIN to propose/attest, but
+  the first block that records bonds must itself be proposed and attested. It is
+  now solved with the existing training-wheels anchors: in objective mode a
+  declared anchor is eligible to propose/attest **while the network is immature**
+  (`Chain.launchAnchor`), so the declared launch set commits the early blocks;
+  validators register their real bonds **live** as they propose
+  (`Node.RegisterBondReg`, attached by `proposeBlock`; `Chain.Objective` /
+  `NewBondReg` / `BondRegNonce` are the seam); and the anchor eligibility **sheds
+  mechanically at maturity** (`Mature()`). It grants **eligibility, never
+  fork-choice weight** — weight is always summed real bond, so a declared anchor
+  can never outweigh a proven one, and a network that never decentralizes simply
+  keeps its training wheels. Coverage: **unit**
+  (`core/chain/objective_coldstart_test.go` — an anchor bootstraps an empty
+  objective set then sheds at maturity) and **integration**
+  (`sim/objective_coldstart_test.go` — an anchor-only network with a separate empty
+  ledger per node bootstraps consensus, and proposers become really bonded
+  on-chain by self-registration, agreed across replicas). **Residual:** the daemon
+  `-objective` flag wiring + an e2e run over real daemons. See
+  `docs/design/m0-consensus.md`.
 - **Test coverage backfill (build-immutable): the Accountability fix (F5) now has
   the integration tier** (2026-08-04) — the F5 fix (on-chain revocation is
   existence-checked, per-operator opt-in, reversible) had unit + node-white-box

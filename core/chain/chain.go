@@ -343,21 +343,43 @@ func (c *Chain) SetBondVerifier(f func(root ports.Hash, size int64, nonce uint64
 // fall back to the legacy rep path rather than trust an unproven bond.
 func (c *Chain) objective() bool { return c.cfg.MinBond > 0 && c.verifyBond != nil }
 
+// Objective reports whether this replica runs objective (on-chain bond)
+// fork-choice (F6) rather than the local reputation view — so a proposer knows
+// to attach its live bond registration.
+func (c *Chain) Objective() bool { return c.objective() }
+
+// launchAnchor reports whether id bootstraps the objective validator set: a
+// declared training-wheels anchor, but ONLY while the network is immature. It
+// breaks the objective-mode cold-start chicken-and-egg (you must be bonded on
+// chain to propose/attest, but the first block that records bonds must itself be
+// proposed and attested) by letting the declared launch set commit the early
+// blocks — the same plural, threshold-gated set the training wheels already
+// trust. It sheds MECHANICALLY at maturity (Mature()), after which only real
+// on-chain bonds qualify. Anchors are expected to register their OWN real bonds
+// early (live self-registration), so this is a launch crutch, not a standing
+// exemption: it grants ELIGIBILITY, never fork-choice WEIGHT (weight is always
+// summed real bond), so a declared anchor cannot outweigh a real bond.
+func (c *Chain) launchAnchor(id ports.NodeID) bool {
+	return len(c.cfg.Anchors) > 0 && c.cfg.Anchors[id] && !c.Mature()
+}
+
 // attesterQualified reports whether id may have its attestation counted toward
-// quorum and weight. Objective mode: its committed bonded size clears MinBond
-// (identical on every replica). Legacy mode: the local reputation view.
+// quorum (and, if it has a real bond, weight). Objective mode: its committed
+// bonded size clears MinBond, OR it is a launch anchor bootstrapping an immature
+// network. Legacy mode: the local reputation view.
 func (c *Chain) attesterQualified(id ports.NodeID) bool {
 	if c.objective() {
-		return c.bonded[id] >= c.cfg.MinBond
+		return c.bonded[id] >= c.cfg.MinBond || c.launchAnchor(id)
 	}
 	return c.rep(id) >= c.cfg.MinAttesterRep
 }
 
-// proposerQualified reports whether id may propose. Objective mode reuses the
-// bond gate (a bonded validator proposes); legacy mode uses MinProposerRep.
+// proposerQualified reports whether id may propose. Objective mode: a bonded
+// validator, or a launch anchor while the network is immature. Legacy mode uses
+// MinProposerRep.
 func (c *Chain) proposerQualified(id ports.NodeID) bool {
 	if c.objective() {
-		return c.bonded[id] >= c.cfg.MinBond
+		return c.bonded[id] >= c.cfg.MinBond || c.launchAnchor(id)
 	}
 	return c.rep(id) >= c.cfg.MinProposerRep
 }
