@@ -75,7 +75,7 @@ func TestRedteamF6_ObjectiveWeightAgreesAcrossDivergentReplicas(t *testing.T) {
 	prop := key(1)
 	vals := []ed25519.PrivateKey{key(2), key(3), key(4), key(5)}
 
-	r1, g := objectiveChain(prop, vals, func(ports.NodeID) int64 { return 0 })          // audited nobody
+	r1, g := objectiveChain(prop, vals, func(ports.NodeID) int64 { return 0 })         // audited nobody
 	r2, _ := objectiveChain(prop, vals, func(ports.NodeID) int64 { return 1_000_000 }) // trusts everyone
 
 	fork := attestedFork(prop, vals, g.Hash(), entry(1), 3)
