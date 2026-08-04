@@ -850,6 +850,18 @@ func (c *Chain) AppendGenesis(b Block) error {
 	if len(b.Revocations) > 0 || len(b.Unrevocations) > 0 {
 		return ErrGenesisTakedown
 	}
+	// The same door, for the STRONGER lever (retest G1). AppendGenesis skips
+	// validateSlashes, and apply() unconditionally evicts every Slashes culprit
+	// (slashed[id]=true, deleted from bonded, barred from re-earning, carried
+	// through adopt()). A genesis carrying an UNVERIFIED Slash would therefore be
+	// a proof-free, pre-emptive, identity-level kill switch — a fortiori what
+	// immutable #5 forbids. A slash is only meaningful against equivocation
+	// WITHIN this chain's history, of which a genesis has none, so genesis may
+	// never carry one. Reject outright; a slash must go through the normal path,
+	// where validateSlashes → VerifyEquivocation gates it on a real proof.
+	if len(b.Slashes) > 0 {
+		return ErrGenesisTakedown
+	}
 	c.apply(b)
 	return nil
 }
