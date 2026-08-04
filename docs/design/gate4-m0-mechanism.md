@@ -30,7 +30,11 @@
 >
 > **Status line: primitives real, composition unproven, M0 not yet held.** The
 > Sybil (F1/F2), privacy (F4), and consensus (F6/F7) fixes are the mechanism
-> **design turn** that follows; accountability (F5) is done.
+> **design turn** that follows; accountability (F5) is done. The design turn is
+> written up per corner:
+> - **Sybil bond (F1/F2/F3)** — [`m0-sybil-bond.md`](m0-sybil-bond.md) *(keystone; F6 depends on it)*
+> - **Privacy issuance / D3 (F4)** — [`m0-privacy-issuance.md`](m0-privacy-issuance.md) *(independent)*
+> - **Consensus fork-choice + slashing (F6/F7)** — [`m0-consensus.md`](m0-consensus.md) *(depends on the bond)*
 
 ## 0. The three decisions this design is built on
 

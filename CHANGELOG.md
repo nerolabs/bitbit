@@ -38,6 +38,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
     Sybil fix) + slashing that distinguishes malicious double-backing from honest
     reorg-following; consensus design turn.
 
+### Docs
+- **M0 mechanism design turn: per-corner fix write-ups** (2026-08-04) — the three
+  broken corners each get a skeptic-readable design doc that names the exact
+  break (`file:line`), the adopt-don't-invent fix, the composition, the schema
+  touch, and a falsifiable denial with the red-team's own PoC inverted as
+  regression. **Sybil (F1/F2/F3)** — `docs/design/m0-sybil-bond.md`: a proven
+  depth-robust graph over full-byte labels (closes the 1/128 gap) + a pre-VDF
+  plot-read seed (releasing the space forfeits the answer). **Privacy (F4)** —
+  `docs/design/m0-privacy-issuance.md`: D3 issuance-mixing — relay + ephemeral
+  transport, epoch batching, canonical validator set, and a prepaid blinded-credit
+  fee decoupling. **Consensus (F6/F7)** — `docs/design/m0-consensus.md`: objective
+  on-chain PoST-bond fork-choice weight + Casper-FFG-style surround-vote slashing
+  that spares honest reorg-followers. The Sybil bond is the keystone (consensus
+  depends on it); privacy is independent. Linked from
+  `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
+
 ### Fixed
 - **Accountability corner (red-team F5): on-chain revocation is no longer a
   global switch** (2026-08-04) — the external M0 red-team broke the
