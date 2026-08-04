@@ -23,7 +23,7 @@
 >
 > | Corner | Design says | **Live verdict** |
 > |---|---|---|
-> | Privacy (D3 issuance-mixing) | Resolved | 🔴 **BROKEN** — issuance-mixing never shipped; a colluding validator minority de-anonymizes the publisher at token acquisition (F4). |
+> | Privacy (D3 issuance-mixing) | Resolved | 🟡 **fee-link FIXED (2026-08-04), network-link pending** — prepaid publish credits (online Chaumian e-cash) sever the per-publish fee debit: the fee is charged in bulk at mint, a publish spends a credit with no durable-identity debit (`core/blindtoken`+`core/node`). Residual: relay/ephemeral/epoch network-layer link still open, so IP+timing correlation remains (F4). See `m0-privacy-issuance.md`. |
 > | Accountability | Resolved | 🟢 **FIXED (2026-08-04, #136)** — on-chain revocation was a global, ownership-unchecked, irreversible switch (F5); now existence-checked, per-operator opt-in, and reversible. |
 > | Sybil (D1 bond) | Resolved | 🟢 **FIXED (2026-08-04) — structural** — the plot now binds the full block *bytes* over a proven depth-robust graph (DRSample), closing the 1/128 leaves-only gap, and the VDF is seeded from a plot block **read before it runs**, so releasing the space forfeits the answer (F1/F2). Residual: the quantitative min-bond-size/delay floor is a tuning follow-up. See `m0-sybil-bond.md`. |
 > | Consensus D2 (fork-choice) | Resolved | 🟡 **F6 FIXED (2026-08-04, mechanism/opt-in), F7 pending** — objective on-chain PoST-bond fork-choice (`Block.BondRegs`, gated by `Config.MinBond`) makes divergent replicas agree and forks heal (regressions in `core/chain`); residual = node wiring + F7 surround-slash. Cross-height double-backing still evades the slash (F7). See `m0-consensus.md`. |

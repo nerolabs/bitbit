@@ -1,15 +1,24 @@
 # M0 fix — unlinkable token issuance, D3 (red-team F4)
 
-> **Status: design doc, ahead of code (the design turn).** The external M0
-> red-team broke the Privacy corner: the blind-signature crypto is sound, but it
-> is invoked over a **non-anonymous transport with a per-request durable-account
-> debit**, so a colluding validator minority de-anonymizes the publisher at token
-> acquisition. This doc specifies D3 — the issuance-mixing layer that
-> `gate4-m0-mechanism.md` §3c/§4 promised and never shipped.
+> **Status: fee-decoupling (the ledger link) SHIPPED (2026-08-04) in
+> `core/blindtoken` + `core/node`; network-layer link still pending.** The
+> external M0 red-team broke the Privacy corner via **two independent links** at
+> token acquisition: the blind-signature crypto is sound, but it is invoked over a
+> **non-anonymous transport** (IP+timing) with a **per-request durable-account fee
+> debit**. This doc specifies D3 — the issuance-mixing layer.
 >
-> Report: `docs/reviews/M0-REDTEAM-REPORT.md` §4 (F4). **Independent of the bond
-> fix** (`m0-sybil-bond.md`) and the consensus fix (`m0-consensus.md`) — can ship
-> in parallel.
+> **What's in code:** the **fee decoupling** (§2d) — prepaid **publish credits**
+> (online Chaumian e-cash, reusing the RSA-FDH blind signature with a domain
+> separated so a credit can't double as a token). The fee is charged in **bulk at
+> mint**; a publish **spends a credit with NO per-publish debit**, severing the
+> ledger link. Purely additive (attach a credit → spend, no charge; attach none →
+> legacy charge), so existing flows are unchanged. Regressions:
+> `core/node/redteam_privacy_test.go`. **Residual:** the **network-layer link**
+> (§2a–2c) — route issuance over the content-blind relay from an ephemeral
+> identity, epoch-batch, canonical validator set — is **not yet built**, so a
+> colluding issuer can still correlate by IP+timing; the corner does not fully
+> hold until that lands. Report: `docs/reviews/M0-REDTEAM-REPORT.md` §4 (F4).
+> **Independent of the bond/consensus fixes.**
 
 ## 1. What broke, precisely
 

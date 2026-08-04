@@ -218,6 +218,13 @@ type Node struct {
 	// can be blinded against and verified across the network.
 	issuerKeyDER   []byte
 	peerIssuerKeys map[ports.NodeID]*rsa.PublicKey
+	// Prepaid publish credits (M0 privacy D3 / F4). A token request may carry a
+	// prepaid credit this issuer verifies and marks spent INSTEAD OF charging the
+	// requester's durable identity — so the per-publish fee no longer links the
+	// standing key to the publish. The fee was charged in bulk at mint (a normal,
+	// charged token request blinded in the credit domain). creditSpent is this
+	// issuer's online double-spend set.
+	creditSpent map[string]bool
 
 	// failure-domain gossip: domainID is this node's own domain hash
 	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
@@ -353,6 +360,7 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 		peerBonds:      make(map[ports.NodeID]bondInfo),
 		attested:       make(map[uint64]ports.Hash),
 		peerIssuerKeys: make(map[ports.NodeID]*rsa.PublicKey),
+		creditSpent:    make(map[string]bool),
 		serveLoad:      make(map[ports.ChunkID]int),
 		leases:         make(map[ports.ChunkID]ports.Time),
 	}
