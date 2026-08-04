@@ -11,6 +11,16 @@
 > **This is not a self-certification that M0 is held.** M0 is held only when a
 > fresh external red-team denies all three failure modes (TENETS Part 0). This
 > guide exists to make that re-verification fast.
+>
+> **Fix-verification pass (2026-08-04):** the original red-team re-ran its seven
+> PoCs against the fixed `main` and confirmed 1/2/3/5 solidly fixed and PoR still
+> denied, but flagged that **#6/#7 (consensus) and #4 (privacy) were fixed but not
+> the DEFAULT path** — a stock validator ran legacy subjective fork-choice, and
+> the default publish still used the legacy fee-charge. **Both are now closed:**
+> objective fork-choice is the default for an untrusted validator (`-objective`
+> defaults true; legacy is an explicit `-objective=false` opt-out), and the
+> default `-token-quorum` publish uses the prepaid-credit path. See the per-finding
+> "Now the default" notes below.
 
 ## Reproduce everything (the inverted regressions)
 
