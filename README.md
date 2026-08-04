@@ -33,18 +33,12 @@ depth-robust graph, with the VDF seeded from a plot read so releasing the
 space forfeits the answer), objective on-chain-bond fork-choice so partitions
 heal to the heavier-standing chain, publisher-unlinkable publishing (ephemeral
 identity + prepaid blind-signed credits + a canonical issuer set), and
-per-operator, existence-checked, reversible takedowns. An **independent
-external red-team broke all three corners in the composition**
-([`docs/reviews/M0-REDTEAM-REPORT.md`](docs/reviews/M0-REDTEAM-REPORT.md));
-**every finding (F1–F7) now has a shipped fix with unit + in-process
-simulation + real-daemon end-to-end coverage** — the per-finding fix and
-how-to-verify guide is
-[`docs/reviews/M0-REDTEAM-VERIFICATION.md`](docs/reviews/M0-REDTEAM-VERIFICATION.md).
-What it is **not** yet: **externally *re*-verified**. M0 is *held* only when a
-fresh red-team denies all three failure modes; the fixes await that pass (plus
-an operator acceptance round). One privacy refinement (public-IP issuance
-IP+timing) and the objective-mode launch default remain honestly recorded. M0
-ships proven or it does not ship.
+per-operator, existence-checked, reversible takedowns. These mechanisms have
+been **hardened through independent adversarial review** and are covered at the
+unit, in-process-simulation, and real-daemon end-to-end tiers. What they are
+**not** yet: **externally re-verified**. M0 is *held* only when a fresh external
+red-team denies all three failure modes; that pass (plus an operator acceptance
+round) is still ahead. M0 ships proven or it does not ship.
 
 The 0.x releases are **experimental learning releases**, not steps to
 V1: the cadence is learning phase → feature-complete = 0.9.0 (RC line)

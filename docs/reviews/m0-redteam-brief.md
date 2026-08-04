@@ -19,6 +19,25 @@ You get **nothing** from the builders — no design rationale beyond what is in
 the repo, no "here's why it's safe." Treat every reassuring comment in the code
 as a **claim to falsify**, not a fact.
 
+**OFF-LIMITS — internal review artifacts (do NOT read; they are a graded answer
+key, not the public product).** This is a blind pass: you find the breaks
+yourself. Therefore:
+
+- **Do not open anything under `docs/reviews/` except this brief.** That directory
+  holds QA and audit artifacts from PRIOR internal reviews — earlier findings
+  reports, fix-verification guides, acceptance briefs. Reading them would hand you
+  a numbered list of what to look for and what was already patched, which defeats
+  an independent pass.
+- **Ignore the "red-team verdict / builder response" status banners** at the top
+  of the design docs (e.g. the verdict table in `gate4-m0-mechanism.md`) and any
+  CHANGELOG entry that references prior "F1–F7" findings. Read the design docs for
+  the *mechanism and the falsifiable claims* (below), not the grade sheet.
+
+Everything you need is in the **code** and the **genuine product docs** — the
+README, `docs/` outside `reviews/`, and the website's user-facing pages. A real
+attacker reads code comments; you may too — but they are claims to break, and you
+do the finding.
+
 ## The one promise to break (M0)
 
 silt's whole reason to exist is to hold three properties *at once* that every
