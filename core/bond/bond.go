@@ -138,6 +138,16 @@ func Seal(secret []byte, size int64) *Commitment {
 // PlotStore) and reload on restart instead of re-plotting (#93).
 func (c *Commitment) Blocks() [][]byte { return c.blocks }
 
+// ReleaseBlocks drops the resident plot bytes, keeping only the commitment
+// (Root, Size) and the 32-byte leaves — the state of an F1/F2 adversary that
+// pledged the space, advertised the bond, then FREED the bytes to save disk,
+// intending to recompute on demand. Under the byte-binding + read-bound-VDF plot
+// (M0 Sybil fix) it can no longer answer: AnswerSpaceTime needs the seed block
+// and the sampled blocks it no longer holds, and it cannot cheaply recompute
+// them (that is the whole point of the depth-robust labeling). So a released
+// commitment fails a live audit — the wire-level consequence the sim asserts.
+func (c *Commitment) ReleaseBlocks() { c.blocks = nil }
+
 // Reconstruct rebuilds a Commitment from persisted plot blocks, RE-DERIVING
 // the leaves and Merkle root from the bytes rather than trusting a stored
 // root (B7). It errors if the block count doesn't match size or any block is

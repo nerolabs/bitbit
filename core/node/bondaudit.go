@@ -89,6 +89,17 @@ func (n *Node) StartBondAudit() {
 // (sim/tests) and observable manual triggers.
 func (n *Node) AuditBondsOnce() { n.bondAuditOnce(uint64(n.clock.Now()) + 1) }
 
+// ReleaseBond frees the node's resident plot bytes while it keeps ADVERTISING
+// the bond (root/size still gossip out) — the F1/F2 adversary that pledged space
+// then freed it to save disk, planning to recompute on demand. Under the
+// byte-binding + read-bound-VDF plot it can no longer answer a live challenge, so
+// it earns no standing. Adversary/test seam (cf. SetLiar for PoR).
+func (n *Node) ReleaseBond() {
+	if n.bond != nil {
+		n.bond.ReleaseBlocks()
+	}
+}
+
 func (n *Node) bondAuditTick() {
 	now := uint64(n.clock.Now()) + 1 // +1 so the first tick is never 0 ("unset")
 	n.bondAuditOnce(now)

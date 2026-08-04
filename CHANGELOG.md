@@ -55,6 +55,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Test coverage backfill (build-immutable): the Sybil fix (F1/F2) now has the
+  integration tier it was missing** (2026-08-04) — the shipped Sybil fix carried
+  only its unit tier (the red-team PoC inverted in `core/bond`); the build-immutable
+  rule (V5) requires unit + integration + e2e. Added the **integration** tier:
+  `sim/bond_release_test.go` drives the property through the live audit wire
+  (gossip → `MsgBondChallenge` → answer → `VerifySpaceTime` → ledger) — a
+  validator that pledges a bond, advertises it, then RELEASES the resident bytes
+  (holding at most the 32-byte leaves, the attacker that frees the space to save
+  disk) FAILS the live audit and earns ZERO standing, while an honest full-plot
+  validator earns it. A `bond.Commitment.ReleaseBlocks` / `Node.ReleaseBond`
+  adversary seam (cf. `SetLiar` for PoR) models the release. **e2e** is already
+  covered by `e2e/TestBondEarnedStandingCommitsOverTCP` (two real daemons proving
+  bonds to each other over real TCP, exercising the fixed read-bound-seed
+  protocol); the released/leaves-only adversary is proven at unit+integration
+  rather than e2e because forcing it end-to-end would mean shipping attack
+  behavior in the production binary — an explicit, stated tier choice, not a
+  silent gap.
 - **Consensus (red-team F6): objective fork-choice is now wired into the node,
   with integration + unit coverage** (2026-08-04) — the F6 objective-weight
   mechanism (on-chain `BondRegs`) previously existed only in `core/chain` behind a
