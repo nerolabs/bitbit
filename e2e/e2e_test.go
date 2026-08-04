@@ -178,6 +178,11 @@ func TestDefaultsRefuseRubberStampCommit(t *testing.T) {
 	a := startDaemon(t, "A",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-serve-registry", "127.0.0.1:0", "-validator",
+		// Local test swarm: opt OUT of the anti-release floor an untrusted
+		// validator now gets by default, so the box plots a small bond instead of
+		// the 1 GiB a real open deployment needs (G4-residual). The consensus
+		// defaults under test here (-quorum/-min-rep) are untouched.
+		"-min-bond-floor", "0",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "2001")
 	peer := a.waitFor(t, rePeer, 20*time.Second)
 	idA, addrA := peer[1], peer[2]
@@ -376,6 +381,9 @@ func TestObjectiveConsensusCommitsOverTCP(t *testing.T) {
 		"-serve-registry", "127.0.0.1:0", "-validator",
 		"-min-bond", "1M", "-mature-validators", "2",
 		"-anchors", anchors, "-quorum", "1", "-attesters", idB,
+		// A local test swarm deliberately uses tiny bonds, so it opts OUT of the
+		// anti-release floor that an untrusted swarm gets by default (G4-residual).
+		"-min-bond-floor", "0",
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "2001")
 	peer := a.waitFor(t, rePeer, 20*time.Second)
@@ -388,6 +396,7 @@ func TestObjectiveConsensusCommitsOverTCP(t *testing.T) {
 		"-bootstrap", bootstrapA, "-validator",
 		"-min-bond", "1M", "-mature-validators", "2",
 		"-anchors", anchors, "-quorum", "1",
+		"-min-bond-floor", "0",
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "2002")
 	b.waitFor(t, reBootstrap, 20*time.Second)
