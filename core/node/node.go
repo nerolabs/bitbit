@@ -199,6 +199,13 @@ type Node struct {
 	// kept that), but it cannot compute the nonce tag, which is the
 	// whole point of the tag. Exists so audits have someone to catch.
 	liar bool
+	// shrinkLiar makes the node hold only the FIRST block of each shard, then
+	// answer a challenge reporting PorBlocks=1 and proving over that single
+	// block — the red-team F4 "tail-shard shrink" attack. The auditor must
+	// reject it by demanding the shard's committed block count, not the
+	// prover's self-report. Exists so the F4 regression exercises the real
+	// answerChallenge → gradeAnswers path end to end.
+	shrinkLiar bool
 	// proofs holds the storage proof for each chunk this node hosts. It is
 	// mirrored to proofStore (when set) so a restart can re-announce coded
 	// shards under the right column key and still answer audits (#69).
@@ -309,6 +316,10 @@ func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
 
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
+
+// SetShrinkLiar toggles the F4 tail-shrink attack (see the shrinkLiar field):
+// the node keeps one block per shard and under-reports its block count.
+func (n *Node) SetShrinkLiar(v bool) { n.shrinkLiar = v }
 
 // SetObservedAddr records this node's public host:port as a relay reported it
 // (#27); ObservedAddr returns it ("" until known). A NATed node hands this to a

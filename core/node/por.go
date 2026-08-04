@@ -135,6 +135,31 @@ func (n *Node) answerChallenge(msg ports.Message) ports.Message {
 		return reply
 	}
 
+	if n.shrinkLiar && blocks > 1 {
+		// F4: keep ONLY block 0, report PorBlocks=1, and prove over a challenge
+		// clamped to that single block. Under a naive auditor (which trusts the
+		// self-reported count) this passes while holding ~1/blocks of the shard.
+		// The fix demands the shard's COMMITTED block count, so this is rejected.
+		ck, err := n.store.Get(bg(), msg.ChunkID)
+		if err != nil {
+			return ports.Message{Kind: ports.MsgChallengeReply}
+		}
+		bb := por.DefaultParams.SectorsPerBlock * por.SectorBytes
+		block0 := ck.Data
+		if len(block0) > bb {
+			block0 = block0[:bb]
+		}
+		cShrunk := porChallenge(seed, 1, msg.PorCount)
+		pr, err := por.Prove(por.DefaultParams, block0, tags[:1], cShrunk)
+		if err != nil {
+			return reply
+		}
+		reply.Found = true
+		reply.PorBlocks = 1
+		reply.PorMu, reply.PorSigma = pr.Mu, pr.Sigma
+		return reply
+	}
+
 	ck, err := n.store.Get(bg(), msg.ChunkID)
 	if err != nil {
 		return ports.Message{Kind: ports.MsgChallengeReply} // lost it; admit it
@@ -183,12 +208,16 @@ func (n *Node) Audit(reg ports.Registry, ch link.CareHandle, done func(AuditRepo
 		leaves := m.Leaves()
 		root := m.Root()
 		dataN := len(m.Chunks)
-		// Every FULL shard's tags cover ChunkSize+GCM ciphertext bytes; the
-		// auditor recomputes that block count and demands it exactly, so a
-		// prover cannot shrink the challenge by under-reporting its blocks
-		// (option B). Only the one possibly-short tail shard is trusted
-		// within a bound — a known, documented residue for the V3 red-team.
-		wantFull := por.DefaultParams.Blocks(int(m.ChunkSize) + ctOverhead)
+		// EVERY stored shard is full-size: chunk.Split zero-pads the last frame
+		// up to ChunkSize (the true payload length rides in the 8-byte frame
+		// header), and erasure pads short stripes, so on the wire there is no
+		// short tail. The auditor therefore demands the SAME full block count
+		// for every leaf — ChunkSize+GCM ciphertext bytes — and a prover cannot
+		// shrink the challenge by under-reporting its block count (red-team F4:
+		// the old tail-leniency branch accepted any 1..wantFull for the last
+		// leaf, which is actually full-size, letting a liar report PorBlocks=1
+		// and pass while holding one block).
+		want := por.DefaultParams.Blocks(int(m.ChunkSize) + ctOverhead)
 		var nextLeaf func(i int)
 		nextLeaf = func(i int) {
 			if i == len(leaves) {
@@ -201,45 +230,21 @@ func (n *Node) Audit(reg ports.Registry, ch link.CareHandle, done func(AuditRepo
 			if col := columnAt(i, dataN, m.K, m.N); col != noColumn {
 				key = colKey(root, col)
 			}
-			tail := !leafExpectFull(i, dataN, m.K, m.N)
-			n.auditLeaf(leaves[i], key, porKey, wantFull, tail, &report, func() { nextLeaf(i + 1) })
+			n.auditLeaf(leaves[i], key, porKey, want, &report, func() { nextLeaf(i + 1) })
 		}
 		nextLeaf(0)
 	})
 }
 
-// leafExpectFull reports whether leaf i (over data ‖ parity) is guaranteed
-// to be a full-size shard, so the auditor can require its exact block count.
-// A data chunk is full unless it is the file's last (possibly short) chunk;
-// a parity shard's length equals its stripe's first data chunk, so it is
-// full unless that first chunk is the short tail (a single-short-chunk
-// stripe).
-func leafExpectFull(i, dataN, k, nn int) bool {
-	if i < dataN { // data chunk
-		return i != dataN-1
-	}
-	if k <= 0 { // uncoded: no parity leaves
-		return true
-	}
-	parPer := nn - k
-	if parPer <= 0 {
-		return true
-	}
-	stripe := (i - dataN) / parPer
-	return stripe*k != dataN-1
-}
-
-// blocksOK cross-checks a prover's reported block count. A full shard must
-// report exactly the recomputed count; the tail shard may report fewer (it
-// is genuinely shorter) but never zero.
-func blocksOK(reported, wantFull int, tail bool) bool {
-	if reported < 1 {
-		return false
-	}
-	if tail {
-		return reported <= wantFull
-	}
-	return reported == wantFull
+// blocksOK cross-checks a prover's reported block count against the count the
+// auditor RECOMPUTED for the shard — exactly, for every leaf (red-team F4).
+// Every stored shard is full-size (chunk.Split pads the tail), so the count is
+// the same wantFull for all leaves. Letting any leaf report 1..wantFull let a
+// liar advertise PorBlocks=1 and be challenged on block 0 alone, passing while
+// holding a sliver of the shard. The auditor, not the prover, fixes the sample
+// space.
+func blocksOK(reported, want int) bool {
+	return reported >= 1 && reported == want
 }
 
 type challengeAnswer struct {
@@ -250,7 +255,7 @@ type challengeAnswer struct {
 }
 
 func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
-	wantFull int, tail bool, report *AuditReport, done func()) {
+	want int, report *AuditReport, done func()) {
 
 	n.resolveProviders(key, func(provs []ports.NodeID) {
 		n.rid++ // draw a fresh, deterministic seed from the request counter
@@ -259,7 +264,7 @@ func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
 		var challengeNext func(i int)
 		challengeNext = func(i int) {
 			if i == len(provs) {
-				n.gradeAnswers(id, porKey, seed, wantFull, tail, answers, report, done)
+				n.gradeAnswers(id, porKey, seed, want, answers, report, done)
 				return
 			}
 			p := provs[i]
@@ -291,12 +296,14 @@ func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
 // response satisfies the verification equation. Passing earns rent; failing
 // is slashed.
 func (n *Node) gradeAnswers(id ports.ChunkID, porKey *por.Key, seed [32]byte,
-	wantFull int, tail bool, answers []challengeAnswer, report *AuditReport, done func()) {
+	want int, answers []challengeAnswer, report *AuditReport, done func()) {
 
 	anyValid := false
 	for _, a := range answers {
-		passed := a.valid && blocksOK(a.blocks, wantFull, tail) &&
-			porKey.Verify(id[:], porChallenge(seed, a.blocks, porSampleCount), a.proof)
+		// Verify over the AUTHORITATIVE block count (want), not the prover's
+		// self-reported one — the prover cannot shrink its own sample space (F4).
+		passed := a.valid && blocksOK(a.blocks, want) &&
+			porKey.Verify(id[:], porChallenge(seed, want, porSampleCount), a.proof)
 		if n.ledger != nil {
 			n.ledger.RecordAudit(a.prover, id, passed)
 		}
