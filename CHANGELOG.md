@@ -9,6 +9,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Blind red-team F4 (integrity, S1): the auditor no longer trusts a prover's
+  self-reported PoR block count on the file's last shard** (2026-08-04) — the audit
+  graded every leaf but the last against a block count it recomputed itself, while
+  the LAST leaf took a lenient "tail" branch that accepted any `1..wantFull`. Since
+  `porChallenge` clamps the sample space to the prover's reported count, a liar
+  holding only block 0 of an N-block shard could report `PorBlocks=1`, be challenged
+  on block 0 alone, and pass — earning rent while holding ~1/N of the shard, with no
+  slash and no repair. The premise behind the leniency was wrong: `chunk.Split`
+  zero-pads the last frame up to `ChunkSize` (the true length rides in the frame
+  header) and erasure pads short stripes, so **every stored shard is full-size on
+  the wire** — there is no short tail to accommodate. The auditor now demands the
+  same recomputed full block count for **every** leaf, so a prover can never shrink
+  its own challenge. Regressions: `core/node/redteam_verify_liar-por_0_test.go`
+  (inverted PoC — the shrink liar's grading predicate now fails, an honest holder
+  still passes) and `sim/audit_tailshrink_test.go` (integration: a shrink liar on a
+  single-chunk file's sole — previously lenient — leaf is slashed into debt while
+  honest holders pass).
 - **Blind red-team F3 (Accountability): genesis can no longer pre-emptively revoke
   a never-published root** (2026-08-04) — `AppendGenesis` calls `apply()` directly
   and skips `validateTakedowns`, so a genesis block could carry `Revocations`
