@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Retest G3 (Accountability, High regression): a genesis bond-squat can no longer
+  lock out an honest validator** (2026-08-04) — the fresh pass found the F1 per-root
+  dedup (`#158`) became a griefing lever when combined with the pre-existing
+  unvalidated genesis `BondRegs`: a malicious genesis pre-squats an honest
+  validator's real plot root under an attacker key (no space-time proof — genesis
+  regs are declared), so when the true holder later registers that root on the
+  normal path with a REAL, verifier-accepted proof, `apply()`'s first-owner dedup
+  sees the root already claimed and drops the honest credit — the holder earns 0,
+  the squatter keeps unbacked standing. Fix: **proof beats declaration.** `apply()`
+  now tracks whether a root's owner claimed it with a verified proof (a height>0
+  registration, gated by `validateBondRegs`) or a mere declared genesis reg
+  (`bondRootProven`); a verified registration DISPLACES an unproven declared claim
+  (stripping the squatter's standing), while every other collision still earns
+  nothing — so once proven, first-proven-owner wins and F1 is preserved. Regressions:
+  `core/chain/redteam_verify_genesis-bondsquat_g3_test.go` (inverted PoC: V's proof
+  displaces the squat; a second identity still can't share the proven root) and
+  `core/node/redteam_verify_genesis-bondsquat_g3_test.go` (a real live bond
+  registration displaces a genesis squat through the objective space-time verifier).
 - **Retest G1 (Accountability, Critical regression): a genesis block can no longer
   carry an equivocation Slash** (2026-08-04) — the fix-verification red-team's fresh
   pass over the F1/F2 code found that `#158`'s on-chain `Block.Slashes` reopened, for
