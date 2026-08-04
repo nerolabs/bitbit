@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **Retest G1 (Accountability, Critical regression): a genesis block can no longer
+  carry an equivocation Slash** (2026-08-04) — the fix-verification red-team's fresh
+  pass over the F1/F2 code found that `#158`'s on-chain `Block.Slashes` reopened, for
+  a stronger lever, exactly the door `#159` (F3) closed for `Revocations`.
+  `AppendGenesis` skips `validateSlashes`, and `apply()` unconditionally evicts every
+  `Slashes` culprit (`slashed[id]=true`, dropped from `bonded`, barred from
+  re-earning, carried through `adopt()`), so a genesis carrying an **unverified**
+  Slash was a proof-free, pre-emptive, identity-level kill switch — a fortiori what
+  immutable #5 forbids. A slash is only meaningful against equivocation within a
+  chain's own history, of which a genesis has none, so `AppendGenesis` now **rejects**
+  any genesis carrying `Slashes` (`ErrGenesisTakedown`), symmetric with the F3 guard;
+  a slash must go through the normal path where `validateSlashes` → `VerifyEquivocation`
+  gates it on a real double-sign proof. Regressions: `core/chain/redteam_verify_genesis-slash_g1_test.go`
+  (genesis slash denied, victim keeps standing, normal-path slash still fires on a real
+  proof) and `core/node/redteam_verify_genesis-slash_g1_test.go` (a node in objective
+  mode never establishes a genesis that evicts an honest bonded validator).
 - **Blind red-team F4 (integrity, S1): the auditor no longer trusts a prover's
   self-reported PoR block count on the file's last shard** (2026-08-04) — the audit
   graded every leaf but the last against a block count it recomputed itself, while
