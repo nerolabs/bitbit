@@ -46,6 +46,13 @@ type bondInfo struct {
 // sealed (false), so a restart can honestly say it reused the plot instead of
 // logging the identical wording as a first-time seal (acceptance F7).
 func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) (reloaded bool) {
+	// Record the identity signer so a node holding a bond can mint an on-chain
+	// bond registration (RegisterBondReg, F6) even before it joins consensus. It
+	// is the same key EnableChain uses (the node's one identity), so this is
+	// consistent whether a validator enables the bond or the chain first.
+	if n.signer == nil {
+		n.signer = signer
+	}
 	if n.plotStore != nil {
 		if root, blocks, ok, err := n.plotStore.Load(n.id); ok && err == nil {
 			if c, rerr := bond.Reconstruct(size, blocks); rerr == nil && c.Root == root {

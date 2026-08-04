@@ -31,7 +31,7 @@ func bondReg(priv ed25519.PrivateKey, size int64, prev ports.Hash) BondReg {
 		Size:      size,
 		Answer:    []byte("valid"),
 	}
-	r.Sig = ed25519.Sign(priv, r.signingBytes(bondRegNonce(prev)))
+	r.Sig = ed25519.Sign(priv, r.signingBytes(BondRegNonce(prev)))
 	return r
 }
 
@@ -249,7 +249,7 @@ func TestRedteamF6_ForgedBondRegDenied(t *testing.T) {
 	badProof := bondReg(newcomer, twoMiB, g.Hash())
 	badProof.Answer = []byte("forged")
 	// re-sign so only the PROOF is bad, isolating the space-time check
-	badProof.Sig = ed25519.Sign(newcomer, badProof.signingBytes(bondRegNonce(g.Hash())))
+	badProof.Sig = ed25519.Sign(newcomer, badProof.signingBytes(BondRegNonce(g.Hash())))
 	blkA := &Block{Version: BlockVersion, Height: 1, Prev: g.Hash(), BondRegs: []BondReg{badProof}}
 	Sign(blkA, prop)
 	for _, v := range vals[:3] {
