@@ -55,6 +55,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Test coverage backfill (build-immutable): the Privacy fixes (F4) now have the
+  integration tier** (2026-08-04) — the fee-decoupling and canonical-issuer-set
+  fixes shipped unit-only; this adds the outcome-driven integration tier.
+  **Fee decoupling** (`sim/credit_fee_test.go`): a publisher mints prepaid credits
+  over the real node loop (charged in bulk at mint), then publishes by SPENDING a
+  credit over the wire — and its durable standing key balance is **unchanged by
+  the publish** (the ledger-level link severed end-to-end), the token verifies,
+  and re-spending a credit over the wire is refused (double-spend). **Canonical
+  issuer set** (`core/node/objectivechain_test.go`): two nodes on the same
+  objective genesis surface the IDENTICAL deterministic on-chain-bonded issuer
+  set, and a node with no chain surfaces none. e2e for the transport-layer parts
+  (relay + ephemeral + epoch) lands with those parts, which are not yet built.
 - **Test coverage backfill (build-immutable): the Sybil fix (F1/F2) now has the
   integration tier it was missing** (2026-08-04) — the shipped Sybil fix carried
   only its unit tier (the red-team PoC inverted in `core/bond`); the build-immutable
