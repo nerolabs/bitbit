@@ -66,7 +66,7 @@ func cmdDaemon(args []string) error {
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
 	matureValidators := fs.Int("mature-validators", 0, "distinct non-anchor validators after which the anchor requirement sheds automatically (0 = never require anchors)")
 	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
-	objective := fs.Bool("objective", false, "consensus fork-choice by OBJECTIVE on-chain bond (F6): eligibility, quorum, and fork-choice weight are decided by verifiable on-chain bond registrations — identical on every replica — instead of the local reputation view, so honest replicas can't diverge under a partition. Validators register their real bonds live as they propose; the launch set bootstraps via -anchors and sheds at maturity. Requires -validator and -bond")
+	objective := fs.Bool("objective", true, "DEFAULT-ON for an untrusted validator: consensus fork-choice by OBJECTIVE on-chain bond (F6), so eligibility, quorum, and fork-choice weight are a function of verifiable on-chain bond registrations — identical on every replica — and honest replicas can't diverge under a partition (the M0 consensus denial). Bootstrap a multi-validator quorum with -anchors (the launch set); validators register their real bonds live as they propose. Auto-off for a trusted swarm (-min-rep 0). Pass -objective=false to run the legacy subjective path, which does NOT hold the M0 denial under an adversarial partition")
 	minBond := fs.String("min-bond", "1M", "objective mode: the minimum bonded size a validator must prove on-chain to qualify (its -bond must clear this)")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (persisted to disk; a restart reloads it) — a bigger bond earns more standing")
@@ -261,16 +261,21 @@ func cmdDaemon(args []string) error {
 			fmt.Printf("training wheels: %d anchor(s), %d required, shed at %d independent validators\n",
 				len(anchorSet), *anchorQuorum, *matureValidators)
 		}
+		// Objective fork-choice is the DEFAULT for an untrusted validator (the M0
+		// consensus path). A trusted deployment (-min-rep 0, self-commit) does not
+		// need it, so it auto-disables there rather than forcing anchor config on a
+		// single trusted box.
+		useObjective := *objective && *minRep > 0
 		var minBondBytes int64
-		if *objective {
-			if len(anchorSet) == 0 || *matureValidators <= 0 {
-				return fmt.Errorf("-objective needs -anchors (the launch set) and -mature-validators > 0, so the declared anchors bootstrap the objective set and then shed at maturity")
-			}
+		if useObjective {
 			mb, perr := parseSize(*minBond)
 			if perr != nil || mb <= 0 {
-				return fmt.Errorf("-objective needs a positive -min-bond: %q", *minBond)
+				return fmt.Errorf("objective consensus needs a positive -min-bond: %q", *minBond)
 			}
 			minBondBytes = mb
+			if len(anchorSet) == 0 || *matureValidators <= 0 {
+				fmt.Println("consensus: WARNING — objective fork-choice (the default M0 path) needs -anchors (the launch validator set) and -mature-validators>0 to bootstrap a MULTI-validator quorum; without them such a swarm will not commit. Pass them, or -min-rep 0 for a trusted swarm, or -objective=false for the legacy (non-M0) path.")
+			}
 		}
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
@@ -319,13 +324,17 @@ func cmdDaemon(args []string) error {
 		// registrations are re-checked against the real space-time primitive, and
 		// (via proposeBlock) this validator registers its own bond live as it
 		// proposes. Must follow EnableBond so a bond exists to register.
-		if *objective {
+		if useObjective {
 			if bsz, _ := parseSize(*bondSize); bsz < minBondBytes {
-				return fmt.Errorf("-objective requires -bond (%s) to clear -min-bond (%s)", *bondSize, *minBond)
+				return fmt.Errorf("objective consensus requires -bond (%s) to clear -min-bond (%s)", *bondSize, *minBond)
 			}
 			nd.EnableObjectiveChain()
-			fmt.Printf("consensus: OBJECTIVE fork-choice (on-chain bond ≥ %s); the launch set bootstraps via %d anchor(s) and sheds at maturity\n",
+			fmt.Printf("consensus: OBJECTIVE fork-choice (default; on-chain bond ≥ %s); %d anchor(s) bootstrap the launch set, shed at maturity\n",
 				*minBond, len(anchorSet))
+		} else if *minRep == 0 {
+			fmt.Println("consensus: legacy self-commit (trusted deployment, -min-rep 0) — objective fork-choice off")
+		} else {
+			fmt.Println("consensus: legacy subjective fork-choice (-objective=false) — does NOT hold the M0 denial under an adversarial partition")
 		}
 		// Publisher privacy (T3): this validator issues blind-signed publish
 		// tokens, and (when -require-tokens) the chain accepts only entries that

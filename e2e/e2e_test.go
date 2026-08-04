@@ -213,7 +213,7 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	a := startDaemon(t, "A",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-serve-registry", "127.0.0.1:0", "-validator",
-		"-min-rep", "100", "-quorum", "1", "-attesters", idB,
+		"-objective=false", "-min-rep", "100", "-quorum", "1", "-attesters", idB,
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "1001")
 	peer := a.waitFor(t, rePeer, 20*time.Second)
@@ -226,7 +226,7 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	b := startDaemon(t, "B",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-bootstrap", bootstrapA, "-validator",
-		"-min-rep", "100", "-quorum", "1",
+		"-objective=false", "-min-rep", "100", "-quorum", "1",
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "1002")
 	b.waitFor(t, reBootstrap, 20*time.Second)
@@ -291,7 +291,7 @@ func TestChainRevocationCommitsOverTCP(t *testing.T) {
 	a := startDaemon(t, "A",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-serve-registry", "127.0.0.1:0", "-validator",
-		"-min-rep", "100", "-quorum", "1", "-attesters", idB,
+		"-objective=false", "-min-rep", "100", "-quorum", "1", "-attesters", idB,
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "3001")
 	peer := a.waitFor(t, rePeer, 20*time.Second)
@@ -302,7 +302,7 @@ func TestChainRevocationCommitsOverTCP(t *testing.T) {
 	b := startDaemon(t, "B",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-bootstrap", bootstrapA, "-validator",
-		"-min-rep", "100", "-quorum", "1",
+		"-objective=false", "-min-rep", "100", "-quorum", "1",
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "3002")
 	b.waitFor(t, reBootstrap, 20*time.Second)
@@ -341,7 +341,7 @@ func TestChainRevocationCommitsOverTCP(t *testing.T) {
 	c := startDaemon(t, "C",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-bootstrap", bootstrapA, "-validator",
-		"-min-rep", "100", "-quorum", "1", "-attesters", idA,
+		"-objective=false", "-min-rep", "100", "-quorum", "1", "-attesters", idA,
 		"-bond", "8M", "-bond-audit", "1s",
 		"-revoke", h.Root.String(), "-honor-chain-revocations",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "3003")
@@ -368,10 +368,13 @@ func TestObjectiveConsensusCommitsOverTCP(t *testing.T) {
 	idB := identity.FromSeed(2002).NodeID().String()
 	anchors := idA + "," + idB // the declared launch set that bootstraps objective mode
 
+	// Note: NO -objective flag — it is the DEFAULT for an untrusted validator, so
+	// this also proves the default path is objective. The objective config is the
+	// launch anchors + min-bond + mature-validators.
 	a := startDaemon(t, "A",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-serve-registry", "127.0.0.1:0", "-validator",
-		"-objective", "-min-bond", "1M", "-mature-validators", "2",
+		"-min-bond", "1M", "-mature-validators", "2",
 		"-anchors", anchors, "-quorum", "1", "-attesters", idB,
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "2001")
@@ -383,7 +386,7 @@ func TestObjectiveConsensusCommitsOverTCP(t *testing.T) {
 	b := startDaemon(t, "B",
 		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
 		"-bootstrap", bootstrapA, "-validator",
-		"-objective", "-min-bond", "1M", "-mature-validators", "2",
+		"-min-bond", "1M", "-mature-validators", "2",
 		"-anchors", anchors, "-quorum", "1",
 		"-bond", "8M", "-bond-audit", "1s",
 		"-capacity", "1G", "-mdns=false", "-id-seed", "2002")
@@ -447,7 +450,7 @@ func TestUnlinkablePublishOverTCP(t *testing.T) {
 	common := func(seed string, others string) []string {
 		return []string{
 			"-listen", "127.0.0.1:0", "-store", t.TempDir(), "-validator",
-			"-min-rep", "100", "-quorum", "1", "-attesters", others,
+			"-objective=false", "-min-rep", "100", "-quorum", "1", "-attesters", others,
 			"-require-tokens", "2", "-bond", "8M", "-bond-audit", "1s",
 			"-capacity", "1G", "-mdns=false", "-id-seed", seed,
 		}

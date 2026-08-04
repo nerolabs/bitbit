@@ -37,7 +37,7 @@ echo "IDA=$IDA"; echo "IDB=$IDB"
 echo ""
 echo "########## NEGATIVE CONTROL — no earned standing must be REFUSED ##########"
 $SILT daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store "$W/neg" \
-  -validator -min-rep 100 -quorum 1 -attesters "$IDB" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/neg.log" 2>&1 &
+  -validator -objective=false -min-rep 100 -quorum 1 -attesters "$IDB" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/neg.log" 2>&1 &
 PIDS+=($!)
 await "$W/neg.log" '^registry:'
 REGN=$(grep '^registry:' "$W/neg.log" | sed -E 's/.*serving ([^ ]+).*/\1/'); PEERN=$(awk '/^peer:/{print $2}' "$W/neg.log")
@@ -50,12 +50,12 @@ kill "${PIDS[0]}" 2>/dev/null; sleep 1
 echo ""
 echo "########## POSITIVE — two validators earn standing, then commit ##########"
 $SILT daemon -id-seed 2 -listen 127.0.0.1:7102 -store "$W/dB" \
-  -validator -min-rep 100 -quorum 1 -attesters "$IDA" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/B.log" 2>&1 &
+  -validator -objective=false -min-rep 100 -quorum 1 -attesters "$IDA" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/B.log" 2>&1 &
 PIDS+=($!)
 await "$W/B.log" '^peer:'
 PEERB=$(awk '/^peer:/{print $2}' "$W/B.log")
 $SILT daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store "$W/dA" \
-  -validator -min-rep 100 -quorum 1 -attesters "$IDB" -bootstrap "$PEERB" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/A.log" 2>&1 &
+  -validator -objective=false -min-rep 100 -quorum 1 -attesters "$IDB" -bootstrap "$PEERB" -bond 8M -bond-audit 1s -capacity 1G -log info >"$W/A.log" 2>&1 &
 PIDS+=($!)
 await "$W/A.log" '^registry:'
 REGA=$(grep '^registry:' "$W/A.log" | sed -E 's/.*serving ([^ ]+).*/\1/'); PEERA=$(awk '/^peer:/{print $2}' "$W/A.log")

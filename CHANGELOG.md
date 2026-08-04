@@ -90,6 +90,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   pattern, ineffective (the spans do not surround), so a finality gadget is not
   added for M0. `docs/design/m0-consensus.md` §2b carries the reasoning.
 
+### Changed
+- **Objective fork-choice is now the DEFAULT for an untrusted validator (closes
+  red-team re-verification #6/#7)** (2026-08-04) — the fix re-verifier confirmed
+  objective mode heals divergent replicas but flagged that it was **off by
+  default**, so a stock validator swarm still ran the legacy subjective path that
+  diverges under partition. `silt daemon -objective` now **defaults to `true`** and
+  is active for any untrusted validator (`-min-rep > 0`); a trusted swarm
+  (`-min-rep 0`, self-commit) auto-disables it, and the legacy subjective path is
+  now an explicit, labeled opt-out (`-objective=false`, which prints that it does
+  NOT hold the M0 denial under an adversarial partition). A multi-validator quorum
+  still bootstraps from the declared launch `-anchors` (the honest trustless-
+  cold-start boundary); without them the daemon warns and a multi-validator swarm
+  will not commit, rather than silently running the divergent path. Verified e2e:
+  `e2e/TestObjectiveConsensusCommitsOverTCP` now runs with **no `-objective` flag**,
+  proving the default path is objective; the legacy-path e2e/example flows opt in
+  with `-objective=false`. This makes "two histories both stand" unreachable with
+  stock validator flags — the residual the re-verifier asked to close.
+
 ### Added
 - **`silt daemon -honor-chain-revocations` and `-revoke`: operate on-chain
   takedowns, with an e2e proof (F5)** (2026-08-04) — the accountability fix's

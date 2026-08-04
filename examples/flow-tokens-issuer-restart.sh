@@ -37,7 +37,7 @@ LAST_PID=""
 start_val(){ # seed port store attesters [extra args...]
   local seed=$1 port=$2 store=$3 att=$4; shift 4
   $SILT daemon -id-seed "$seed" -listen "127.0.0.1:$port" -store "$W/$store" \
-    -validator -min-rep 100 -quorum 1 -attesters "$att" -require-tokens 1 \
+    -validator -objective=false -min-rep 100 -quorum 1 -attesters "$att" -require-tokens 1 \
     -bond 8M -bond-audit 1s -capacity 1G -log info "$@" >"$W/$store.stdout" 2>&1 &
   LAST_PID=$!; PIDS+=("$LAST_PID")
 }
