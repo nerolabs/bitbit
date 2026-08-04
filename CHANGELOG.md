@@ -55,6 +55,37 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Sybil corner (red-team F1/F2/F3): the PoST bond now binds the bytes it
+  charges for, and the VDF is bound to a plot read** (2026-08-04) — the external
+  M0 red-team broke the Sybil corner three ways; the first two are now fixed at
+  the mechanism level (`core/bond`), per `docs/design/m0-sybil-bond.md`.
+  **(F1)** `plotBlock` derived each 4 KiB block from only the 32-byte *leaves* of
+  its predecessor and parents, so a prover could store just the leaves (1/128 of
+  the bond) and recompute any probed block on demand. Each block now depends on
+  the **full bytes** of its predecessor and its parents, selected over a **proven
+  depth-robust graph** (DRSample, Alwen–Blocki–Harsha CCS'17) instead of the old
+  flat-uniform parents — so reconstructing a block requires the parents' bytes
+  recursively and the pebbling cost is Ω(n); the rational strategy is to store
+  the S bytes, and the charged size equals the resident footprint. `Verify` never
+  recomputes a block, so it stays O(log n). **(F2)** `AnswerSpaceTime` seeded the
+  VDF from the *public* `challengeSeed(root, nonce)`, so a zero-resident prover
+  ran the VDF and then re-derived the sampled blocks — releasing the space
+  forfeited nothing. The VDF is now seeded from a plot block **read before the
+  VDF** (`seedIndex` → `challengeSeedST`): the answer carries that block plus its
+  inclusion proof, the verifier recomputes the seed index and checks the proof,
+  so a prover that released the space cannot produce the seed without the Ω(n)
+  recompute. **(F3)** root-owner dedup is documented as only a same-root tiebreak;
+  Sybil cost now lives in the byte-bound proof, and distinct identities still
+  produce distinct plots. The plot on-disk format (`adapters/diskplot`) bumps to
+  **version 2** so a restart re-plots rather than reloading the old, insecure
+  labeling (one-time re-plot on upgrade). The red-team PoCs are adopted inverted
+  as regressions (`core/bond/redteam_sybil_test.go`), and `BenchmarkSeal` records
+  the plot/re-plot constant (~270 MB/s) behind the "re-plot ≫ epoch" tuning.
+  **Residual (honest):** the *structural* anti-release binding is in; the
+  *quantitative* floor — a minimum bond size and `BondVDFDelay` such that even the
+  smallest allowed bond cannot re-plot within one challenge window — is a
+  deployment-tuning follow-up, and consensus fork-choice weight (F6) still depends
+  on this bond being real. See the design doc's open-risks section.
 - **Accountability corner (red-team F5): on-chain revocation is no longer a
   global switch** (2026-08-04) — the external M0 red-team broke the
   accountability tenet three ways through the chain's takedown path: a quorum

@@ -6,10 +6,6 @@
 // missing Sybil cost the reputation-quorum chain has always assumed but
 // never charged (threat-catalog B1/D3).
 //
-// ⚠️ As of 2026-08-04 this "N identities cost N×size" claim is DISPROVEN by the
-// M0 red-team (F1/F3) — see the RED-TEAM note below: the real cost is ~size/128
-// (→0 for small bonds). The paragraphs here describe the INTENDED design.
-//
 // IDENTITY BINDING (Gate 4b). The plot is sealed from a per-identity SECRET
 // (derived from the node's signing key), not its public NodeID, so:
 //   - only the identity's owner can generate its plot — an outsider cannot
@@ -17,13 +13,13 @@
 //   - a validator credits a given bond root to at most ONE identity
 //     (core/credit's root-owner dedup), so a colluding operator cannot point
 //     N identities at ONE shared plot: each identity needs its own distinct
-//     plot (distinct secret ⇒ distinct root), restoring the N×size cost.
+//     plot (distinct secret ⇒ distinct root).
 //
-// Together these close the plot-amortisation gap (design §6): "strict binding,
-// N plots for N identities." Note this is NOT a proof of CORRECT plotting
-// (no PoRep/SNARK): a verifier still trusts the advertised root and only
-// checks the prover can answer challenges on it — the dedup and the secret
-// are what make sharing a root uneconomical and un-grief-able, respectively.
+// Note this is NOT a proof of CORRECT plotting (no PoRep/SNARK): a verifier
+// still trusts the advertised root and only checks the prover can answer
+// challenges on it. The COST that makes a short or shared plot uneconomical
+// lives in the labeling below, not in the dedup — the dedup is only a
+// same-root tiebreak, and the secret is what makes a plot un-grief-able.
 //
 // The challenge shape mirrors the toy PoR in core/node/por.go, but points
 // at an identity-bound bond instead of a shared file, and — crucially —
@@ -33,43 +29,32 @@
 // nonce picks which blocks, so a prover must hold (nearly) all of them —
 // cost = Size.
 //
-// ⚠️ RED-TEAM 2026-08-04 — THIS SCHEME IS BROKEN (F1/F2), fix pending the Sybil
-// design turn. The claims in the next paragraph are FALSE against the shipped
-// code and are kept only so the correction has something to point at:
-//   - plotBlock derives block i from the 32-byte LEAVES of its parents, not the
-//     parents' 4 KiB block BYTES (see plotBlock + leaves[i]=HashBytes(block_i)).
-//     So a prover that stores only the leaves (32 B/block = 1/128 of the bond)
-//     recomputes any probed block in one call and builds its Merkle proof —
-//     passing Verify/VerifySpaceTime while holding 1/128 of what it advertises
-//     (→ 0 resident bytes for bonds small enough to re-plot inside the VDF
-//     window). "Store the S bytes" is NOT the rational strategy; storing the
-//     leaves is.
-//   - the VDF "time" half gates nothing: AnswerSpaceTime seeds the VDF from the
-//     PUBLIC challenge seed, so a zero-resident prover runs the VDF, learns the
-//     probed indices, then re-derives exactly those blocks. Releasing the space
-//     does not forfeit the answer.
+// SPACE-HARDNESS — the plot binds BYTES over a depth-robust graph (M0 Sybil
+// design turn, fixes red-team F1/F2; docs/design/m0-sybil-bond.md). Each block
+// i is a memory-hard label derived from the per-identity secret, the index, and
+// the FULL BYTES of its predecessor and its DRSample parents (a proven
+// depth-robust graph, Alwen–Blocki–Harsha CCS'17). Because a block depends on
+// its parents' 4 KiB bytes — not their 32-byte leaves — a prover cannot store
+// only the leaves and recompute on demand: reconstructing block i requires the
+// parents' bytes, which require theirs, and depth-robustness makes the pebbling
+// cost of recomputing any block Ω(n). So the rational strategy is to STORE the
+// S bytes; the charged size equals the resident footprint (closing the earlier
+// 1/128 leaves-only gap). Verify never recomputes a block, so it stays O(log n).
 //
-// The fix (design turn): make each block depend on the full parent BYTES (a
-// memory-hard label / proven depth-robust graph), and bind the sampling
-// challenge to a plot read BEFORE the VDF so releasing the space forfeits it.
-// Report: docs/reviews/M0-REDTEAM-REPORT.md §1–§2.
-//
-// THE PLOT — the INTENDED design (Gate 4b), not yet achieved. The bond dataset
-// is a SEQUENTIAL LABELING: block i is derived from the node's identity, its
-// index, its immediate predecessor, and a few pseudo-random EARLIER blocks
-// (a chain plus long-range parents — a directed acyclic graph). The INTENT is
-// that recomputing a probed block forces recomputing its dependency subgraph so
-// the rational strategy is to STORE the S bytes — but as the red-team note above
-// shows, binding to leaves rather than bytes defeats this. Same identity ⇒ same
-// plot, so an owner can regenerate on setup.
+// SPACE-TIME — the VDF is bound to a plot READ before it runs (fixes F2). The
+// per-epoch challenge first samples one plot block (seedIndex), and the VDF is
+// seeded from that block's bytes (challengeSeedST): a prover that has released
+// the space cannot produce the seed without first re-deriving the block, which
+// is the Ω(n) memory-hard recompute above. Tuned so re-plot ≫ one epoch, this
+// makes release-and-replay uneconomical — the sequential VDF work then binds
+// FRESH elapsed time on top of proven possession. The prover carries the seed
+// block plus its inclusion proof so the verifier can recompute the seed and
+// check the VDF, all still O(log n).
 //
 // HONESTLY LABELED — what this does and does not prove:
-//   - It was INTENDED to deliver SPACE-hardness heuristically; the red-team
-//     showed it does not (F1). It is NOT a formally depth-robust graph (DRG);
-//     the fix is a proven-DRG labeling (Ateniese-style) and/or a memory-hard
-//     label function over block BYTES. The TIME half — a VDF meant to bind a
-//     fresh epoch challenge to non-parallelisable elapsed work — does not
-//     currently bind possession (F2), because its input is public.
+//   - It delivers SPACE-hardness over a proven depth-robust graph and binds the
+//     TIME half to possession; the constant (honest cost vs. Sybil-farm cost,
+//     and re-plot ≫ epoch) is the external red-team's target (design §6).
 //   - No replication proof and no zero-knowledge: it proves "this identity
 //     holds a distinct blob of this size," not "this is a unique replica of
 //     user data." Elevating held REAL network content to standing (so the
@@ -142,7 +127,7 @@ func Seal(secret []byte, size int64) *Commitment {
 	blocks := make([][]byte, n)
 	leaves := make([]ports.Hash, n)
 	for i := 0; i < n; i++ {
-		b := plotBlock(secret, i, leaves) // reads leaves[0..i-1] already filled
+		b := plotBlock(secret, i, blocks) // reads blocks[0..i-1] already filled
 		blocks[i] = b
 		leaves[i] = ports.HashBytes(b)
 	}
@@ -189,6 +174,14 @@ type Answer struct {
 	VDFY  []byte `cbor:",omitempty"`
 	VDFPi []byte `cbor:",omitempty"`
 	VDFT  uint64 `cbor:",omitempty"`
+	// SeedBlock + SeedProof bind the VDF to a plot READ done BEFORE the VDF ran
+	// (space-time only): the block at seedIndex(root,nonce), with its inclusion
+	// proof, whose bytes seed the VDF (challengeSeedST). The verifier recomputes
+	// the seed index, checks the proof, and re-derives the seed — so a prover
+	// that released the space cannot produce the seed without the Ω(n) recompute.
+	// Empty ⇒ space-only.
+	SeedBlock []byte         `cbor:",omitempty"`
+	SeedProof manifest.Proof `cbor:",omitempty"`
 }
 
 // Answer builds the space-only response for nonce from held blocks. It
@@ -215,23 +208,29 @@ func (c *Commitment) answer(idxs []int) (Answer, bool) {
 	return a, true
 }
 
-// AnswerSpaceTime is the proof-of-space-TIME response: it first runs the VDF
-// for `delay` sequential squarings over the fresh challenge, then derives the
-// probed block indices from the VDF output.
-//
-// ⚠️ RED-TEAM 2026-08-04 (F2): the intended guarantee below — "a prover cannot
-// release the space and re-plot just in time" — is FALSE as shipped. The VDF is
-// seeded from challengeSeed(c.Root, nonce), which is PUBLIC, so a zero-resident
-// prover runs the VDF, learns the indices, then re-derives exactly those blocks
-// (which, per Finding 1, it can rebuild from the leaves alone). The delay does
-// not bind possession because nothing about the VDF requires reading the plot.
-// Fix (design turn): seed the sampling from a value that requires reading the
-// plot BEFORE the VDF. delay == 0 falls back to a space-only answer.
+// AnswerSpaceTime is the proof-of-space-TIME response. It binds the VDF to a
+// plot READ done before the VDF runs (M0 F2 fix): it first reads the block at
+// seedIndex(root, nonce) from the plot, seeds the VDF from that block's bytes,
+// runs `delay` sequential squarings, then derives the probed block indices from
+// the VDF output. Because the seed requires a plot block — and re-deriving that
+// block on demand is the Ω(n) depth-robust recompute — a prover that released
+// the space cannot cheaply produce the seed, so releasing the space forfeits the
+// answer. delay == 0 falls back to a space-only answer.
 func (c *Commitment) AnswerSpaceTime(nonce uint64, p vdf.Params, delay uint64) (Answer, bool) {
 	if delay == 0 {
 		return c.Answer(nonce)
 	}
-	proof, err := vdf.Eval(p, challengeSeed(c.Root, nonce), delay)
+	// Read the seed block (must be possessed BEFORE the VDF) and prove it.
+	si := seedIndex(c.Root, len(c.leaves), nonce)
+	if si >= len(c.blocks) || c.blocks[si] == nil {
+		return Answer{}, false
+	}
+	seedProof, err := manifest.Prove(c.leaves, si)
+	if err != nil {
+		return Answer{}, false
+	}
+	seedBlock := c.blocks[si]
+	proof, err := vdf.Eval(p, challengeSeedST(c.Root, nonce, seedBlock), delay)
 	if err != nil {
 		return Answer{}, false
 	}
@@ -239,6 +238,7 @@ func (c *Commitment) AnswerSpaceTime(nonce uint64, p vdf.Params, delay uint64) (
 	if !ok {
 		return Answer{}, false
 	}
+	a.SeedBlock, a.SeedProof = seedBlock, seedProof
 	a.VDFY, a.VDFPi, a.VDFT = proof.Y, proof.Pi, proof.T
 	return a, true
 }
@@ -263,10 +263,21 @@ func VerifySpaceTime(root ports.Hash, size int64, nonce uint64, a Answer, p vdf.
 	if a.VDFT != delay {
 		return false // must attest exactly the required amount of work
 	}
-	if !vdf.Verify(p, challengeSeed(root, nonce), vdf.Proof{Y: a.VDFY, Pi: a.VDFPi, T: a.VDFT}) {
+	n := NumBlocks(size)
+	// The VDF must be seeded from the plot block at seedIndex, proven held: a
+	// prover that released the space cannot present it (F2 fix). Recompute the
+	// seed index and check the inclusion proof before trusting the seed block.
+	si := seedIndex(root, n, nonce)
+	if a.SeedProof.Index != si || a.SeedProof.Total != n {
 		return false
 	}
-	want := challengeIndices(root, NumBlocks(size), vdfDerivedNonce(a.VDFY))
+	if !manifest.VerifyProof(root, ports.HashBytes(a.SeedBlock), a.SeedProof) {
+		return false
+	}
+	if !vdf.Verify(p, challengeSeedST(root, nonce, a.SeedBlock), vdf.Proof{Y: a.VDFY, Pi: a.VDFPi, T: a.VDFT}) {
+		return false
+	}
+	want := challengeIndices(root, n, vdfDerivedNonce(a.VDFY))
 	return verifyAt(root, size, want, a)
 }
 
@@ -291,13 +302,35 @@ func verifyAt(root ports.Hash, size int64, want []int, a Answer) bool {
 	return true
 }
 
-// challengeSeed binds a VDF challenge to this bond and nonce, so a proof for
-// one bond/epoch cannot be replayed for another.
-func challengeSeed(root ports.Hash, nonce uint64) []byte {
-	b := make([]byte, len(root)+8)
-	copy(b, root[:])
-	binary.BigEndian.PutUint64(b[len(root):], nonce)
-	return b
+// seedIndex picks the single plot block whose bytes seed the space-time VDF,
+// from the PUBLIC (root, nBlocks, nonce). Possession of this block is required
+// to start the VDF (see challengeSeedST), which is what binds the "time" half
+// to held space. Domain-separated from challengeIndices so the seed block and
+// the sampled blocks are chosen independently.
+func seedIndex(root ports.Hash, nBlocks int, nonce uint64) int {
+	h := sha256.New()
+	h.Write([]byte("silt/bond/st/v2/seed"))
+	h.Write(root[:])
+	var nb [8]byte
+	binary.BigEndian.PutUint64(nb[:], nonce)
+	h.Write(nb[:])
+	sum := h.Sum(nil)
+	return int(binary.BigEndian.Uint64(sum[:8]) % uint64(nBlocks))
+}
+
+// challengeSeedST binds the VDF challenge to this bond, nonce, AND the bytes of
+// the seed block — so the VDF cannot even be started without reading the plot
+// (F2 fix). A proof for one bond/epoch cannot be replayed for another, and a
+// zero-resident prover cannot produce the seed without the Ω(n) recompute.
+func challengeSeedST(root ports.Hash, nonce uint64, seedBlock []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte("silt/bond/st/v2/vdfseed"))
+	h.Write(root[:])
+	var nb [8]byte
+	binary.BigEndian.PutUint64(nb[:], nonce)
+	h.Write(nb[:])
+	h.Write(seedBlock)
+	return h.Sum(nil)
 }
 
 // vdfDerivedNonce turns the VDF output into the block-sampling nonce, so the
@@ -323,22 +356,26 @@ func challengeIndices(root ports.Hash, nBlocks int, nonce uint64) []int {
 }
 
 const (
-	plotDomain = "silt/bond/plot/v1"
-	// plotParents is how many pseudo-random EARLIER blocks each block depends
-	// on, on top of its immediate predecessor. More parents raise recompute
-	// cost and defeat checkpointing harder, at a small plotting-time cost.
+	// plotDomain is bumped to v2 with the byte-binding + DRSample labeling (M0
+	// Sybil fix). A v1 plot on disk re-plots rather than reloading (the disk
+	// format version guards this) because its blocks are the old, leaves-only
+	// labeling the red-team broke.
+	plotDomain = "silt/bond/plot/v2"
+	// plotParents is how many DRSample long-range parents each block depends on,
+	// on top of its immediate predecessor. DRSample with a chain already yields a
+	// depth-robust graph at indegree 2; extra parents strengthen the pebbling
+	// bound at a small plotting-time cost.
 	plotParents = 3
 )
 
-// plotBlock is the identity-bound, dependency-chained block generator. Block
-// i mixes the per-identity secret, the index, its predecessor's leaf, and
-// plotParents pseudo-random earlier leaves, then expands that label to
-// BlockSize. The dependency on earlier blocks is what forces a prover to
-// STORE the plot: recomputing block i on demand means recomputing its
-// dependency subgraph, which the long-range parents make as costly as holding
-// the plot outright. leaves must already hold the finalized leaves of blocks
-// 0..i-1.
-func plotBlock(secret []byte, i int, leaves []ports.Hash) []byte {
+// plotBlock is the identity-bound, byte-binding, depth-robust block generator.
+// Block i mixes the per-identity secret, the index, and the FULL BYTES of its
+// immediate predecessor and its DRSample parents, then expands that label to
+// BlockSize. Binding to the parents' bytes (not their 32-byte leaves) is what
+// forces a prover to STORE the plot: recomputing block i on demand requires the
+// parents' bytes, recursively, and the depth-robust graph makes that pebbling
+// cost Ω(n). blocks must already hold the finalized bytes of blocks 0..i-1.
+func plotBlock(secret []byte, i int, blocks [][]byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(plotDomain))
 	h.Write(secret)
@@ -346,12 +383,12 @@ func plotBlock(secret []byte, i int, leaves []ports.Hash) []byte {
 	binary.BigEndian.PutUint64(ib[:], uint64(i))
 	h.Write(ib[:])
 	if i > 0 {
-		h.Write(leaves[i-1][:]) // the chain: immediate predecessor
+		h.Write(blocks[i-1]) // the chain: immediate predecessor's full bytes
 	} else {
-		h.Write(make([]byte, len(ports.Hash{}))) // genesis: zero seed
+		h.Write(make([]byte, BlockSize)) // genesis: zero block
 	}
 	for _, p := range parentIndices(secret, i) {
-		h.Write(leaves[p][:]) // long-range dependencies
+		h.Write(blocks[p]) // long-range dependencies, full bytes
 	}
 	label := h.Sum(nil)
 
@@ -367,9 +404,14 @@ func plotBlock(secret []byte, i int, leaves []ports.Hash) []byte {
 	return block
 }
 
-// parentIndices derives plotParents pseudo-random dependency indices in
-// [0, i) for block i, from (secret, i). Returns nil for block 0 (no
-// predecessors). Repeats are harmless.
+// parentIndices derives plotParents long-range dependency indices in [0, i)
+// for block i using DRSample (Alwen–Blocki–Harsha, "Practical Graphs for
+// Optimal Side-Channel Resistant Proofs of Work", CCS'17): each parent's
+// distance from i is drawn log-uniformly — pick a bucket g in [1, ⌊log2 i⌋],
+// then an offset uniformly in (2^(g-1), 2^g] — so short and long edges are both
+// well represented, which is what makes the graph provably depth-robust (unlike
+// the old flat-uniform choice). Deterministic from (secret, i); returns nil for
+// block 0. Repeats are harmless.
 func parentIndices(secret []byte, i int) []int {
 	if i == 0 {
 		return nil
@@ -384,7 +426,36 @@ func parentIndices(secret []byte, i int) []int {
 		binary.BigEndian.PutUint64(b[8:], uint64(j))
 		h.Write(b[:])
 		sum := h.Sum(nil)
-		out[j] = int(binary.BigEndian.Uint64(sum[:8]) % uint64(i))
+		out[j] = drSampleParent(i, binary.BigEndian.Uint64(sum[:8]), binary.BigEndian.Uint64(sum[8:16]))
 	}
 	return out
+}
+
+// drSampleParent returns an earlier block index for block i using the DRSample
+// distance distribution. r1 picks the bucket (a power-of-two distance band);
+// r2 picks the offset within it. The result is always in [0, i).
+func drSampleParent(i int, r1, r2 uint64) int {
+	// bucket g ∈ [1, floor(log2(i))]; distance ∈ (2^(g-1), 2^g], clamped to < i.
+	maxg := 0
+	for (1 << (maxg + 1)) <= i {
+		maxg++
+	}
+	if maxg < 1 {
+		maxg = 1 // i == 1: only distance 1 is possible
+	}
+	g := 1 + int(r1%uint64(maxg)) // in [1, maxg]
+	lo := 1 << (g - 1)            // 2^(g-1)
+	hi := 1 << g                  // 2^g
+	if hi > i {
+		hi = i
+	}
+	span := hi - lo
+	if span < 1 {
+		span = 1
+	}
+	dist := lo + int(r2%uint64(span)) + 1 // in (2^(g-1), 2^g], i.e. [lo+1, hi]
+	if dist > i {
+		dist = i
+	}
+	return i - dist
 }
