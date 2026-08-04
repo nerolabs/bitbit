@@ -57,6 +57,8 @@ func cmdDaemon(args []string) error {
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
 	mdns := fs.Bool("mdns", true, "announce and discover peers on the local network (LAN multicast); needs a non-loopback -listen")
 	denylistPath := fs.String("denylist", "", "operator takedown list: a file of denied root hashes to refuse to store/serve (you choose which lists to honor)")
+	honorRevocations := fs.Bool("honor-chain-revocations", false, "SUBSCRIBE to the chain's on-chain takedowns (M0 F5): also deny roots a quorum has revoked on-chain. Default OFF — following the chain does not impose someone else's takedowns; honoring is a per-operator choice, proportional to who trusts you, never a global switch. The operator-local -denylist is always honored")
+	revokeRoot := fs.String("revoke", "", "as a validator, propose an on-chain takedown of this root hash once standing is earned and the root is committed (M0 F5: quorum-gated, existence-checked; honored only by nodes that -honor-chain-revocations)")
 	validator := fs.Bool("validator", false, "keep a chain replica and take part in consensus")
 	uiAddr := fs.String("ui", "", "serve the web UI at this address (e.g. 127.0.0.1:8081)")
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
@@ -152,7 +154,8 @@ func cmdDaemon(args []string) error {
 			fmt.Printf("bond: WARNING — -bond (%s) is below -min-bond-floor (%s); this validator will earn NO standing\n", *bondSize, *minBondFloor)
 		}
 	}
-	nd := node.New(id, cfg, walltime.New(loop), tr, store)
+	clk := walltime.New(loop)
+	nd := node.New(id, cfg, clk, tr, store)
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
 	// bootstrap) to the same artifact the node and transport narrate to.
@@ -298,6 +301,10 @@ func cmdDaemon(args []string) error {
 			}
 		}
 		nd.EnableChain(ch, ident.Signer())
+		if *honorRevocations {
+			nd.SetHonorChainRevocations(true) // per-operator opt-in (F5); default OFF
+			fmt.Println("takedowns: honoring on-chain revocations (per-operator subscription, F5)")
+		}
 		if sz, perr := parseSize(*bondSize); perr == nil && sz > 0 {
 			if nd.EnableBond(ident.Signer(), sz) {
 				// Reloaded the existing plot — a restart reuses it, no re-plot
@@ -640,6 +647,34 @@ func cmdDaemon(args []string) error {
 						fmt.Fprintln(os.Stderr, "chain save:", err)
 					}
 				})
+				// -revoke: propose an on-chain takedown of the named root once it is
+				// committed and we have earned standing to gather a quorum (F5). Poll
+				// on the loop-safe clock; existence + quorum are enforced by the chain.
+				if *revokeRoot != "" {
+					root, rerr := ports.ParseHash(strings.TrimSpace(*revokeRoot))
+					if rerr != nil {
+						fmt.Fprintln(os.Stderr, "-revoke:", rerr)
+					} else {
+						var tryRevoke func()
+						tryRevoke = func() {
+							if _, ok := nd.Chain().LookupRoot(root); !ok {
+								clk.AfterFunc(2*ports.Second, tryRevoke) // root not committed yet
+								return
+							}
+							nd.ProposeRevocation([]ports.Hash{root}, attesterIDs, attesterIDs, *quorum, func(err error) {
+								if err != nil {
+									clk.AfterFunc(2*ports.Second, tryRevoke) // no quorum yet; retry
+									return
+								}
+								fmt.Printf("takedown: proposed on-chain revocation of %s\n", root)
+								if serr := chainstore.Save(chainPath, nd.Chain().Blocks(0)); serr != nil {
+									fmt.Fprintln(os.Stderr, "chain save:", serr)
+								}
+							})
+						}
+						clk.AfterFunc(2*ports.Second, tryRevoke)
+					}
+				}
 			}
 			nd.AnnounceHeld(func(count int) {
 				if count > 0 {

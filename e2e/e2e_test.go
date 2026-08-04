@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/nerolabs/silt/adapters/identity"
+	"github.com/nerolabs/silt/core/link"
 )
 
 var siltBin string
@@ -272,6 +273,82 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	if len(got) != len(want) || !bytes.Equal(got, want) {
 		t.Fatalf("round-trip corrupted the file: got %d bytes, want %d", len(got), len(want))
 	}
+	_ = b
+}
+
+// TestChainRevocationCommitsOverTCP is the e2e tier for the accountability fix
+// (red-team F5): a validator proposes an on-chain takedown of a published root,
+// and it COMMITS through a real quorum over real TCP. The per-operator honoring
+// (a subscribing node denies it, a non-subscribing node does not) is proven at
+// the integration tier (sim/revocation_test.go); this proves the daemon can
+// actually drive a quorum revocation end to end — the runtime capability that
+// tier could not exercise.
+func TestChainRevocationCommitsOverTCP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	idB := identity.FromSeed(3002).NodeID().String()
+	a := startDaemon(t, "A",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-serve-registry", "127.0.0.1:0", "-validator",
+		"-min-rep", "100", "-quorum", "1", "-attesters", idB,
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "3001")
+	peer := a.waitFor(t, rePeer, 20*time.Second)
+	idA, addrA := peer[1], peer[2]
+	regRef := a.waitFor(t, reRegistry, 20*time.Second)[1]
+	bootstrapA := idA + "@" + addrA
+
+	b := startDaemon(t, "B",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-bootstrap", bootstrapA, "-validator",
+		"-min-rep", "100", "-quorum", "1",
+		"-bond", "8M", "-bond-audit", "1s",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "3002")
+	b.waitFor(t, reBootstrap, 20*time.Second)
+
+	// Publish a root, retrying until the bonded quorum can commit it.
+	src := filepath.Join(t.TempDir(), "payload.bin")
+	want := make([]byte, 128<<10)
+	rand.New(rand.NewSource(0xF5)).Read(want)
+	if err := os.WriteFile(src, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reAnyLink := regexp.MustCompile(`silt:v1:\S+`)
+	var linkStr, lastOut string
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		out, err := runClientAllowErr(t, "swarm", "add", src, "-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+		lastOut = out
+		if err == nil {
+			if linkStr = reAnyLink.FindString(out); linkStr != "" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("publish never committed:\n%s", lastOut)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	h, err := link.Parse(linkStr)
+	if err != nil {
+		t.Fatalf("parse link %q: %v", linkStr, err)
+	}
+
+	// A third validator is told to REVOKE that root: once it has earned standing
+	// and seen the root committed, it proposes an on-chain takedown that commits
+	// through the quorum. It also subscribes to on-chain takedowns (F5).
+	c := startDaemon(t, "C",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-bootstrap", bootstrapA, "-validator",
+		"-min-rep", "100", "-quorum", "1", "-attesters", idA,
+		"-bond", "8M", "-bond-audit", "1s",
+		"-revoke", h.Root.String(), "-honor-chain-revocations",
+		"-capacity", "1G", "-mdns=false", "-id-seed", "3003")
+	c.waitFor(t, reBootstrap, 20*time.Second)
+
+	reRevoked := regexp.MustCompile(`proposed on-chain revocation of ` + h.Root.String())
+	c.waitFor(t, reRevoked, 40*time.Second)
 	_ = b
 }
 
