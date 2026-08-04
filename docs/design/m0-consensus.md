@@ -1,14 +1,22 @@
 # M0 fix — objective fork-choice + sound cross-fork slashing (red-team F6 / F7)
 
-> **Status: design doc, ahead of code (the design turn).** The external M0
-> red-team broke the consensus sub-suite (D2): fork-choice weight is **subjective
-> local reputation**, so two honest replicas diverge permanently (F6); and
-> cross-height double-backing evades the same-height-only equivocation slash (F7).
-> This doc specifies the fix a skeptic can read.
+> **Status: F6 objective fork-choice SHIPPED (2026-08-04, mechanism, opt-in) in
+> `core/chain`; F7 surround-slashing still pending.** The external M0 red-team
+> broke the consensus sub-suite (D2): fork-choice weight is **subjective local
+> reputation**, so two honest replicas diverge permanently (F6); and cross-height
+> double-backing evades the same-height-only equivocation slash (F7).
 >
-> Report: `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7 (F6/F7).
-> **Depends on the bond fix** (`m0-sybil-bond.md`) — objective weight is only
-> meaningful if the bond it weighs is real. **F7 is folded in here** (not a
+> The **F6 objective-weight mechanism is in code**: an on-chain PoST-bond
+> registration (`Block.BondRegs`) makes proposer/attester eligibility, quorum, and
+> fork-choice weight a function of the chain, not the local audit view — gated by
+> `Config.MinBond` so it is additive and opt-in (default stays legacy; no
+> `BlockVersion` bump). Regressions in `core/chain/redteam_consensus_test.go` show
+> divergent replicas now AGREE and forks HEAL. **Residual:** node/daemon wiring to
+> emit registrations + enable objective mode in production (a validator cold-start
+> via genesis-seeded bonds), and **F7** (Casper-FFG surround-vote slashing) —
+> still a follow-up. Report: `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7.
+> **Depends on the bond fix** (`m0-sybil-bond.md`, shipped) — objective weight is
+> only meaningful if the bond it weighs is real. **F7 folds in here** (not a
 > standalone patch): a naive cross-fork slash wrongly punishes honest
 > reorg-followers, which regresses the forged-slash-griefing corner that currently
 > *holds* — so the sound version needs the ordering machinery F6 introduces.

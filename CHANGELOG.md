@@ -55,6 +55,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
 ### Fixed
+- **Consensus corner (red-team F6): fork-choice is now objective — honest
+  replicas stop diverging** (2026-08-04) — fork-choice weight, the quorum count,
+  and proposer/attester eligibility used the **local reputation view**
+  (`c.rep(id)`), so two honest validators that had audited different peers
+  computed different weights and forked permanently (the partition never healed).
+  Fork-choice is now driven by **on-chain PoST-bond registrations**
+  (`Block.BondRegs`): a validator records its bonded size with a fresh
+  space-time proof any replica re-verifies (`SetBondVerifier`), bound to the
+  block's parent so it can't be replayed to another height/fork and signed so it
+  can't be claimed by a non-holder. Weight becomes the summed on-chain bond of a
+  block's distinct attesters — a quantity **every replica recomputes identically
+  from the chain** — so divergent local views can no longer disagree on which
+  fork is heavier, and a lighter fork reorgs onto the heavier one on every honest
+  node. The mechanism is **additive and opt-in** (`Config.MinBond > 0`): the field
+  is `omitempty` so a block with no registrations hashes exactly as before (no
+  `BlockVersion` bump), and the default path is unchanged — the legacy
+  reputation-gated behavior and every existing test/sim are untouched. Regressions
+  in `core/chain/redteam_consensus_test.go` show two maximally-divergent replicas
+  computing the same weight, a partition healing to the heavier-bond fork, and a
+  forged registration (bad proof or bad signature) denied. **Residual (honest):**
+  the objective-mode wiring in the node/daemon (validators emitting registrations,
+  a genesis-seeded validator cold-start, enabling `MinBond` in production) is a
+  follow-up, and **F7** — cross-height double-backing evading the same-height-only
+  equivocation slash — is not yet fixed (it needs Casper-FFG-style surround-vote
+  slashing that spares honest reorg-followers). See `docs/design/m0-consensus.md`.
 - **Sybil corner (red-team F1/F2/F3): the PoST bond now binds the bytes it
   charges for, and the VDF is bound to a plot read** (2026-08-04) — the external
   M0 red-team broke the Sybil corner three ways; the first two are now fixed at
