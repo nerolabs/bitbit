@@ -1,12 +1,19 @@
 # M0 Sybil — rebinding the storage bond to identity and size (G2)
 
-**Status: DESIGN, not yet built.** The Sybil corner is **open** at `main` as of this
-note. This is the build plan for closing it.
+**Status: BUILT, awaiting external red-team re-verification.** The construction
+below shipped in `core/bond` v3 with unit + integration + e2e coverage and the
+red-team PoC inverted as a regression (`core/bond/redteam_g2_test.go`,
+`sim/bond_sybil_g2_test.go`). Per the immutables (B8) the corner is **not held**
+until an external adversary denies it against the built code; the carried open
+risks in §8 (tight `ε→k`, on-chain proof size / asymmetric-`k`) are that
+adversary's targets.
 
 > **Live verdict.** An external red-team broke the Sybil corner twice: first via a
 > shared-plot Sybil (F1, fixed by per-root dedup) and then — over the fix code — via
-> **prefix plots** (G2), which dedup structurally cannot catch. M0 is held only when
-> all three corners are denied by an external adversary. **It is not held today.**
+> **prefix plots** (G2), which dedup structurally cannot catch. This note's fix is
+> now built; M0 is held only when all three corners are denied by an external
+> adversary against the *built* code, so treat it as hardened-not-held until that
+> pass returns.
 
 Companion docs: [m0-sybil-bond.md](m0-sybil-bond.md) (the F1/F2/F3 structural pass),
 [gate4-m0-mechanism.md](gate4-m0-mechanism.md) (the M0 mechanism spine).

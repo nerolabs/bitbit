@@ -9,6 +9,45 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **G2 (Sybil, Critical): the storage bond is now a VERIFIED proof-of-space —
+  prefix plots can no longer back N standings from one disk** (2026-08-05) — the
+  fix-verification red-team broke the Sybil corner a second time, over the F1 fix
+  code, with **prefix plots**: `plotBlock`/`parentIndices` keyed only on
+  `(secret, i)` and never on the total block count `n`, so blocks `0..m-1` of an
+  `n`-block plot were **byte-identical** to a standalone `m`-block plot with its
+  OWN distinct Merkle root — and `VerifySpaceTime` only checked Merkle *inclusion*,
+  never recomputed a *label*. Per-root dedup (F1) keys on *equal* roots, so it was
+  structurally unable to catch a family of *distinct* prefix roots: the scheme was
+  proof-of-STORAGE, not proof-of-SPACE, and one physical plot backed ~`N`
+  standings (marginal cost of one more Sybil ≈ one 4 KiB block). The fix (a
+  graph-labeling proof-of-space over silt's existing DRSample graph — DFKP CRYPTO'15
+  / ABH CCS'17, adopted not invented) seals the plot from a **public, identity- and
+  size-bound seed** `H("silt/bond/plot/v3" ‖ pk ‖ n)` folded into both the labels
+  and the parent draws, and adds a **labeling-consistency challenge**: the answer
+  opens `k` challenged nodes with their predecessor and DRSample parents (Merkle-
+  proven), and the verifier **recomputes** each label from the opened parent bytes
+  under `H(pk, n)` and requires a match. Because the seed is public the verifier can
+  do this without holding the plot, so identity and size become **checked** properties
+  of the plot, not claimed ones: a prefix, a foreign-identity plot, or arbitrary
+  committed bytes all fail the recompute. **N standings now require N plots.** `k` is
+  a per-network knob (`-bond-label-k`, `Config.BondLabelSamples`, default 64;
+  soundness error ≤ `(1-ε)^k` against an ε-short prover); leaving it unset resolves
+  to 64 inside `core/bond`, so the check is never silently disabled. The seed and the
+  labeling check ship **together** (a public seed without the check would regress
+  griefing), and G3's "proof beats declaration" rule is load-bearing for the public
+  seed's griefing-safety. Plot format **v2 → v3** — a one-time fleet re-plot; the
+  disk version guard forces it so a restart never reloads an insecure v2 plot.
+  Regressions: `core/bond/redteam_g2_test.go` (a prefix passes possession but fails
+  the labeling check; a plot for one key fails under another; arbitrary bytes fail;
+  a prefix *family* forges **zero** standings; k unset still denies),
+  `sim/bond_sybil_g2_test.go` (a Sybil pointing at another node's plot earns no
+  standing over the live-audit wire), `adapters/diskplot` (a v2 file loads as
+  absent → re-plot), and the objective/audit e2e paths carry the ~1.5 MB label proof
+  over TCP and on-chain. Design: [docs/design/m0-sybil-rebind.md](docs/design/m0-sybil-rebind.md).
+  **Honest status: built + covered across all three tiers, awaiting external
+  red-team re-verification — not self-certified held** (immutable B8: the tight
+  `ε→k` constant and the on-chain proof-size / asymmetric-`k` mitigation are the
+  carried open risks in the design note §8).
 - **Retest G4-residual: the anti-release floor is now ON BY DEFAULT for an untrusted
   validator** (2026-08-05) — `#163` shipped the floor + re-challenge mechanism but
   defaulted both knobs to `0`, and the daemon did not auto-enable them on the

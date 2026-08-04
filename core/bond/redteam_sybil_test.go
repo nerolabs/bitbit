@@ -12,6 +12,7 @@ import (
 // These are the M0 red-team Sybil PoCs (F1/F2) INVERTED as regressions: each
 // asserts the attack that used to PASS is now DENIED. See
 // docs/design/m0-sybil-bond.md §5 and docs/reviews/M0-REDTEAM-REPORT.md §1–§2.
+// The G2 prefix-plot regressions live in redteam_g2_test.go.
 
 // F1 (leaves-only prover): the red-team stored only the 32-byte leaves (1/128 of
 // the plot) and recomputed any probed block on demand, because the old plotBlock
@@ -20,11 +21,11 @@ import (
 // cannot reconstruct a block: without the true parent bytes, the recompute yields
 // a block whose hash no longer matches the committed leaf.
 func TestRedteamF1_ByteBindingDefeatsLeavesOnly(t *testing.T) {
-	id := secret(9)
 	const n = 128
+	seed := plotSeedN(pk(9), n)
 	blocks := make([][]byte, n)
 	for i := 0; i < n; i++ {
-		blocks[i] = plotBlock(id, i, blocks)
+		blocks[i] = plotBlock(seed, i, n, blocks)
 	}
 	leaves := make([]ports.Hash, n)
 	for i := range blocks {
@@ -40,13 +41,13 @@ func TestRedteamF1_ByteBindingDefeatsLeavesOnly(t *testing.T) {
 	for i := range starved {
 		starved[i] = make([]byte, BlockSize)
 	}
-	forged := plotBlock(id, target, starved)
+	forged := plotBlock(seed, target, n, starved)
 	if ports.HashBytes(forged) == leaves[target] {
 		t.Fatal("F1 regression: block recomputed without parent bytes — a leaves-only prover would still pass")
 	}
 	// Sanity: with the true parent bytes it DOES reproduce (the plot is a
 	// deterministic function of the held bytes, so an honest holder answers).
-	if !bytes.Equal(plotBlock(id, target, blocks), blocks[target]) {
+	if !bytes.Equal(plotBlock(seed, target, n, blocks), blocks[target]) {
 		t.Fatal("honest recompute from held bytes must reproduce the block")
 	}
 }
@@ -57,12 +58,13 @@ func TestRedteamF1_ByteBindingDefeatsLeavesOnly(t *testing.T) {
 // VDF from a plot block read BEFORE the VDF (seedIndex), carried with an
 // inclusion proof, so an answer that did not read the real plot block fails.
 func TestRedteamF2_VDFBoundToPlotRead(t *testing.T) {
-	c := Seal(secret(4), 1<<20)
+	pkA := pk(4)
+	c := Seal(pkA, 1<<20)
 	p := vdf.Default()
 	const nonce = 123
 
-	honest, ok := c.AnswerSpaceTime(nonce, p, stDelay)
-	if !ok || !VerifySpaceTime(c.Root, c.Size, nonce, honest, p, stDelay) {
+	honest, ok := c.AnswerSpaceTime(nonce, p, stDelay, testK)
+	if !ok || !VerifySpaceTime(pkA, c.Root, c.Size, nonce, honest, p, stDelay, testK) {
 		t.Fatal("setup: honest space-time answer must verify")
 	}
 	// The honest answer must actually carry the pre-VDF seed read.
@@ -79,7 +81,7 @@ func TestRedteamF2_VDFBoundToPlotRead(t *testing.T) {
 	tampered := honest
 	tampered.SeedBlock = append([]byte(nil), honest.SeedBlock...)
 	tampered.SeedBlock[0] ^= 0xff
-	if VerifySpaceTime(c.Root, c.Size, nonce, tampered, p, stDelay) {
+	if VerifySpaceTime(pkA, c.Root, c.Size, nonce, tampered, p, stDelay, testK) {
 		t.Fatal("F2 regression: a tampered VDF seed block passed")
 	}
 
@@ -88,21 +90,21 @@ func TestRedteamF2_VDFBoundToPlotRead(t *testing.T) {
 	noSeed := honest
 	noSeed.SeedBlock = nil
 	noSeed.SeedProof = manifest.Proof{}
-	if VerifySpaceTime(c.Root, c.Size, nonce, noSeed, p, stDelay) {
+	if VerifySpaceTime(pkA, c.Root, c.Size, nonce, noSeed, p, stDelay, testK) {
 		t.Fatal("F2 regression: an answer with no plot-read seed passed")
 	}
 
 	// (c) Seeding from ANOTHER plot's block (a prover that holds a different, or
 	// smaller, plot) fails: the seed proof is against the wrong root/index.
-	other := Seal(secret(5), 1<<20)
-	otherST, ok := other.AnswerSpaceTime(nonce, p, stDelay)
+	other := Seal(pk(5), 1<<20)
+	otherST, ok := other.AnswerSpaceTime(nonce, p, stDelay, testK)
 	if !ok {
 		t.Fatal("setup: other plot answer")
 	}
 	crossed := honest
 	crossed.SeedBlock = otherST.SeedBlock
 	crossed.SeedProof = otherST.SeedProof
-	if VerifySpaceTime(c.Root, c.Size, nonce, crossed, p, stDelay) {
+	if VerifySpaceTime(pkA, c.Root, c.Size, nonce, crossed, p, stDelay, testK) {
 		t.Fatal("F2 regression: a VDF seed block from another plot passed")
 	}
 }
@@ -113,8 +115,8 @@ func TestRedteamF2_VDFBoundToPlotRead(t *testing.T) {
 // property is asserted by TestPlotDeterministicAndIdentityBound; this records the
 // coupling so a future change that re-collapses plots is caught here too.
 func TestRedteamF3_DistinctIdentitiesDistinctPlots(t *testing.T) {
-	a := Seal(secret(1), 1<<20)
-	b := Seal(secret(2), 1<<20)
+	a := Seal(pk(1), 1<<20)
+	b := Seal(pk(2), 1<<20)
 	if a.Root == b.Root {
 		t.Fatal("F3 regression: two identities share a plot root — cost would not scale with identities")
 	}

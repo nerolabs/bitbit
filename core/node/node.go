@@ -98,6 +98,16 @@ type Config struct {
 	// strategy. 0 = no floor (the deterministic sim uses small bonds); a real
 	// deployment sets it — the daemon defaults it safely.
 	MinBondBytes int64
+	// BondLabelSamples is k, the number of labeling-consistency opens a bond
+	// challenge carries and a verifier checks (M0 Sybil G2,
+	// docs/design/m0-sybil-rebind.md): each open recomputes one block's label from
+	// its opened DRSample parents, catching a prover that committed bytes it did
+	// not correctly plot for its (identity, size). Against an ε-short prover the
+	// soundness error is ≤ (1-ε)^k. A per-network EVOLVING knob: prover and
+	// verifier must agree (like BondVDFDelay), so a deployment sets it uniformly.
+	// 0 resolves to bond.DefaultLabelSamples (64) — the check is never disabled by
+	// leaving it unset (safe-by-default; sims/tests inherit the full k).
+	BondLabelSamples int
 }
 
 func DefaultConfig() Config {
@@ -120,6 +130,7 @@ func DefaultConfig() Config {
 		BondMaxAge:        300 * ports.Second, // ~5 audit intervals unproven → standing lapses
 		ChainSyncInterval: 30 * ports.Second,  // catch-up retries so a restart rejoins once bond audits re-establish peer standing
 		BondVDFDelay:      1000,               // modest; a real deployment raises it for a stronger time floor
+		BondLabelSamples:  64,                 // bond.DefaultLabelSamples: labeling-consistency opens per challenge (G2)
 	}
 }
 
