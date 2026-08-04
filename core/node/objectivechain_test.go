@@ -29,9 +29,9 @@ func TestNodeCanonicalIssuersMirrorsChain(t *testing.T) {
 	v0, v1, v2 := identity.FromSeed(30), identity.FromSeed(31), identity.FromSeed(32)
 	g := &chain.Block{Version: chain.BlockVersion, Height: 0, Entries: []ports.Entry{mkEntry("g")},
 		BondRegs: []chain.BondReg{
-			{Validator: pubOf(v0), Size: 5 << 20},
-			{Validator: pubOf(v1), Size: 3 << 20},
-			{Validator: pubOf(v2), Size: 4 << 20},
+			{Validator: pubOf(v0), Root: ports.HashBytes(pubOf(v0)), Size: 5 << 20},
+			{Validator: pubOf(v1), Root: ports.HashBytes(pubOf(v1)), Size: 3 << 20},
+			{Validator: pubOf(v2), Root: ports.HashBytes(pubOf(v2)), Size: 4 << 20},
 		}}
 	chain.Sign(g, v0.Signer())
 
@@ -88,8 +88,8 @@ func TestRegisterBondRegRoundTripsThroughObjectiveVerifier(t *testing.T) {
 	cfg := chain.Config{Quorum: 1, MinBond: 1 << 20}
 	g := &chain.Block{Version: chain.BlockVersion, Height: 0, Entries: []ports.Entry{mkEntry("g")},
 		BondRegs: []chain.BondReg{
-			{Validator: pubOf(pID), Size: 64 << 20},
-			{Validator: pubOf(vID), Size: 64 << 20},
+			{Validator: pubOf(pID), Root: ports.HashBytes(pubOf(pID)), Size: 64 << 20},
+			{Validator: pubOf(vID), Root: ports.HashBytes(pubOf(vID)), Size: 64 << 20},
 		}}
 	chain.Sign(g, pID.Signer())
 

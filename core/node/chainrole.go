@@ -148,6 +148,18 @@ func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID,
 			b.BondRegs = append(b.BondRegs, reg)
 		}
 	}
+	// Record any equivocations we detected on-chain, so every replica evicts the
+	// culprit from the objective set in lockstep (F2). Drop any already recorded.
+	if len(n.pendingSlashes) > 0 {
+		var still []chain.Equivocation
+		for _, e := range n.pendingSlashes {
+			if n.chain.IsSlashed(e.CulpritID()) {
+				continue
+			}
+			b.Slashes = append(b.Slashes, e)
+		}
+		n.pendingSlashes = still
+	}
 	chain.Sign(b, n.signer)
 	if err := n.chain.ValidateProposal(b); err != nil {
 		done(fmt.Errorf("propose: local pre-check: %w", err))
@@ -220,7 +232,12 @@ func (n *Node) slashEquivocators(a, b []chain.Block) {
 		return
 	}
 	for _, e := range chain.FindEquivocations(a, b) {
-		n.ledger.SlashEquivocation(e.CulpritID())
+		n.ledger.SlashEquivocation(e.CulpritID()) // legacy/rep path
+		// Queue the proof for on-chain recording so the OBJECTIVE set evicts the
+		// culprit in lockstep on every replica (F2), not just this local ledger.
+		if n.chain != nil && !n.chain.IsSlashed(e.CulpritID()) {
+			n.pendingSlashes = append(n.pendingSlashes, e)
+		}
 		n.logf(ports.LogWarn, "validator slashed for equivocation", "culprit", e.CulpritID(), "height", e.A.Height)
 	}
 }
