@@ -8,22 +8,20 @@ package node
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 
 	"github.com/nerolabs/silt/core/bond"
-	"github.com/nerolabs/silt/core/crypto"
 	"github.com/nerolabs/silt/core/vdf"
 	"github.com/nerolabs/silt/ports"
 )
 
-// bondSecret derives a node's per-identity plot secret from its signing key,
-// domain-separated so it never coincides with any other use of the key. The
-// plot is sealed from THIS (only the owner has it), which is what binds the
-// bond to the identity and stops an outsider precomputing a victim's root.
-func bondSecret(signer ed25519.PrivateKey) []byte {
-	var seed [32]byte
-	copy(seed[:], signer.Seed())
-	k := crypto.DeriveKey(seed, "silt/bond/plot/v1")
-	return k[:]
+// plotPubKey is the validator ed25519 public key the plot seed H(pk, n) binds to
+// (M0 Sybil G2). It is PUBLIC by design: the verifier recomputes labels from it,
+// so the plot can no longer be sealed from a private secret. Identity binding is
+// now a CHECKED property of the plot (a plot for pk_A fails recomputation under
+// pk_B), not the un-grief-ability of a private seed — see docs/design/m0-sybil-rebind.md.
+func plotPubKey(signer ed25519.PrivateKey) []byte {
+	return append([]byte(nil), signer.Public().(ed25519.PublicKey)...)
 }
 
 // bondInfo is a peer's advertised bond, learned from gossip (BondRoot /
@@ -53,9 +51,10 @@ func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) (reloaded bool)
 	if n.signer == nil {
 		n.signer = signer
 	}
+	pk := plotPubKey(signer)
 	if n.plotStore != nil {
 		if root, blocks, ok, err := n.plotStore.Load(n.id); ok && err == nil {
-			if c, rerr := bond.Reconstruct(size, blocks); rerr == nil && c.Root == root {
+			if c, rerr := bond.Reconstruct(pk, size, blocks); rerr == nil && c.Root == root {
 				n.bond = c // reloaded from disk, re-verified — no re-plot (#93)
 				return true
 			}
@@ -64,7 +63,7 @@ func (n *Node) EnableBond(signer ed25519.PrivateKey, size int64) (reloaded bool)
 			n.logf(ports.LogWarn, "bond plot load error; re-plotting", "err", err)
 		}
 	}
-	n.bond = bond.Seal(bondSecret(signer), size)
+	n.bond = bond.Seal(pk, size)
 	if n.plotStore != nil {
 		if err := n.plotStore.Save(n.id, n.bond.Root, n.bond.Blocks()); err != nil {
 			n.logf(ports.LogWarn, "bond plot persist failed", "err", err)
@@ -166,9 +165,14 @@ func (n *Node) bondAuditOnce(now uint64) {
 				// A bond below the anti-release floor earns no standing however
 				// well it answers: it is small enough to release and re-plot inside
 				// the challenge window (F1/F2), so a valid answer proves nothing
-				// about sustained possession.
-				ok := info.size >= n.cfg.MinBondBytes &&
-					derr == nil && bond.VerifySpaceTime(info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay)
+				// about sustained possession. The labeling check (G2) recomputes
+				// labels from H(pk, n), so the answer must carry the prover's key
+				// AND it must hash to the identity we challenged — otherwise a plot
+				// sealed for another identity or size would pass. sha256(PK)==id is
+				// what binds the free-variable root back to this peer's identity.
+				ok := info.size >= n.cfg.MinBondBytes && derr == nil &&
+					sha256.Sum256(ans.PK) == id &&
+					bond.VerifySpaceTime(ans.PK, info.root, info.size, nonce, ans, vdf.Default(), n.cfg.BondVDFDelay, n.cfg.BondLabelSamples)
 				// Replied-but-can't-prove is a FAIL (a liar advertising a bond
 				// it doesn't hold) → standing zeroed; a valid answer earns it.
 				// The root binds standing to the plot: a shared root credits
@@ -192,7 +196,7 @@ func (n *Node) answerBondChallenge(msg ports.Message) ports.Message {
 	if n.bond == nil {
 		return reply
 	}
-	ans, ok := n.bond.AnswerSpaceTime(msg.Nonce, vdf.Default(), n.cfg.BondVDFDelay)
+	ans, ok := n.bond.AnswerSpaceTime(msg.Nonce, vdf.Default(), n.cfg.BondVDFDelay, n.cfg.BondLabelSamples)
 	if !ok {
 		return reply
 	}

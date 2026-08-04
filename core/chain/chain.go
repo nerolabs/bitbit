@@ -345,7 +345,7 @@ type Chain struct {
 	// Populated only when Config.MinBond > 0. verifyBond re-checks a registration's
 	// space-time proof (injected so core/chain stays decoupled from core/bond).
 	bonded     map[ports.NodeID]int64
-	verifyBond func(root ports.Hash, size int64, nonce uint64, answer []byte) bool
+	verifyBond func(pk []byte, root ports.Hash, size int64, nonce uint64, answer []byte) bool
 	// bondRootOwner enforces, in the OBJECTIVE set, the same per-root dedup the
 	// credit ledger has (credit.rootOwner): a bond Root builds standing for AT
 	// MOST ONE identity, so a colluding operator pointing N identities at one
@@ -392,11 +392,13 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 }
 
 // SetBondVerifier wires the objective-fork-choice bond check (F6): given a
-// registration's (root, size, nonce, answer), it re-verifies the space-time
-// proof (typically bond.VerifySpaceTime with the node's VDF params). Required
-// for Config.MinBond > 0 to take effect; injected so core/chain does not depend
-// on core/bond or core/vdf.
-func (c *Chain) SetBondVerifier(f func(root ports.Hash, size int64, nonce uint64, answer []byte) bool) {
+// registration's (pk, root, size, nonce, answer), it re-verifies the space-time
+// proof (typically bond.VerifySpaceTime with the node's VDF params). pk is the
+// registrant's ed25519 public key (BondReg.Validator) — the labeling check (G2)
+// recomputes labels from H(pk, n), so the plot is bound to this identity and
+// size, not to an attacker-chosen root. Required for Config.MinBond > 0 to take
+// effect; injected so core/chain does not depend on core/bond or core/vdf.
+func (c *Chain) SetBondVerifier(f func(pk []byte, root ports.Hash, size int64, nonce uint64, answer []byte) bool) {
 	c.verifyBond = f
 }
 
@@ -501,7 +503,7 @@ func (c *Chain) validateBondRegs(b *Block) error {
 		if r.Size < c.cfg.MinBondBytes {
 			return fmt.Errorf("%w: validator %s size %d below anti-release floor %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBondBytes)
 		}
-		if !c.verifyBond(r.Root, r.Size, nonce, r.Answer) {
+		if !c.verifyBond(r.Validator, r.Root, r.Size, nonce, r.Answer) {
 			return fmt.Errorf("%w: validator %s space-time proof", ErrBadBondReg, r.ValidatorID())
 		}
 	}

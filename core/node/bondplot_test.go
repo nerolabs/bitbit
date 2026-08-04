@@ -81,9 +81,12 @@ func TestEnableBondReloadsInsteadOfReplotting(t *testing.T) {
 	if second.bond.Root != firstRoot {
 		t.Fatal("reloaded bond advertises a different root than it plotted")
 	}
-	// The reloaded plot is fully functional: it answers a space-time challenge.
-	ans, ok := second.bond.AnswerSpaceTime(7, vdf.Default(), 200)
-	if !ok || !bond.VerifySpaceTime(second.bond.Root, size, 7, ans, vdf.Default(), 200) {
+	// The reloaded plot is fully functional: it answers a space-time challenge,
+	// including the G2 labeling opens (the reloaded plot re-derived its public
+	// seed, so it can rebuild them and the verifier recomputes labels from the pk).
+	pk := []byte(signer.Public().(ed25519.PublicKey))
+	ans, ok := second.bond.AnswerSpaceTime(7, vdf.Default(), 200, second.cfg.BondLabelSamples)
+	if !ok || !bond.VerifySpaceTime(pk, second.bond.Root, size, 7, ans, vdf.Default(), 200, second.cfg.BondLabelSamples) {
 		t.Fatal("reloaded bond cannot answer a space-time challenge")
 	}
 }

@@ -2,6 +2,7 @@ package diskplot
 
 import (
 	"bytes"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
@@ -96,5 +97,34 @@ func TestLoadForeignFormat(t *testing.T) {
 	}
 	if _, _, ok, err := s.Load(id); ok || err != nil {
 		t.Fatalf("foreign file: ok=%v err=%v, want ok=false err=nil", ok, err)
+	}
+}
+
+// M0 Sybil G2 migration: a WELL-FORMED plot from the previous format version
+// (correct magic, version 2) must be rejected as "no plot" so a restart re-plots
+// under the v3 identity-and-size-bound labeling instead of reloading the insecure
+// v2 labeling the red-team broke. This is the version guard doing its load-bearing
+// job — without it, a v2 plot's root re-derives fine (Merkle of block hashes) and
+// would be silently reloaded (docs/design/m0-sybil-rebind.md §5, §8.4).
+func TestLoadRejectsPreviousFormatVersion(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir)
+	id := nodeID(4)
+
+	// Hand-write a valid header claiming version 2 with one block.
+	block := bytes.Repeat([]byte{0x5a}, 4096)
+	var hdr [headerSize]byte
+	binary.BigEndian.PutUint32(hdr[0:], magic)
+	binary.BigEndian.PutUint32(hdr[4:], 2) // the OLD format version
+	binary.BigEndian.PutUint32(hdr[8:], uint32(len(block)))
+	binary.BigEndian.PutUint32(hdr[12:], 1)
+	root := ports.HashBytes([]byte("v2 root"))
+	copy(hdr[16:], root[:])
+	if err := os.WriteFile(filepath.Join(dir, s.path(id)[len(dir)+1:]), append(hdr[:], block...), 0o644); err != nil {
+		t.Fatalf("write v2 plot: %v", err)
+	}
+
+	if _, _, ok, err := s.Load(id); ok || err != nil {
+		t.Fatalf("G2 migration: a v2 plot must load as absent (ok=false, err=nil) so the node re-plots to v3; got ok=%v err=%v", ok, err)
 	}
 }

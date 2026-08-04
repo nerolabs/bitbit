@@ -24,12 +24,16 @@ func (n *Node) EnableObjectiveChain() {
 		return
 	}
 	delay := n.cfg.BondVDFDelay
-	n.chain.SetBondVerifier(func(root ports.Hash, size int64, nonce uint64, answer []byte) bool {
+	k := n.cfg.BondLabelSamples
+	n.chain.SetBondVerifier(func(pk []byte, root ports.Hash, size int64, nonce uint64, answer []byte) bool {
 		ans, err := bond.DecodeAnswer(answer)
 		if err != nil {
 			return false
 		}
-		return bond.VerifySpaceTime(root, size, nonce, ans, vdf.Default(), delay)
+		// pk is the authoritative validator key from BondReg.Validator (the chain
+		// verifies the ed25519 signature over it). Labels are recomputed from
+		// H(pk, n), so a plot sealed for another identity or size fails (G2).
+		return bond.VerifySpaceTime(pk, root, size, nonce, ans, vdf.Default(), delay, k)
 	})
 }
 
@@ -42,7 +46,7 @@ func (n *Node) RegisterBondReg(prev ports.Hash) (chain.BondReg, bool) {
 	if n.bond == nil || n.signer == nil {
 		return chain.BondReg{}, false
 	}
-	ans, ok := n.bond.AnswerSpaceTime(chain.BondRegNonce(prev), vdf.Default(), n.cfg.BondVDFDelay)
+	ans, ok := n.bond.AnswerSpaceTime(chain.BondRegNonce(prev), vdf.Default(), n.cfg.BondVDFDelay, n.cfg.BondLabelSamples)
 	if !ok {
 		return chain.BondReg{}, false
 	}

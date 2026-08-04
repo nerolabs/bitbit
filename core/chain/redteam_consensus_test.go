@@ -17,7 +17,7 @@ import (
 // same thing) is the property under test here, not the bond crypto itself —
 // that is proven in core/bond. A registration's signature is still real
 // ed25519, so a forged registration is genuinely rejected.
-func objectiveVerify(_ ports.Hash, _ int64, _ uint64, answer []byte) bool {
+func objectiveVerify(_ []byte, _ ports.Hash, _ int64, _ uint64, answer []byte) bool {
 	return string(answer) == "valid"
 }
 
