@@ -64,6 +64,8 @@ func cmdDaemon(args []string) error {
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
 	matureValidators := fs.Int("mature-validators", 0, "distinct non-anchor validators after which the anchor requirement sheds automatically (0 = never require anchors)")
 	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
+	objective := fs.Bool("objective", false, "consensus fork-choice by OBJECTIVE on-chain bond (F6): eligibility, quorum, and fork-choice weight are decided by verifiable on-chain bond registrations — identical on every replica — instead of the local reputation view, so honest replicas can't diverge under a partition. Validators register their real bonds live as they propose; the launch set bootstraps via -anchors and sheds at maturity. Requires -validator and -bond")
+	minBond := fs.String("min-bond", "1M", "objective mode: the minimum bonded size a validator must prove on-chain to qualify (its -bond must clear this)")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
 	bondSize := fs.String("bond", "64M", "storage bond a validator seals to earn consensus standing, proven to peers over time (persisted to disk; a restart reloads it) — a bigger bond earns more standing")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
@@ -249,10 +251,21 @@ func cmdDaemon(args []string) error {
 			fmt.Printf("training wheels: %d anchor(s), %d required, shed at %d independent validators\n",
 				len(anchorSet), *anchorQuorum, *matureValidators)
 		}
+		var minBondBytes int64
+		if *objective {
+			if len(anchorSet) == 0 || *matureValidators <= 0 {
+				return fmt.Errorf("-objective needs -anchors (the launch set) and -mature-validators > 0, so the declared anchors bootstrap the objective set and then shed at maturity")
+			}
+			mb, perr := parseSize(*minBond)
+			if perr != nil || mb <= 0 {
+				return fmt.Errorf("-objective needs a positive -min-bond: %q", *minBond)
+			}
+			minBondBytes = mb
+		}
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
-			AllowPublisher: *allowPublisher,
+			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 		}, ledger.Reputation)
 		if *allowPublisher {
 			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
@@ -287,6 +300,18 @@ func cmdDaemon(args []string) error {
 			} else {
 				fmt.Printf("bond: sealed a %s storage bond for consensus standing\n", *bondSize)
 			}
+		}
+		// Objective fork-choice (F6): wire the on-chain-bond verifier so
+		// registrations are re-checked against the real space-time primitive, and
+		// (via proposeBlock) this validator registers its own bond live as it
+		// proposes. Must follow EnableBond so a bond exists to register.
+		if *objective {
+			if bsz, _ := parseSize(*bondSize); bsz < minBondBytes {
+				return fmt.Errorf("-objective requires -bond (%s) to clear -min-bond (%s)", *bondSize, *minBond)
+			}
+			nd.EnableObjectiveChain()
+			fmt.Printf("consensus: OBJECTIVE fork-choice (on-chain bond ≥ %s); the launch set bootstraps via %d anchor(s) and sheds at maturity\n",
+				*minBond, len(anchorSet))
 		}
 		// Publisher privacy (T3): this validator issues blind-signed publish
 		// tokens, and (when -require-tokens) the chain accepts only entries that

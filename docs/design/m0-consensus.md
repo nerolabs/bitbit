@@ -20,9 +20,12 @@
 > is always summed real bond). Covered unit (`core/chain/objective_coldstart_test.go`
 > — anchor bootstraps then sheds) + integration (`sim/objective_coldstart_test.go`
 > — an anchor-only network with empty ledgers bootstraps and validators become
-> really bonded on chain). **Residual:** the daemon `-objective` flag + an e2e run,
-> and **F7** (Casper-FFG surround-vote slashing). Report:
-> `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7.
+> really bonded on chain). The daemon now exposes it: **`silt daemon -objective`**
+> wires the verifier + live self-registration, and the **e2e tier**
+> (`e2e/TestObjectiveConsensusCommitsOverTCP`) proves two objective daemons commit a
+> real quorum over real TCP. **Residual:** flipping the shipped DEFAULT to objective
+> (it is opt-in at the daemon today), and **F7** (Casper-FFG surround-vote
+> slashing). Report: `docs/reviews/M0-REDTEAM-REPORT.md` §6/§7.
 > **Depends on the bond fix** (`m0-sybil-bond.md`, shipped) — objective weight is
 > only meaningful if the bond it weighs is real. **F7 folds in here** (not a
 > standalone patch): a naive cross-fork slash wrongly punishes honest

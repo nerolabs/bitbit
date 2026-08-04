@@ -54,6 +54,21 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   depends on it); privacy is independent. Linked from
   `docs/design/gate4-m0-mechanism.md`. Design only — no code changed.
 
+### Added
+- **`silt daemon -objective`: run consensus on objective on-chain-bond fork-choice
+  (F6), with an e2e proof** (2026-08-04) — a validator can now enable objective
+  mode from the binary: `-objective` (with `-min-bond`, and requiring `-anchors` +
+  `-mature-validators > 0` for the cold-start) wires the on-chain-bond verifier and
+  makes the validator register its real bond live as it proposes, so eligibility,
+  quorum, and fork-choice weight come from verifiable on-chain bonds instead of the
+  local reputation view. This completes the F6 test pyramid with the **e2e tier**
+  (`e2e/TestObjectiveConsensusCommitsOverTCP`): two `-objective` daemons bootstrap
+  via anchors and drive a real objective quorum commit over real TCP, and the file
+  round-trips bit-perfect — the bond-registration-and-verification protocol works
+  end to end, not just in the sim. Objective mode remains opt-in at the daemon
+  (the default stays the legacy reputation path); flipping the shipped default is
+  the remaining step, tracked in `docs/design/m0-consensus.md`.
+
 ### Fixed
 - **Consensus (F6): the objective-fork-choice cold-start — an anchor-bootstrapped
   validator set that builds itself from real bonds** (2026-08-04) — objective mode
