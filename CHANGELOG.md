@@ -75,6 +75,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   added for M0. `docs/design/m0-consensus.md` §2b carries the reasoning.
 
 ### Added
+- **`silt daemon -honor-chain-revocations` and `-revoke`: operate on-chain
+  takedowns, with an e2e proof (F5)** (2026-08-04) — the accountability fix's
+  per-operator honoring and quorum-gated, existence-checked revocation are now
+  operable from the binary. `-honor-chain-revocations` **subscribes** this
+  operator to on-chain takedowns (default OFF — following the chain never imposes
+  someone else's takedowns; the operator-local `-denylist` is always honored).
+  `-revoke <root>` makes a validator **propose** an on-chain takedown of a root
+  once it has earned standing and the root is committed (retried on the loop-safe
+  clock; the chain enforces existence + quorum). This completes the F5 test pyramid
+  with the **e2e tier** (`e2e/TestChainRevocationCommitsOverTCP`): a validator
+  drives a quorum revocation of a published root over real TCP and it commits. The
+  per-operator honoring is covered at integration (`sim/revocation_test.go`).
 - **Anti-release bond floor (`-min-bond-floor` / `Node.MinBondBytes`): a bond too
   small to be safe against release + re-plot earns no standing (M0 Sybil F1/F2)**
   (2026-08-04) — the byte-binding + read-bound-VDF plot makes a released prover
