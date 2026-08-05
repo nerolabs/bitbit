@@ -46,20 +46,44 @@ import (
 type Config struct {
 	MinProposerRep int64
 	MinAttesterRep int64
-	Quorum         int // attestations required, excluding the proposer
-	// Launch-window "training wheels" (risk 15): while the network is
-	// immature — fewer than MatureValidators DISTINCT non-anchor qualified
-	// validators have ever attested a committed block — a commit ALSO needs
-	// AnchorQuorum attestations from Anchors (a declared seed set), so a
-	// Sybil quorum can't capture a young network before it decentralizes.
-	// The wheels shed MECHANICALLY on that measured decentralization, never a
-	// flag day. Anchors are plural and require a threshold, so no single
-	// anchor is load-bearing (cf. R4) — and while they can gate publication
-	// on the young network (a transparent, on-chain, time-limited power),
-	// they can never do so once mature. Empty Anchors / zero AnchorQuorum =
+	Quorum         int // attestations required (a FLOOR; see ByzantineQuorum), excluding the proposer
+	// ByzantineQuorum sizes the required quorum at the Byzantine threshold
+	// (H4 / Memo 05): in OBJECTIVE mode a commit's support set (the proposer plus
+	// its attesters) is raised to a supermajority n−f of the qualified bonded set
+	// of size N (f = ⌊(N-1)/3⌋), so any two support sets intersect in ≥ f+1 ≥ 1
+	// honest validator — the classic quorum-intersection safety, which a FIXED
+	// Quorum loses as the set grows (a fixed 3 among 30 validators no longer
+	// guarantees two quorums share an honest node). Config.Quorum stays a floor (for
+	// tiny trusted deployments); the effective attestation requirement is
+	// max(Quorum, N−f−1). It only ever RAISES the bar, so it is safe to leave off
+	// for legacy/trusted configs (default) and default-on for an untrusted objective
+	// validator. See RequiredQuorum. No effect in legacy (reputation) mode, where the
+	// qualified set size is a local, divergent view.
+	ByzantineQuorum bool
+	// Launch-window "training wheels" (risk 15): while the network is immature —
+	// its NAKAMOTO COEFFICIENT over non-anchor bonded weight is below
+	// MatureValidators — a commit ALSO needs AnchorQuorum attestations from Anchors
+	// (a declared seed set), so a Sybil quorum can't capture a young network before
+	// it decentralizes. The wheels shed MECHANICALLY on measured decentralization,
+	// never a flag day, and — unlike a one-way latch — RE-ENGAGE if decentralization
+	// later drops (the post-shed escape hatch, H4). Anchors are plural and require a
+	// threshold, so no single anchor is load-bearing (cf. R4) — and while they can
+	// gate publication on the young network (a transparent, on-chain, time-limited
+	// power), they can never do so once mature. Empty Anchors / zero AnchorQuorum =
 	// no training wheels (the default; trusted/sim deployments).
-	Anchors          map[ports.NodeID]bool
-	AnchorQuorum     int
+	Anchors      map[ports.NodeID]bool
+	AnchorQuorum int
+	// MatureValidators is the required NAKAMOTO COEFFICIENT (H4 / Memo 05): the
+	// minimum number of DISTINCT non-anchor bonds whose combined bonded weight must
+	// EXCEED the Byzantine fraction (⌊total/3⌋) of the non-anchor bonded set before
+	// the training wheels shed. This is cost-to-corrupt over bond-distinct operators,
+	// not a head-count: a network whose weight is dominated by one big bond (Nakamoto
+	// 1) is NOT mature no matter how many satellite keys an operator adds, so one
+	// operator cannot cheaply trip the wheels off. 0 = no threshold (always mature;
+	// the default). (Residual, documented: a determined operator that splits its
+	// stake into many EQUAL bonds still inflates the coefficient — the on-chain limit
+	// is that stake concentration is invisible — but it pays the full cost-to-corrupt
+	// and ByzantineQuorum still bounds it to ≤ ⅓ of weight for safety.)
 	MatureValidators int
 	// AllowPublisher permits an entry to carry a durable Publisher NodeID.
 	// It is FALSE by default because a Publisher→root record is permanent
@@ -455,6 +479,58 @@ func (c *Chain) proposerQualified(id ports.NodeID) bool {
 	return c.rep(id) >= c.cfg.MinProposerRep
 }
 
+// qualifiedCount is the number of distinct on-chain validators currently eligible
+// to attest in objective mode: a committed bond ≥ MinBond, not slashed. It is the
+// N the Byzantine quorum is sized against, recomputed identically by every replica
+// from the chain (so RequiredQuorum never diverges). Anchors that also hold a real
+// bond are counted; a pure training-wheels anchor with no bond is not (it is a
+// bootstrap backstop, not part of the decentralized fault budget).
+func (c *Chain) qualifiedCount() int {
+	n := 0
+	for id, sz := range c.bonded {
+		if sz >= c.cfg.MinBond && !c.slashed[id] {
+			n++
+		}
+	}
+	return n
+}
+
+// bftThreshold is the number of NON-PROPOSER attestations a commit needs for
+// Byzantine quorum-intersection safety over n validators. The tolerated fault
+// count is f = ⌊(n-1)/3⌋, and the total support set (the proposer, always a
+// qualified signer, PLUS its attesters) must be a supermajority of n−f. So the
+// attestation count returned is (n−f)−1. Any two such support sets of size n−f
+// intersect in 2(n−f)−n = n−2f ≥ f+1 validators (since n ≥ 3f+1), so — with ≤ f
+// faulty — at least one HONEST validator is in both, which stops two conflicting
+// blocks from each gathering a quorum (safety). n ≤ 0 → 0.
+func bftThreshold(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	f := (n - 1) / 3
+	q := n - f - 1
+	if q < 0 {
+		return 0
+	}
+	return q
+}
+
+// RequiredQuorum is the number of distinct qualified non-proposer attestations a
+// commit needs. It is Config.Quorum by default, but with ByzantineQuorum set in
+// objective mode it rises to the Byzantine threshold 2f+1 over the qualified set —
+// max(Quorum, bftThreshold(N)) — so quorum-intersection safety is preserved as the
+// validator set grows. Exposed so a proposer gathers enough attestations to match
+// what ValidateCommit will demand.
+func (c *Chain) RequiredQuorum() int {
+	q := c.cfg.Quorum
+	if c.cfg.ByzantineQuorum && c.objective() {
+		if bq := bftThreshold(c.qualifiedCount()); bq > q {
+			q = bq
+		}
+	}
+	return q
+}
+
 // BondRegNonce is the fresh challenge a non-genesis bond registration must
 // answer, derived from the parent hash the block extends — so a registration
 // proves possession AT this position and cannot be replayed to another height
@@ -604,22 +680,75 @@ func (c *Chain) RequireTokens(quorum int, issuerKey func(ports.NodeID) *rsa.Publ
 	c.issuerKey = issuerKey
 }
 
-// Mature reports whether the network has decentralized enough for the
-// launch-window anchors to no longer be required: at least MatureValidators
-// DISTINCT non-anchor qualified validators have attested a committed block.
-// Because attesting requires earned standing (a storage bond, #78), this
-// count can't be cheaply inflated by Sybils — maturing early costs real bonds.
+// Mature reports whether the network has decentralized enough for the launch-
+// window anchors to no longer be required: its NAKAMOTO COEFFICIENT over the
+// non-anchor bonded set is at least MatureValidators (H4 / Memo 05). Unlike the
+// old head-count of distinct validators — which one operator could trip by
+// spinning up many minimum bonds, then capture consensus once the wheels shed —
+// this is cost-to-corrupt over bond-distinct operators: a set whose weight is
+// dominated by a few bonds has a LOW coefficient and stays immature no matter how
+// many satellite keys are added. It reads the CURRENT bonded set, so maturity
+// RE-ENGAGES the wheels if decentralization later drops (the post-shed escape
+// hatch). Legacy mode has no on-chain bonded set, so it falls back to the head
+// count of distinct qualified validators seen.
 func (c *Chain) Mature() bool {
 	if c.cfg.MatureValidators <= 0 {
 		return true
 	}
-	n := 0
+	if !c.objective() {
+		n := 0
+		for id := range c.validatorsSeen {
+			if !c.cfg.Anchors[id] {
+				n++
+			}
+		}
+		return n >= c.cfg.MatureValidators
+	}
+	return c.nakamotoCoefficient() >= c.cfg.MatureValidators
+}
+
+// nakamotoCoefficient is the minimum number of the largest DISTINCT non-anchor
+// operators — among validators that have actually ATTESTED a committed block
+// (validatorsSeen) AND still hold a live bond ≥ MinBond — whose combined bonded
+// weight EXCEEDS the Byzantine fraction (⌊total/3⌋) of that participating weight.
+// It is the fewest bond-distinct operators one would have to corrupt to reach the
+// fault threshold: higher = more decentralized.
+//
+// Two properties make it the right maturity gate (H4 / Memo 05):
+//   - participation-gated: only validators that produced a committed attestation
+//     count, so a malicious genesis cannot DECLARE a fake-decentralized set to shed
+//     the wheels — an unproven bond that never attests contributes nothing;
+//   - weight-aware: a set whose weight is dominated by one bond yields 1 no matter
+//     how many satellite keys an operator adds, so one operator cannot cheaply trip
+//     the wheels off (the head-count hole).
+//
+// It reads CURRENT bonds, so a participant whose bond lapses (TTL) drops out and the
+// coefficient can fall — re-engaging the wheels (the post-shed escape hatch).
+func (c *Chain) nakamotoCoefficient() int {
+	sizes := make([]int64, 0, len(c.validatorsSeen))
+	var total int64
 	for id := range c.validatorsSeen {
-		if !c.cfg.Anchors[id] {
-			n++
+		if c.cfg.Anchors[id] || c.slashed[id] {
+			continue
+		}
+		if sz := c.bonded[id]; sz >= c.cfg.MinBond {
+			sizes = append(sizes, sz)
+			total += sz
 		}
 	}
-	return n >= c.cfg.MatureValidators
+	if total == 0 {
+		return 0
+	}
+	sort.Slice(sizes, func(i, j int) bool { return sizes[i] > sizes[j] }) // largest first
+	threshold := total / 3
+	var cum int64
+	for i, sz := range sizes {
+		cum += sz
+		if cum > threshold {
+			return i + 1
+		}
+	}
+	return len(sizes)
 }
 
 // Revoked reports whether root has been taken down by a committed
@@ -767,8 +896,8 @@ func (c *Chain) ValidateCommit(b *Block) error {
 		seen[id] = true
 		valid++
 	}
-	if valid < c.cfg.Quorum {
-		return fmt.Errorf("%w: %d qualified, need %d", ErrNoQuorum, valid, c.cfg.Quorum)
+	if req := c.RequiredQuorum(); valid < req {
+		return fmt.Errorf("%w: %d qualified, need %d", ErrNoQuorum, valid, req)
 	}
 	// Training wheels: while immature, the quorum must ALSO carry anchor
 	// sign-off, so a Sybil quorum can't capture a young network before it has

@@ -110,7 +110,7 @@ censorship). **Verdict** = held / broken / residual / undecided as of this writi
 | S1 | Storage bond → objective weight + rep | Sybil: N ids < N storage | v3 labeling PoS (G2) + per-root dedup (F1) + anti-release floor (G4) + read-bound VDF (F2) | floor auto-on ✓ | ✓ (sha256(PK)==id, labels from H(pk,n)) | partial | **held** (plot primitive; awaiting external re-verify) |
 | S2 | PoR audit | proof outsourcing/relay (RT-1) | **H1 (landed):** PoR grants **no standing** (removed the `auditsPassed·25` mint — standing = bond only) + challenge is **identity-bound** (`porProverSeed = H(base‖proverID)`); audits fund balance/durability + a negative integrity signal only (`core/credit` `Reputation`, `core/node/por.go`) | grants no standing (n/a) | ✓ (bond-gated; identity-bound) | n/a | **hardened (H1)** — residual colluding-holder recompute re-priced, not closed → sealed replicas (H7) |
 | S3 | Objective bond weight across TIME | release-and-coast amortization (RT-2) | `BondTTLBlocks` re-challenge decay (G4) + **non-proposer renewal path (H2)** + `effectiveBondTTL` default-on | **`-bond-ttl` derived-on for untrusted objective** ✓ | ✓ | ✓ | **held (H2)** — attest-only validators renew without proposing; released bond decays |
-| S4 | Consensus quorum (propose/attest) | honest-majority false; shed metric Sybil-inflatable; rep not slashable | rep-weighted quorum, MinProposer/AttesterRep, training wheels + `Mature()` (`core/chain`) | quorum not sized at BFT threshold; shed on head-count | — | — | **weak (Memo 05)**: size quorum at 2f+1/3f+1; shed on cost-to-corrupt over bond-distinct operators |
+| S4 | Consensus quorum (propose/attest) | honest-majority false; shed metric Sybil-inflatable | **H4:** Byzantine quorum sizing (`RequiredQuorum` = supermajority n−f over the qualified bonded set) + Nakamoto-coefficient `Mature()` (cost-to-corrupt over bond-distinct operators, revertible escape hatch) (`core/chain`) | `-byzantine-quorum` derived-on for untrusted objective ✓ | — | ✓ | **held (H4)** — two quorums always intersect above the fault bound; one operator's many keys can't trip the wheels. Residual: even stake-splitting (documented); rep-not-slashable is the legacy path (objective mode uses the bond, slashable) |
 | S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery (B2/B4/J1) | plain Kademlia, NodeID=H(pk), free minting, no IP diversity (`core/dht`) | no S/Kad disjoint paths, no IP-diversity buckets, no wide-region | — | — | **open (Memo 08)** — adopt-now stack re-prices by orders of magnitude |
 | S6 | Takedown / revocation | global switch | per-operator opt-in, quorum-gated, existence-checked, un-revocable (`core/chain`, `core/denylist`) | honor-revocations off ✓ | — | ✓ | **held** (red team DENIED); missing CT-log + non-globality metric (Memo 04) |
 | S7 | Publisher privacy / issuance | deanonymize publisher | publisher-less ledger + ephemeral publish + Chaumian credits (`core/blindtoken`) | publisher-less default ✓ | — | ✓ | **held for shipped layers**; D3 IP+timing **residual (undecided, Memo 01)** |
@@ -207,12 +207,30 @@ security item must also add its **Invariant B default-denies-attack test**.
   S1 floor on, S3 TTL on post-H2; S2 denied structurally by Invariant A). Both fail loudly
   if a new press skips classification or a mechanism ships off-by-default.
 
-- **H4 — Consensus quorum sizing + shed metric (Memo 05).** Size `Quorum` at the
-  Byzantine threshold (2f+1 of 3f+1); replace the head-count shed trigger with
-  cost-to-corrupt / Nakamoto-over-**bond-distinct-operators**, Byzantine-robustly
-  sampled; keep a post-shed escape hatch. *Exit:* a sim proving two quorums always
-  intersect above the fault bound; a shed-metric test showing one operator with N keys
-  cannot trip the wheels off.
+- **H4 — Consensus quorum sizing + shed metric (Memo 05). ✅ DONE.** Added
+  `Config.ByzantineQuorum`: in objective mode `RequiredQuorum` rises to a supermajority
+  **n−f** of the qualified bonded set (f = ⌊(n−1)/3⌋), so a commit's support set
+  (proposer + attesters) is BFT-sized and any two quorums intersect in ≥ f+1 ≥ 1 honest
+  validator — the safety a fixed `Quorum` loses as the set grows. The proposer gathers
+  `max(floor, RequiredQuorum())` (`core/node` proposeBlock) and `ValidateCommit` enforces
+  the same. Replaced the head-count `Mature()` with the **Nakamoto coefficient** over the
+  *participating* non-anchor bonded set (`validatorsSeen ∩ current bond`): the min number
+  of bond-distinct operators needed to reach ⌊total/3⌋ of the weight. It is
+  participation-gated (a fake genesis can't declare decentralization), weight-aware (a
+  set dominated by one bond has coefficient 1 → stays immature no matter how many
+  satellite keys), and revertible (a lapsed bond drops out → wheels re-engage = the
+  post-shed escape hatch). Both default-on for the untrusted objective posture
+  (`effectiveByzantineQuorum`; `-byzantine-quorum` / `-mature-validators`).
+  *Delivered exit criteria:* `core/chain/h4_consensus_test.go` —
+  `TestBFTQuorumIntersectionAboveFaultBound` (for every n, two quorums intersect in
+  ≥ f+1 with ≥ 1 honest), `TestByzantineQuorumScalesWithValidatorSet` +
+  `TestFixedQuorumUnsafeWithoutByzantineSizing` (the requirement rises with the set; the
+  fixed-quorum hole shown), `TestMaturityNakamotoResistsOneOperator` (one operator whose
+  weight is one dominant bond can't trip the wheels; a spread set does). Invariant-B:
+  `cmd/silt` `TestInvariantB_S4_ByzantineQuorumOnByDefault` + the effective-derivation test.
+  *Residual (documented):* an operator that splits stake into many EQUAL bonds still
+  inflates the coefficient — stake concentration is invisible on-chain — but it pays the
+  full cost-to-corrupt and Byzantine quorum bounds it to ≤ ⅓ of weight for safety.
 
 ### P2 — re-price the surfaces research says are open
 
@@ -257,8 +275,10 @@ security item must also add its **Invariant B default-denies-attack test**.
   off-by-default mechanism fails `cmd/silt/invariant_b_test.go`. Still: never call a
   corner "held" because one surface is hardened — check §4; every new mechanism ships
   with its Invariant-B default-denies-attack test (add a row to the harness).
-- **State after H1+H2+H3:** the Sybil corner's standing surfaces S1/S2/S3 are all held
-  with tests + inverted PoCs + Invariant-A/B guardrails. **Next open backlog:** P1 **H4**
-  (consensus quorum sizing at the Byzantine threshold + a Sybil-robust shed metric, Memo
-  05 — S4 is still `weak`), then P2 **H5** (DHT eclipse, S5 `open`) / **H6** (convergent-
-  encryption default, S8 `weak`). P3 (H7–H9) stays gated on the §6 decisions (D-S7 top).
+- **State after H1+H2+H3+H4:** the Sybil corner's standing surfaces S1/S2/S3 **and** the
+  consensus quorum S4 are all held with tests + inverted PoCs + Invariant-A/B guardrails.
+  **Next open backlog:** P2 **H5** (DHT eclipse / key-surround, S5 `open`, Memo 08) and
+  **H6** (convergent-encryption default → private + Proof-of-Ownership, S8 `weak`, Memo
+  02). P3 (H7–H9) stays gated on the §6 decisions (D-S7 durability top). The remaining
+  `weak`/`open` surfaces are S5 and S8; the accountability/privacy corners (S6/S7) are
+  held for shipped layers.

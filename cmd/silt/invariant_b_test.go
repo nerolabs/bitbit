@@ -24,6 +24,9 @@ import "testing"
 //   S3 bond-TTL (RT-2)     → enforced-by-default (H2), asserted here (via effectiveBondTTL);
 //                            the release-and-coast prune behavior itself is proven over the
 //                            wire in sim TestObjectiveBondRenewalSustainsAttestOnlyValidator
+//   S4 Byzantine quorum    → enforced-by-default (H4), asserted here (via effectiveByzantineQuorum);
+//                            the quorum-intersection safety itself is proven in
+//                            core/chain TestBFTQuorumIntersectionAboveFaultBound
 
 // TestInvariantB_S1_AntiReleaseFloorOnByDefault asserts the untrusted-validator
 // DEFAULT (no -min-bond-floor passed, objective path) imposes the anti-release
@@ -86,5 +89,34 @@ func TestBondTTLDefaultsOnForUntrustedValidator(t *testing.T) {
 	// A trusted/non-objective node gets no imposed TTL, so demos keep working.
 	if got, defaulted := effectiveBondTTL(false, 0, false); got != 0 || defaulted {
 		t.Fatalf("a trusted/non-objective node must get no imposed TTL: got %d (defaulted=%v)", got, defaulted)
+	}
+}
+
+// TestInvariantB_S4_ByzantineQuorumOnByDefault asserts the untrusted-validator
+// DEFAULT sizes the commit quorum at the Byzantine threshold, so a fixed quorum
+// can't silently lose quorum-intersection safety as the set grows — without the
+// operator having to know the flag exists.
+func TestInvariantB_S4_ByzantineQuorumOnByDefault(t *testing.T) {
+	on, defaulted := effectiveByzantineQuorum(false /*byzSet*/, false /*explicit*/, true /*objectivePath*/)
+	if !on || !defaulted {
+		t.Fatalf("Invariant B (S4) violated: an untrusted objective validator must size the quorum at the Byzantine threshold by default, got on=%v defaulted=%v", on, defaulted)
+	}
+}
+
+// TestByzantineQuorumDefaultsOnForUntrustedValidator pins the effectiveByzantineQuorum
+// contract: on-by-default for the untrusted objective posture, an explicit choice
+// (including the =false opt-out) always wins, and a trusted/non-objective node is off.
+func TestByzantineQuorumDefaultsOnForUntrustedValidator(t *testing.T) {
+	if on, defaulted := effectiveByzantineQuorum(false, false, true); !on || !defaulted {
+		t.Fatalf("untrusted objective validator must default ON: got on=%v defaulted=%v", on, defaulted)
+	}
+	if on, defaulted := effectiveByzantineQuorum(true, false, true); on || defaulted {
+		t.Fatalf("an explicit -byzantine-quorum=false must opt out: got on=%v defaulted=%v", on, defaulted)
+	}
+	if on, _ := effectiveByzantineQuorum(true, true, false); !on {
+		t.Fatalf("an explicit -byzantine-quorum=true must be honored even off the objective path")
+	}
+	if on, defaulted := effectiveByzantineQuorum(false, false, false); on || defaulted {
+		t.Fatalf("a trusted/non-objective node must get no imposed Byzantine sizing: got on=%v defaulted=%v", on, defaulted)
 	}
 }

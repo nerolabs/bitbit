@@ -64,8 +64,9 @@ func cmdDaemon(args []string) error {
 	attesters := fs.String("attesters", "", "comma-separated validator IDs to gather attestations from")
 	anchorList := fs.String("anchors", "", "launch-window training wheels: comma-separated anchor validator IDs whose sign-off an immature-network commit also requires (empty = no training wheels)")
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
-	matureValidators := fs.Int("mature-validators", 0, "distinct non-anchor validators after which the anchor requirement sheds automatically (0 = never require anchors)")
-	quorum := fs.Int("quorum", 3, "attestations (excluding the proposer) required to commit a block — safe default; lower only for a trusted/one-box swarm")
+	matureValidators := fs.Int("mature-validators", 0, "required NAKAMOTO COEFFICIENT (M0 H4): the anchor requirement sheds only once this many bond-DISTINCT operators are needed to reach ⅓ of the bonded weight — cost-to-corrupt, not a head-count, so one operator with many keys can't trip the wheels off (0 = never require anchors)")
+	quorum := fs.Int("quorum", 3, "MINIMUM attestations (excluding the proposer) to commit a block — a floor; with -byzantine-quorum the effective requirement rises to the Byzantine threshold over the qualified set. Lower only for a trusted/one-box swarm")
+	byzantineQuorum := fs.Bool("byzantine-quorum", false, "size the commit quorum at the Byzantine threshold (M0 H4): the support set becomes a supermajority n−f of the qualified bonded set, so two quorums always share an honest validator (safety as the set grows). LEFT UNSET it defaults ON for an untrusted objective validator; an explicit =false opts out (trusted swarm). Only ever RAISES the bar")
 	objective := fs.Bool("objective", true, "DEFAULT-ON for an untrusted validator: consensus fork-choice by OBJECTIVE on-chain bond (F6), so eligibility, quorum, and fork-choice weight are a function of verifiable on-chain bond registrations — identical on every replica — and honest replicas can't diverge under a partition (the M0 consensus denial). Bootstrap a multi-validator quorum with -anchors (the launch set); validators register their real bonds live as they propose. Auto-off for a trusted swarm (-min-rep 0). Pass -objective=false to run the legacy subjective path, which does NOT hold the M0 denial under an adversarial partition")
 	minBond := fs.String("min-bond", "1M", "objective mode: the minimum bonded size a validator must prove on-chain to qualify (its -bond must clear this)")
 	minRep := fs.Int64("min-rep", 100, "reputation a proposer/attester must have EARNED (bonds+audits) to write — safe default; 0 = trusted deployment (self-commit, unsafe on an open network)")
@@ -164,13 +165,15 @@ func cmdDaemon(args []string) error {
 	// recomputed just-in-time. At the measured ~270 MB/s plot throughput
 	// (bond.BenchmarkSeal) and this daemon's ~2s window that is ~540 MiB, so the
 	// default carries ~2x margin.
-	floorSet, ttlSet := false, false
+	floorSet, ttlSet, byzSet := false, false, false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "min-bond-floor":
 			floorSet = true
 		case "bond-ttl":
 			ttlSet = true
+		case "byzantine-quorum":
+			byzSet = true
 		}
 	})
 	explicitFloor, ferr := parseSize(*minBondFloor)
@@ -196,6 +199,14 @@ func cmdDaemon(args []string) error {
 	effTTL, ttlDefaulted := effectiveBondTTL(ttlSet, *bondTTL, objectivePath)
 	if ttlDefaulted {
 		fmt.Printf("bond: objective re-challenge TTL defaulted to %d blocks for this untrusted (objective) swarm — standing lapses this many blocks after a validator's latest bond proof unless it renews, so a released plot can't keep voting. Override with -bond-ttl (0 disables; safe only for a trusted/demo swarm).\n", effTTL)
+	}
+	// Byzantine quorum sizing gets the same safe-by-default treatment (H4): a fixed
+	// quorum loses quorum-intersection safety as the validator set grows, so an
+	// untrusted objective validator sizes the commit quorum at the Byzantine
+	// threshold unless the operator opts out. It only ever raises the bar.
+	effByz, byzDefaulted := effectiveByzantineQuorum(byzSet, *byzantineQuorum, objectivePath)
+	if byzDefaulted {
+		fmt.Println("consensus: Byzantine quorum sizing defaulted ON for this untrusted (objective) swarm — a commit needs a supermajority of the qualified bonded set so two quorums always share an honest validator. Override with -byzantine-quorum=false (safe only for a trusted swarm).")
 	}
 	if effFloor > 0 {
 		cfg.MinBondBytes = effFloor
@@ -334,7 +345,8 @@ func cmdDaemon(args []string) error {
 		// TTL. cfg.MinBondBytes is 0 unless -min-bond-floor was set.
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
-			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
+			ByzantineQuorum: effByz,
+			Anchors:         anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
 		}, ledger.Reputation)
@@ -978,4 +990,19 @@ func effectiveBondTTL(ttlSet bool, explicit uint64, objectivePath bool) (ttl uin
 		return DerivedBondTTL, true
 	}
 	return explicit, false
+}
+
+// effectiveByzantineQuorum decides Byzantine quorum sizing (H4), mirroring the
+// floor/TTL derivations: an explicit -byzantine-quorum always wins (including
+// =false, the trusted opt-out), otherwise the untrusted objective path turns it on
+// and every other posture leaves it off. It only ever RAISES the quorum, so
+// defaulting it on for an untrusted validator can never weaken an existing config.
+func effectiveByzantineQuorum(byzSet, explicit, objectivePath bool) (on, defaulted bool) {
+	if byzSet {
+		return explicit, false
+	}
+	if objectivePath {
+		return true, true
+	}
+	return false, false
 }
