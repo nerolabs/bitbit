@@ -61,24 +61,33 @@ reputation/consensus weight MUST:
 - dedup the underlying resource (one resource credits ≤ 1 identity);
 - gate credit behind the storage bond where the credit implies held space.
 
-*Enforcement:* a test that **enumerates every standing-granting press** and asserts each
-satisfies A, so a new press cannot ship unaudited. Bond audit ✓ (post-G2). PoR audit ✗
-(RT-1). 
+*Enforcement (H3, landed):* `core/credit/invariant_a_test.go` **enumerates every
+standing-granting press** — a reflection guard over every `*Ledger` method forces each to
+be classified `mints`/`reduces`/`neutral`, and a behavioral guard proves no non-`mints`
+press lifts a bondless identity, so a new press cannot ship unaudited. The sole `mints`
+press (the bond) is asserted identity-bound + deduped + bond-gated. Bond audit ✓ (post-G2).
+PoR audit ✓ (grants no standing, H1).
 
 **Invariant B — a mechanism is not "shipped" until its safe configuration is the DEFAULT
-for the untrusted posture.** *Enforcement:* for every security mechanism, a test that
-builds the **default** config for an untrusted validator and asserts it denies the
-attack. This is the 3rd time off-by-default bit us; make it structurally impossible.
+for the untrusted posture.** *Enforcement (H3, landed):* `cmd/silt/invariant_b_test.go`
+builds the **default** untrusted-validator config and asserts it denies the attack, per
+mechanism (S1 anti-release floor on; S3 bond-TTL on — post-H2). This was the 3rd time
+off-by-default bit us; the harness makes a new off-by-default mechanism fail loudly.
 
 ---
 
 ## 3. Cross-corner couplings (why single-corner fixes are unsafe)
 
-- **bond-TTL (safety) ↔ bond renewal (liveness).** Defaulting `-bond-ttl` on naively is
-  a **liveness trap**: renewal happens only when a validator *proposes*
-  (`core/node/chainrole.go`), which is event-driven, so an attest-only validator never
-  renews and lapses — the quorum loses its weight. RT-2 cannot be closed by a default
-  flip; it needs a **non-proposer renewal path first**.
+- **bond-TTL (safety) ↔ bond renewal (liveness). RESOLVED (H2).** Defaulting `-bond-ttl`
+  on naively was a **liveness trap**: renewal happened only when a validator *proposes*
+  (`core/node/chainrole.go`), so an attest-only validator never renewed and lapsed. H2
+  added the **non-proposer renewal path** (`node.SubmitBondRenewal` → `MsgSubmitBondReg`
+  → the next proposer folds queued peer regs into its block; the chain already verifies
+  each reg against its own identity, so no proposer-owns-its-regs assumption existed to
+  break). Only *then* was `-bond-ttl` made safe-by-default on the untrusted objective
+  posture (`effectiveBondTTL`, mirroring the floor). The sim
+  `TestObjectiveBondRenewalSustainsAttestOnlyValidator` proves an attest-only validator
+  sustains standing across many TTL windows while a released one is pruned.
 - **bond ↔ consensus weight ↔ eclipse.** A perfect bond is worthless if a ~$4 key-
   surround suppresses provider records (Memo 08), and consensus safety comes from
   *quorum arithmetic at the Byzantine threshold*, not reputation weight (Memo 05) —
@@ -100,7 +109,7 @@ censorship). **Verdict** = held / broken / residual / undecided as of this writi
 |---|---|---|---|---|---|---|---|
 | S1 | Storage bond → objective weight + rep | Sybil: N ids < N storage | v3 labeling PoS (G2) + per-root dedup (F1) + anti-release floor (G4) + read-bound VDF (F2) | floor auto-on ✓ | ✓ (sha256(PK)==id, labels from H(pk,n)) | partial | **held** (plot primitive; awaiting external re-verify) |
 | S2 | PoR audit | proof outsourcing/relay (RT-1) | **H1 (landed):** PoR grants **no standing** (removed the `auditsPassed·25` mint — standing = bond only) + challenge is **identity-bound** (`porProverSeed = H(base‖proverID)`); audits fund balance/durability + a negative integrity signal only (`core/credit` `Reputation`, `core/node/por.go`) | grants no standing (n/a) | ✓ (bond-gated; identity-bound) | n/a | **hardened (H1)** — residual colluding-holder recompute re-priced, not closed → sealed replicas (H7) |
-| S3 | Objective bond weight across TIME | release-and-coast amortization (RT-2) | `BondTTLBlocks` re-challenge decay (G4) | **`-bond-ttl` off** | ✓ | **✗** | **BROKEN (High, RT-2)** — blocked on renewal path (§3) |
+| S3 | Objective bond weight across TIME | release-and-coast amortization (RT-2) | `BondTTLBlocks` re-challenge decay (G4) + **non-proposer renewal path (H2)** + `effectiveBondTTL` default-on | **`-bond-ttl` derived-on for untrusted objective** ✓ | ✓ | ✓ | **held (H2)** — attest-only validators renew without proposing; released bond decays |
 | S4 | Consensus quorum (propose/attest) | honest-majority false; shed metric Sybil-inflatable; rep not slashable | rep-weighted quorum, MinProposer/AttesterRep, training wheels + `Mature()` (`core/chain`) | quorum not sized at BFT threshold; shed on head-count | — | — | **weak (Memo 05)**: size quorum at 2f+1/3f+1; shed on cost-to-corrupt over bond-distinct operators |
 | S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery (B2/B4/J1) | plain Kademlia, NodeID=H(pk), free minting, no IP diversity (`core/dht`) | no S/Kad disjoint paths, no IP-diversity buckets, no wide-region | — | — | **open (Memo 08)** — adopt-now stack re-prices by orders of magnitude |
 | S6 | Takedown / revocation | global switch | per-operator opt-in, quorum-gated, existence-checked, un-revocable (`core/chain`, `core/denylist`) | honor-revocations off ✓ | — | ✓ | **held** (red team DENIED); missing CT-log + non-globality metric (Memo 04) |
@@ -166,21 +175,37 @@ security item must also add its **Invariant B default-denies-attack test**.
   recent chain state (not `n.rid`); add chunk-owner dedup to the balance credit.
 
 - **H2 — Non-proposer bond renewal path, THEN default `-bond-ttl` on (RT-2, High).
-  Invariant B (and unblocks §3 coupling).**
-  Add a renewal path so an attest-only validator submits a fresh `BondReg` for inclusion
-  by whoever proposes next (mirror `pendingSlashes`); only then add `DerivedBondTTL` +
-  auto-enable on the untrusted objective posture (or fail-closed on `-bond-ttl 0`).
-  *Exit:* a sim where an attest-only validator sustains standing across many rounds
-  **with TTL on** (proves no liveness regression); an inverted PoC
-  (`TestRedteamCoastTTLZero*` → released plot decays out); Invariant-B test asserts the
-  untrusted default prunes a released bond.
+  Invariant B (and unblocks §3 coupling). ✅ DONE.**
+  Added the renewal path: `node.SubmitBondRenewal` broadcasts a fresh self-signed
+  `BondReg` (new `MsgSubmitBondReg`); a receiver queues it (`pendingBondRegs`, keyed by
+  validator, latest wins) after re-verifying it for the current head
+  (`chain.ValidateBondReg`); `proposeBlock` folds the queued peer regs — deterministically
+  sorted, re-filtered for the head so one stale reg can't poison the block — into the next
+  block, exactly mirroring `pendingSlashes`. The chain already verified each reg against
+  its *own* identity (`validateBondReg`), so no proposer-owns-its-regs assumption blocked
+  peer inclusion. The chain-sync sweep (`chainSyncTick`) drives renewal, so an attest-only
+  validator renews without proposing. Only then `DerivedBondTTL` + `effectiveBondTTL`
+  auto-enable on the untrusted objective posture (mirrors the floor; explicit `-bond-ttl 0`
+  is the trusted opt-out).
+  *Delivered exit criteria:* sim `TestObjectiveBondRenewalSustainsAttestOnlyValidator`
+  (attest-only validator sustains standing across many TTL windows via the wire renewal
+  path — no liveness regression — while a released validator is pruned); inverted PoC
+  `core/node/redteam_rt2_test.go::TestRedteamRT2_ReleaseAndCoast` (TTL off ⇒ coast
+  survives, the vuln; TTL on ⇒ released plot decays out); Invariant-B test
+  `cmd/silt/invariant_b_test.go::TestInvariantB_S3_BondTTLPrunesReleasedBondByDefault`
+  (+ `TestBondTTLDefaultsOnForUntrustedValidator`) asserts the untrusted default turns the
+  TTL on.
 
 ### P1 — the systemic guardrails (do alongside P0 so P0 lands against the system)
 
 - **H3 — Write the enumerate-all-standing-presses Invariant-A test + the
-  default-denies-attack Invariant-B harness.** The structural guardrail so a new press
-  or an off-by-default mechanism cannot ship. *Exit:* both harnesses exist, cover S1/S2/
-  S3, and fail loudly if a press skips identity-binding or a default admits the attack.
+  default-denies-attack Invariant-B harness. ✅ DONE.** `core/credit/invariant_a_test.go`
+  (reflection guard forces every `*Ledger` method to be classified; behavioral guard
+  proves no non-`mints` press lifts a bondless identity; the sole `mints` press asserted
+  identity-bound/deduped/bond-gated — covers S1 grant + S2 no-grant) and
+  `cmd/silt/invariant_b_test.go` (default untrusted-validator config denies the attack —
+  S1 floor on, S3 TTL on post-H2; S2 denied structurally by Invariant A). Both fail loudly
+  if a new press skips classification or a mechanism ships off-by-default.
 
 - **H4 — Consensus quorum sizing + shed metric (Memo 05).** Size `Quorum` at the
   Byzantine threshold (2f+1 of 3f+1); replace the head-count shed trigger with
@@ -227,6 +252,13 @@ security item must also add its **Invariant B default-denies-attack test**.
   not yet run over a real wire — `M0-FIELD-TEST-REPORT.md` §11 is a step-by-step build
   guide (needs a gated `-adversary` test-only daemon flag). Convergence/fault/restart
   (liveness) already PASS on a real 5-container wire.
-- **Don't repeat the traps:** never flip `-bond-ttl` on without H2's renewal path;
-  never call a corner "held" because one surface is hardened — check §4; every new
-  mechanism ships with its Invariant-B default-denies-attack test.
+- **Don't repeat the traps:** the H3 harnesses now enforce this structurally — a new
+  standing press fails `core/credit/invariant_a_test.go` until classified, and an
+  off-by-default mechanism fails `cmd/silt/invariant_b_test.go`. Still: never call a
+  corner "held" because one surface is hardened — check §4; every new mechanism ships
+  with its Invariant-B default-denies-attack test (add a row to the harness).
+- **State after H1+H2+H3:** the Sybil corner's standing surfaces S1/S2/S3 are all held
+  with tests + inverted PoCs + Invariant-A/B guardrails. **Next open backlog:** P1 **H4**
+  (consensus quorum sizing at the Byzantine threshold + a Sybil-robust shed metric, Memo
+  05 — S4 is still `weak`), then P2 **H5** (DHT eclipse, S5 `open`) / **H6** (convergent-
+  encryption default, S8 `weak`). P3 (H7–H9) stays gated on the §6 decisions (D-S7 top).
