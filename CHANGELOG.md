@@ -9,6 +9,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H5-B (DHT eclipse, Memo 08): failure-domain diversity — a single-domain key-surround
+  can't suppress discovery** (2026-08-05) — H5-A stopped provider records being *forged*;
+  this stops them being *suppressed*. An adversary that grinds the NodeIDs closest to a
+  content key (a ~$4 /24 key-surround) could hold every slot a lookup converges on and
+  simply return nothing. Fix, reusing the gossiped failure-domain (`Domain`) signal as the
+  diversity dimension: (1) the routing table caps same-domain peers **per bucket**
+  (`dht.Table.SetDiversity`), so a one-domain Sybil cluster can't fill the buckets near a
+  key and evict honest peers; (2) provider records are announced to a domain-**spread**
+  near set, not just the NodeID-closest (`announceTargets`/`diverseNear`), so honest nodes
+  in other domains hold the record; (3) after the distance walk converges onto the
+  surrounding NodeIDs, resolution **sweeps** that domain-spread set (`sweepProviders`), so
+  the honest holders are actually queried. `DHTDomainCap` gates it (0 = off); default
+  `-dht-domain-cap 2` for the daemon and the ephemeral fetcher. Regression:
+  `core/node/redteam_h5b_test.go` — an adversary grinds the 10 closest NodeIDs to a key
+  (one domain, suppressing); with diversity OFF the key is undiscoverable, with it ON
+  discovery succeeds through honest other-domain nodes; plus unit tests for the
+  domain-spread near set and the per-bucket routing cap. Residual: `Domain` is
+  self-reported — binding it to the transport-observed /24 (or per-AS) is the full-strength
+  hardening. Real-TCP `e2e` green; this completes surface S5 (with H5-A).
 - **H5-A (DHT eclipse, Memo 08): self-certifying provider records — records can't be
   silently forged** (2026-08-05) — DHT provider records were unsigned NodeIDs: a node
   holding the k-closest slots to a content key could fabricate provider records for

@@ -11,6 +11,14 @@ type Table struct {
 	self    ports.NodeID
 	k       int
 	buckets [256][]ports.NodeID // each ordered oldest → newest
+	// Failure-domain diversity (M0 H5-B / Memo 08): when domainOf is set and
+	// perDomainCap > 0, a bucket admits at most perDomainCap peers sharing one
+	// domain, so an adversary minting many NodeIDs in ONE domain (a cheap key-
+	// surround from a single /24) can't fill the buckets near a key and crowd out
+	// the honest, domain-diverse peers a lookup needs. Domain 0 (unknown) is never
+	// capped — an unknown peer is assumed independent (like preferFreshDomain).
+	domainOf     func(ports.NodeID) uint64
+	perDomainCap int
 }
 
 func NewTable(self ports.NodeID, k int) *Table {
@@ -18,6 +26,32 @@ func NewTable(self ports.NodeID, k int) *Table {
 }
 
 func (t *Table) Self() ports.NodeID { return t.self }
+
+// SetDiversity turns on the per-bucket domain cap (H5-B). domainOf resolves a
+// peer's failure domain (0 = unknown); perDomainCap ≤ 0 disables the cap.
+func (t *Table) SetDiversity(domainOf func(ports.NodeID) uint64, perDomainCap int) {
+	t.domainOf = domainOf
+	t.perDomainCap = perDomainCap
+}
+
+// domainSaturated reports whether bucket b already holds perDomainCap peers in
+// id's (known) domain — in which case a NEW peer from that domain is not admitted.
+func (t *Table) domainSaturated(b []ports.NodeID, id ports.NodeID) bool {
+	if t.domainOf == nil || t.perDomainCap <= 0 {
+		return false
+	}
+	d := t.domainOf(id)
+	if d == 0 {
+		return false // unknown domain: assumed independent, never capped
+	}
+	cnt := 0
+	for _, e := range b {
+		if t.domainOf(e) == d {
+			cnt++
+		}
+	}
+	return cnt >= t.perDomainCap
+}
 
 // Observe records that a peer was seen alive. Known peers move to the
 // back (newest). New peers join if the bucket has room; if it's full the
@@ -37,7 +71,7 @@ func (t *Table) Observe(id ports.NodeID) {
 			return
 		}
 	}
-	if len(b) < t.k {
+	if len(b) < t.k && !t.domainSaturated(b, id) {
 		t.buckets[i] = append(b, id)
 	}
 }

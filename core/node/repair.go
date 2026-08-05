@@ -81,8 +81,10 @@ func (n *Node) AnnounceHeld(done func(int)) {
 	n.announceAll(keys, func() { done(held) })
 }
 
-// announceAll plants "I have this" records on the K closest nodes to each
-// placement key.
+// announceAll plants "I have this" records on the nodes near each placement key.
+// With domain diversity on (H5-B) the target set is the K NodeID-closest PLUS a
+// domain-SPREAD near set, so the record also lands on honest nodes in domains an
+// adversary surrounding the closest NodeIDs doesn't control — keeping it findable.
 func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
 	var next func(i int)
 	next = func(i int) {
@@ -92,24 +94,42 @@ func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
 		}
 		id := ids[i]
 		n.IterativeFindNode(id, func(closest []ports.NodeID) {
+			targets := n.announceTargets(id, closest)
 			var send func(j int)
 			send = func(j int) {
-				if j == len(closest) {
+				if j == len(targets) {
 					next(i + 1)
 					return
 				}
-				if closest[j] == n.id {
+				if targets[j] == n.id {
 					send(j + 1)
 					return
 				}
 				rec := n.providerRecord(id) // self-certifying announcement (H5)
-				n.request(closest[j], ports.Message{Kind: ports.MsgAddProvider, Target: id, Provider: &rec},
+				n.request(targets[j], ports.Message{Kind: ports.MsgAddProvider, Target: id, Provider: &rec},
 					func(ports.Message, error) { send(j + 1) })
 			}
 			send(0)
 		})
 	}
 	next(0)
+}
+
+// announceTargets is the set of nodes to plant a provider record on: the distance-
+// closest, plus (when domain diversity is on) a domain-spread near set, deduped.
+func (n *Node) announceTargets(key ports.Hash, closest []ports.NodeID) []ports.NodeID {
+	if n.cfg.DHTDomainCap <= 0 {
+		return closest
+	}
+	seen := make(map[ports.NodeID]bool, len(closest))
+	out := make([]ports.NodeID, 0, len(closest)+n.cfg.K)
+	for _, id := range append(append([]ports.NodeID(nil), closest...), n.diverseNear(key, n.cfg.K)...) {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // repairTick sweeps all cared-for roots sequentially, then reschedules
