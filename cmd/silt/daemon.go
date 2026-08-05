@@ -73,7 +73,7 @@ func cmdDaemon(args []string) error {
 	minBondFloor := fs.String("min-bond-floor", "0", "anti-release floor (M0 F1/F2): a bond smaller than this earns NO standing, because it could be released and re-plotted inside the challenge window. Set it ABOVE (challenge-window × plot-throughput): at ~270 MB/s and this daemon's ~2s window that is ~540 MiB, so a real open deployment sets e.g. 1G. 0 = off (safe only for a trusted/demo swarm)")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	bondLabelK := fs.Int("bond-label-k", 64, "labeling-consistency opens per bond challenge (M0 Sybil G2): each recomputes one block's label from its DRSample parents, so a prover holding arbitrary/reused/wrong-size bytes (not a real plot for its identity+size) fails. Soundness error ≤ (1-ε)^k against an ε-short prover. A per-network knob — prover and verifier must MATCH (like -bond-vdf), so set it uniformly across the swarm. Lower it only to shrink on-chain proof size, at a soundness cost. 0 = default (64)")
-	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. 0 = off (standing never expires; safe only for a trusted/demo swarm)")
+	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4 / RT-2): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. LEFT UNSET it defaults ON for an untrusted objective validator (derived cadence); an explicit 0 disables it (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
@@ -164,10 +164,13 @@ func cmdDaemon(args []string) error {
 	// recomputed just-in-time. At the measured ~270 MB/s plot throughput
 	// (bond.BenchmarkSeal) and this daemon's ~2s window that is ~540 MiB, so the
 	// default carries ~2x margin.
-	floorSet := false
+	floorSet, ttlSet := false, false
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "min-bond-floor" {
+		switch f.Name {
+		case "min-bond-floor":
 			floorSet = true
+		case "bond-ttl":
+			ttlSet = true
 		}
 	})
 	explicitFloor, ferr := parseSize(*minBondFloor)
@@ -182,6 +185,17 @@ func cmdDaemon(args []string) error {
 	effFloor, defaulted := effectiveBondFloor(floorSet, explicitFloor, objectivePath)
 	if defaulted {
 		fmt.Printf("bond: anti-release floor defaulted to %d MiB for this untrusted (objective) swarm — a smaller plot could be released and re-plotted inside the challenge window. Override with -min-bond-floor (0 disables; safe only for a trusted/demo swarm).\n", effFloor>>20)
+	}
+	// The bond TTL gets the same safe-by-default treatment as the floor (H2 / RT-2):
+	// left OFF it admitted release-and-coast — a validator registers a bond once,
+	// releases the plot, and keeps voting forever off a single one-time proof. On
+	// the objective path it now decays un-renewed standing by default; the paired
+	// non-proposer renewal path (node.SubmitBondRenewal, driven by the chain-sync
+	// sweep) lets an honest attest-only validator renew without proposing, so the
+	// default costs no liveness.
+	effTTL, ttlDefaulted := effectiveBondTTL(ttlSet, *bondTTL, objectivePath)
+	if ttlDefaulted {
+		fmt.Printf("bond: objective re-challenge TTL defaulted to %d blocks for this untrusted (objective) swarm — standing lapses this many blocks after a validator's latest bond proof unless it renews, so a released plot can't keep voting. Override with -bond-ttl (0 disables; safe only for a trusted/demo swarm).\n", effTTL)
 	}
 	if effFloor > 0 {
 		cfg.MinBondBytes = effFloor
@@ -322,7 +336,7 @@ func cmdDaemon(args []string) error {
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			Anchors: anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
-			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: *bondTTL,
+			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
 		}, ledger.Reputation)
 		if *allowPublisher {
 			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
@@ -934,6 +948,34 @@ func effectiveBondFloor(floorSet bool, explicit int64, objectivePath bool) (floo
 	}
 	if objectivePath {
 		return DerivedBondFloor, true
+	}
+	return explicit, false
+}
+
+// DerivedBondTTL is the objective re-challenge cadence an untrusted (objective)
+// validator gets when the operator sets none: standing lapses this many committed
+// blocks after a validator's latest on-chain bond registration unless it renews
+// with a fresh space-time proof (M0 hardening H2 / red-team RT-2). Shipping the
+// TTL mechanism but defaulting it OFF left release-and-coast live — a validator
+// registers a bond once, releases the plot, and votes forever off one proof — so
+// like -objective and -min-bond-floor it is now SAFE-BY-DEFAULT on the objective
+// path. The value trades liveness margin against how long a released bond can
+// coast: the paired non-proposer renewal path (node.SubmitBondRenewal) fires
+// every chain-sync sweep, so an honest validator gets many inclusion chances per
+// window and never lapses, while a coaster is pruned within this many blocks. A
+// tuning knob (Evolving), not a fixed law; a real deployment can tighten it.
+const DerivedBondTTL = uint64(32)
+
+// effectiveBondTTL decides the objective re-challenge TTL, mirroring
+// effectiveBondFloor: an explicit -bond-ttl always wins (including 0, the
+// trusted/demo opt-out), otherwise the untrusted objective path gets
+// DerivedBondTTL and every other posture stays at the explicit (0) value.
+func effectiveBondTTL(ttlSet bool, explicit uint64, objectivePath bool) (ttl uint64, defaulted bool) {
+	if ttlSet {
+		return explicit, false
+	}
+	if objectivePath {
+		return DerivedBondTTL, true
 	}
 	return explicit, false
 }

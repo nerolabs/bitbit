@@ -236,14 +236,15 @@ a regression (build-immutable).
    parameters and parent-correlation needs the DFKP'15 / Fisch'19 pebbling reduction
    instantiated for silt's exact graph. **External derivation required (B8) before
    fixing production `k`.**
-2. **On-chain proof size — and a dependency.** The asymmetric-`k` mitigation leans on
-   on-chain standing also decaying via `BondTTLBlocks` plus continuous live re-audit.
-   **`BondTTLBlocks` cannot currently be enabled by default**: bond renewal happens only
-   when a validator *proposes* (`core/node/chainrole.go`), and proposing is
-   event-driven, so an **attest-only validator would never renew and would lapse**,
-   costing the quorum its standing. **A renewal path for non-proposers is a
-   prerequisite** for the accumulation argument (e.g. submit a `BondReg` for inclusion
-   by whoever proposes next, mirroring `pendingSlashes`).
+2. **On-chain proof size — and a dependency (RESOLVED, H2).** The asymmetric-`k`
+   mitigation leans on on-chain standing also decaying via `BondTTLBlocks` plus continuous
+   live re-audit. This was blocked because bond renewal happened only when a validator
+   *proposes* (`core/node/chainrole.go`), so an attest-only validator would lapse. **H2
+   (RT-2) built the non-proposer renewal path** — `node.SubmitBondRenewal` submits a fresh
+   `BondReg` (`MsgSubmitBondReg`) for inclusion by whoever proposes next (mirroring
+   `pendingSlashes`), and `BondTTLBlocks` is now safe-by-default on the untrusted objective
+   posture (`effectiveBondTTL`). The renewal-path prerequisite for the accumulation
+   argument is therefore met; see `docs/design/m0-hardening-strategy.md` §3, §7 H2.
 3. **Plot throughput `B`.** The 1 GiB floor scales linearly in `B`; `~270 MB/s` should
    be re-measured on target hardware with indegree-4 DRSample.
 4. **Migration.** v2 plots must re-plot to v3. The format guard forces it, but the

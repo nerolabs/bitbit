@@ -56,3 +56,29 @@ func (n *Node) RegisterBondReg(prev ports.Hash) (chain.BondReg, bool) {
 	}
 	return chain.NewBondReg(n.signer, n.bond.Root, n.bond.Size, answer, prev), true
 }
+
+// SubmitBondRenewal broadcasts a fresh self-signed bond registration to peers so
+// whichever one proposes next folds it into a block — the NON-PROPOSER renewal
+// path (H2 / red-team RT-2). It is the liveness half of a bond TTL: an attest-only
+// validator that still holds its plot can answer the fresh challenge and so keeps
+// its objective standing without ever proposing, while a validator that RELEASED
+// its plot (the release-and-coast attack) cannot produce the proof and decays out.
+// No-op off the objective path or with no bond/signer. Fire-and-forget: a dropped
+// submission is retried on the next sweep, and one inclusion resets the TTL clock.
+func (n *Node) SubmitBondRenewal(peers []ports.NodeID) {
+	if n.chain == nil || !n.chain.Objective() || n.bond == nil || n.signer == nil {
+		return
+	}
+	head, _ := n.chain.Head()
+	reg, ok := n.RegisterBondReg(head)
+	if !ok {
+		return
+	}
+	raw := bondRegEncode(reg)
+	for _, p := range peers {
+		if p == n.id {
+			continue
+		}
+		n.request(p, ports.Message{Kind: ports.MsgSubmitBondReg, Data: raw}, func(ports.Message, error) {})
+	}
+}

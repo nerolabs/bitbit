@@ -9,6 +9,38 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H2 / RT-2 (Sybil, High): bond standing decays across time by default — release-and-
+  coast denied** (2026-08-05) — the blind red team broke the Sybil corner (over the G2
+  fix) through the *time* axis: a validator registered a genuine bond once, **released
+  the plot**, and kept voting forever off that single one-time proof, because the bond
+  TTL (`BondTTLBlocks`) shipped **off by default** — the third "fixed but off by default"
+  instance. It could not simply be flipped on: renewal happened only when a validator
+  *proposed*, so an attest-only validator would never renew and would lapse, costing the
+  quorum its weight (a liveness trap). Fix: a **non-proposer renewal path** —
+  `node.SubmitBondRenewal` broadcasts a fresh self-signed `BondReg` (new
+  `MsgSubmitBondReg`); a receiver re-verifies it for the current head
+  (`chain.ValidateBondReg`) and queues it (`pendingBondRegs`); the next proposer folds the
+  queued peer regs (deterministically ordered, head-filtered so one stale reg can't poison
+  the block) into its block, mirroring `pendingSlashes`. The chain-sync sweep drives
+  renewal, so an attest-only validator renews without ever proposing. **Only then** is the
+  TTL made safe-by-default on the untrusted objective posture (`effectiveBondTTL`, mirroring
+  the anti-release floor; explicit `-bond-ttl 0` is the trusted opt-out). Regressions: sim
+  `TestObjectiveBondRenewalSustainsAttestOnlyValidator` (attest-only validator sustains
+  standing across many TTL windows via the wire renewal path while a released validator is
+  pruned — no liveness regression), `core/node/redteam_rt2_test.go` (TTL off ⇒ coast
+  survives, the vuln; TTL on ⇒ released plot decays out), `cmd/silt/invariant_b_test.go`
+  (the untrusted default turns the TTL on).
+- **H3 (Sybil, systemic): Invariant-A/B guardrails so a standing press or an off-by-default
+  mechanism cannot ship unaudited** (2026-08-05) — the strategy doc's two meta-patterns
+  ("we fix instances, not classes" and "fixed but off by default") each bit us three-plus
+  times (F1→G2→RT-1; F6→F4→G4→RT-2). Turned both classes into compile-and-test obligations:
+  `core/credit/invariant_a_test.go` enumerates every standing-granting press (a reflection
+  guard forces each `*Ledger` method to be classified `mints`/`reduces`/`neutral`; a
+  behavioral guard proves no non-`mints` press lifts a bondless identity; the sole `mints`
+  press — the bond — is asserted identity-bound + deduped + bond-gated), and
+  `cmd/silt/invariant_b_test.go` builds the default untrusted-validator config and asserts
+  it denies the attack per mechanism (S1 anti-release floor on, S3 bond-TTL on). A new
+  press that skips classification or a mechanism that ships off-by-default now fails loudly.
 - **H1 / RT-1 (Sybil, Critical): PoR audits no longer mint consensus standing —
   a disk-less relay farm earns nothing** (2026-08-05) — a fresh blind red-team broke
   the Sybil corner (over the G2 fix) via the proof-of-retrievability audit press:

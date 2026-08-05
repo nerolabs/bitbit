@@ -75,6 +75,8 @@ const (
 	MsgTokenReply        // Data: the blind signature; OK=false if refused
 	MsgGetIssuerKey      // ask a validator for its publish-token issuer public key
 	MsgIssuerKeyReply    // Data: the issuer public key (blindtoken.MarshalPub); OK=false if none
+	MsgSubmitBondReg     // Data: a fresh CBOR BondReg a validator submits for a proposer to include (H2 non-proposer renewal)
+	MsgSubmitBondRegAck  // OK: the renewal was received (queued if valid for the current head)
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:
@@ -182,6 +184,7 @@ func (k MsgKind) String() string {
 		MsgCommitBlock: "CommitBlock", MsgCommitAck: "CommitAck",
 		MsgGetChain: "GetChain", MsgChainReply: "ChainReply",
 		MsgCheckReachability: "CheckReachability", MsgReachabilityReply: "ReachabilityReply",
+		MsgSubmitBondReg: "SubmitBondReg", MsgSubmitBondRegAck: "SubmitBondRegAck",
 	}
 	if int(k) < len(names) && names[k] != "" {
 		return names[k]
@@ -192,7 +195,7 @@ func (k MsgKind) String() string {
 // IsReply reports whether this kind terminates a pending request.
 func (m Message) IsReply() bool {
 	switch m.Kind {
-	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply, MsgTokenReply, MsgIssuerKeyReply:
+	case MsgFindNodeReply, MsgGetProvidersReply, MsgAddProviderAck, MsgStoreChunkAck, MsgFetchChunkReply, MsgHasChunkReply, MsgChallengeReply, MsgAttestReply, MsgCommitAck, MsgChainReply, MsgBondReply, MsgTokenReply, MsgIssuerKeyReply, MsgSubmitBondRegAck:
 		return true
 	}
 	return false

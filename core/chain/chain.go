@@ -491,23 +491,48 @@ func (c *Chain) validateBondRegs(b *Block) error {
 	}
 	nonce := BondRegNonce(b.Prev)
 	for _, r := range b.BondRegs {
-		if len(r.Validator) != ed25519.PublicKeySize {
-			return fmt.Errorf("%w: bond registration has no valid validator key", ErrBadBondReg)
-		}
-		if !ed25519.Verify(ed25519.PublicKey(r.Validator), r.signingBytes(nonce), r.Sig) {
-			return fmt.Errorf("%w: validator %s signature", ErrBadBondReg, r.ValidatorID())
-		}
-		if r.Size < c.cfg.MinBond {
-			return fmt.Errorf("%w: validator %s size %d below MinBond %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBond)
-		}
-		if r.Size < c.cfg.MinBondBytes {
-			return fmt.Errorf("%w: validator %s size %d below anti-release floor %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBondBytes)
-		}
-		if !c.verifyBond(r.Validator, r.Root, r.Size, nonce, r.Answer) {
-			return fmt.Errorf("%w: validator %s space-time proof", ErrBadBondReg, r.ValidatorID())
+		if err := c.validateBondReg(r, nonce); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// validateBondReg runs the per-registration objective checks for a given
+// per-position nonce: a valid validator key, a signature over (root,size,nonce)
+// binding the claim to that identity, a size clearing MinBond and the anti-
+// release floor, and a space-time proof the injected verifier accepts. Shared by
+// validateBondRegs (whole block) and ValidateBondReg (one peer-submitted renewal).
+func (c *Chain) validateBondReg(r BondReg, nonce uint64) error {
+	if len(r.Validator) != ed25519.PublicKeySize {
+		return fmt.Errorf("%w: bond registration has no valid validator key", ErrBadBondReg)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(r.Validator), r.signingBytes(nonce), r.Sig) {
+		return fmt.Errorf("%w: validator %s signature", ErrBadBondReg, r.ValidatorID())
+	}
+	if r.Size < c.cfg.MinBond {
+		return fmt.Errorf("%w: validator %s size %d below MinBond %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBond)
+	}
+	if r.Size < c.cfg.MinBondBytes {
+		return fmt.Errorf("%w: validator %s size %d below anti-release floor %d", ErrBadBondReg, r.ValidatorID(), r.Size, c.cfg.MinBondBytes)
+	}
+	if !c.verifyBond(r.Validator, r.Root, r.Size, nonce, r.Answer) {
+		return fmt.Errorf("%w: validator %s space-time proof", ErrBadBondReg, r.ValidatorID())
+	}
+	return nil
+}
+
+// ValidateBondReg reports whether a single peer-submitted bond renewal would be
+// accepted in a block extending the CURRENT head (H2 non-proposer renewal path).
+// A proposer filters the renewals it received through this before including them,
+// so one stale or forged submission can't poison the whole block; a receiver uses
+// it to drop junk on arrival. False off the objective path (legacy ignores regs).
+func (c *Chain) ValidateBondReg(r BondReg) bool {
+	if !c.objective() {
+		return false
+	}
+	head, _ := c.Head()
+	return c.validateBondReg(r, BondRegNonce(head)) == nil
 }
 
 // validateSlashes verifies a block's on-chain equivocation records (F2): each

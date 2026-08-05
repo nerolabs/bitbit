@@ -5,9 +5,11 @@
 package node
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/nerolabs/silt/core/chain"
 	"github.com/nerolabs/silt/ports"
@@ -81,6 +83,22 @@ func (n *Node) handleChain(from ports.NodeID, msg ports.Message) bool {
 	case ports.MsgGetChain:
 		blocks := n.chain.Blocks(msg.Height)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgChainReply, OK: true, Data: chain.EncodeBlocks(blocks)})
+	case ports.MsgSubmitBondReg:
+		// A peer submitted a fresh bond renewal for us to include when we next
+		// propose (H2 non-proposer renewal). Queue it only if it verifies for our
+		// current head — a stale or forged one is dropped on arrival, and the
+		// submitter resubmits on its next renewal sweep. The reg is self-signed and
+		// self-verifying (bound to the submitter's own key), so accepting a peer's
+		// reg grants standing to the PEER, never to us.
+		if n.chain != nil && n.chain.Objective() {
+			if reg, err := bondRegDecode(msg.Data); err == nil && n.chain.ValidateBondReg(reg) {
+				if n.pendingBondRegs == nil {
+					n.pendingBondRegs = make(map[ports.NodeID]chain.BondReg)
+				}
+				n.pendingBondRegs[reg.ValidatorID()] = reg
+			}
+		}
+		n.reply(from, msg, ports.Message{Kind: ports.MsgSubmitBondRegAck, OK: true})
 	default:
 		return false
 	}
@@ -147,6 +165,27 @@ func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID,
 		if reg, ok := n.RegisterBondReg(b.Prev); ok {
 			b.BondRegs = append(b.BondRegs, reg)
 		}
+	}
+	// Fold in peer-submitted renewals (H2 / RT-2): an attest-only validator can't
+	// propose, so it SUBMITS its fresh BondReg (MsgSubmitBondReg) and whoever
+	// proposes next records it — renewing that validator's TTL clock without it
+	// ever proposing. Include only regs still valid for THIS head (ValidateBondReg),
+	// so one stale or forged submission can't poison the block; sort by validator
+	// id so the block bytes are deterministic. Clear the queue either way — a peer
+	// resubmits on its next renewal sweep, so a dropped stale reg is self-healing.
+	if n.chain.Objective() && len(n.pendingBondRegs) > 0 {
+		fresh := make([]chain.BondReg, 0, len(n.pendingBondRegs))
+		for vid, reg := range n.pendingBondRegs {
+			if vid != n.id && n.chain.ValidateBondReg(reg) {
+				fresh = append(fresh, reg)
+			}
+		}
+		sort.Slice(fresh, func(i, j int) bool {
+			a, b := fresh[i].ValidatorID(), fresh[j].ValidatorID()
+			return bytes.Compare(a[:], b[:]) < 0
+		})
+		b.BondRegs = append(b.BondRegs, fresh...)
+		n.pendingBondRegs = make(map[ports.NodeID]chain.BondReg)
 	}
 	// Record any equivocations we detected on-chain, so every replica evicts the
 	// culprit from the objective set in lockstep (F2). Drop any already recorded.
@@ -321,6 +360,11 @@ func (n *Node) chainSyncTick() {
 				n.chainSyncOnCatchUp(added)
 			}
 		})
+		// Renew objective standing without proposing (H2 / RT-2): submit a fresh
+		// bond proof to the same validator set we reconcile against, so an
+		// attest-only validator sustains its TTL-bound standing. No-op off the
+		// objective path or with no bond.
+		n.SubmitBondRenewal(peers)
 	}
 	n.clock.AfterFunc(n.cfg.ChainSyncInterval, n.chainSyncTick)
 }
@@ -363,4 +407,19 @@ func attDecode(raw []byte) (chain.Attestation, error) {
 		return chain.Attestation{}, fmt.Errorf("bad attestation payload")
 	}
 	return b.Atts[0], nil
+}
+
+// bond renewals ride the same block-CBOR wrapper as attestations, so a submitted
+// BondReg (MsgSubmitBondReg) travels the wire without a new codec.
+func bondRegEncode(r chain.BondReg) []byte {
+	b := chain.Block{Version: chain.BlockVersion, BondRegs: []chain.BondReg{r}}
+	return chain.Encode(&b)
+}
+
+func bondRegDecode(raw []byte) (chain.BondReg, error) {
+	b, err := chain.Decode(raw)
+	if err != nil || len(b.BondRegs) != 1 {
+		return chain.BondReg{}, fmt.Errorf("bad bondreg payload")
+	}
+	return b.BondRegs[0], nil
 }

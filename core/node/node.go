@@ -278,6 +278,13 @@ type Node struct {
 	// and has not yet recorded on-chain; proposeBlock drains them into Block.Slashes
 	// so every replica evicts the culprit from the objective set in lockstep (F2).
 	pendingSlashes []chain.Equivocation
+	// pendingBondRegs are fresh bond renewals PEERS submitted (MsgSubmitBondReg)
+	// that this node will fold into the next block it proposes — the NON-PROPOSER
+	// renewal path (H2 / red-team RT-2). Without it a validator renews its
+	// objective standing only when IT proposes, so with a bond TTL on (RT-2), an
+	// attest-only validator would never renew and would lapse, dropping the
+	// quorum's weight. Keyed by validator id; the latest submission wins.
+	pendingBondRegs map[ports.NodeID]chain.BondReg
 	// attested records the block hash this validator has signed at each height,
 	// so it NEVER signs a second, different block at a height it already
 	// attested — an honest validator does not equivocate, even if two competing
@@ -382,24 +389,25 @@ func (n *Node) dropHosted(id ports.ChunkID) {
 
 func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, store ports.ChunkStore) *Node {
 	n := &Node{
-		cfg:            cfg,
-		id:             id,
-		clock:          clock,
-		tr:             tr,
-		store:          store,
-		table:          dht.NewTable(id, cfg.K),
-		provs:          dht.NewProviders(),
-		pending:        make(map[uint64]*pending),
-		reachable:      make(map[ports.NodeID]ports.Time),
-		reachProbes:    make(map[uint64]*reachProbe),
-		proofs:         make(map[ports.ChunkID]ports.StorageProof),
-		peerDomains:    make(map[ports.NodeID]uint64),
-		peerBonds:      make(map[ports.NodeID]bondInfo),
-		attested:       make(map[uint64]ports.Hash),
-		peerIssuerKeys: make(map[ports.NodeID]*rsa.PublicKey),
-		creditSpent:    make(map[string]bool),
-		serveLoad:      make(map[ports.ChunkID]int),
-		leases:         make(map[ports.ChunkID]ports.Time),
+		cfg:             cfg,
+		id:              id,
+		clock:           clock,
+		tr:              tr,
+		store:           store,
+		table:           dht.NewTable(id, cfg.K),
+		provs:           dht.NewProviders(),
+		pending:         make(map[uint64]*pending),
+		reachable:       make(map[ports.NodeID]ports.Time),
+		reachProbes:     make(map[uint64]*reachProbe),
+		proofs:          make(map[ports.ChunkID]ports.StorageProof),
+		peerDomains:     make(map[ports.NodeID]uint64),
+		peerBonds:       make(map[ports.NodeID]bondInfo),
+		attested:        make(map[uint64]ports.Hash),
+		pendingBondRegs: make(map[ports.NodeID]chain.BondReg),
+		peerIssuerKeys:  make(map[ports.NodeID]*rsa.PublicKey),
+		creditSpent:     make(map[string]bool),
+		serveLoad:       make(map[ports.ChunkID]int),
+		leases:          make(map[ports.ChunkID]ports.Time),
 	}
 	if cfg.Domain != "" {
 		n.domainID = domainHash(cfg.Domain)
