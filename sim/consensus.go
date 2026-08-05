@@ -107,12 +107,13 @@ func Consensus(seed int64, o ConsensusOpts) (ConsensusResult, error) {
 		}
 	}
 
-	// Reputation is history: the established nodes have passed audits
-	// on record; everyone else is a nobody the chain won't listen to.
+	// Standing is EARNED STORAGE: the established nodes hold a proven, identity-
+	// bound bond; everyone else is a nobody the chain won't listen to. PoR audits
+	// no longer mint standing (H1) — only the bond press does — so seed standing
+	// via a distinct bond root per node (64 MiB ⇒ 1024 points, over the bar).
 	for i := 0; i < o.Established; i++ {
-		for a := 0; a < 8; a++ {
-			ledger.RecordAudit(cl.Nodes[i].ID(), ports.HashBytes([]byte{byte(i), byte(a)}), true)
-		}
+		id := cl.Nodes[i].ID()
+		ledger.RecordBondChallenge(id, ports.HashBytes([]byte{byte(i), 0xb0}), 64<<20, true, 1)
 	}
 	validators := make([]ports.NodeID, 0, o.Established)
 	for i := 0; i < o.Established; i++ {

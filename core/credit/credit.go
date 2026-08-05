@@ -204,23 +204,34 @@ const bondUnit = 64 << 10
 
 // Reputation condenses a node's observed history into the number the
 // chain consults (M12). It is built ONLY on evidence a node cannot
-// fabricate:
+// fabricate, and — critically — it is minted by exactly ONE press:
 //
 //   - challenged, identity-bound held storage (bondedBytes, core/bond) —
-//     the Sybil cost: N identities need N real bonds on real disk;
-//   - passed storage audits (por.go), which a liar without the bytes
-//     cannot answer; minus
+//     the Sybil cost: N identities need N real bonds on real disk. This is
+//     the ONLY term that GRANTS standing; minus
 //   - failed audits and failed bond challenges, which bite hard.
 //
-// Self-reported serving (servedBytes / RecordServe) is DELIBERATELY NOT
-// here anymore: a wash-serving Sybil ring can move it freely, so it funds
-// the balance economy and the observatory but buys zero standing. Each
-// validator still computes this from its OWN observations, so lying to
-// one buys nothing with the others.
+// PoR audits (por.go) DO NOT grant Sybil-resistant standing (M0 hardening
+// H1 / red-team RT-1). Plain proof-of-retrievability over shared, erasure-
+// coded content proves POSSESSION of the bytes, not a DISTINCT physical
+// replica: a data-less identity can RELAY a real holder's aggregated
+// response and pass, because the proof is a pure function of (chunkID,
+// challenge, data) — not bound to the prover (see docs/design/
+// m0-hardening-strategy.md §4 S2, research memo 03). So a "+25 per pass"
+// mint let a disk-less Sybil farm reach propose/attest eligibility with
+// ZERO storage. Audits now fund only the BALANCE economy (RecordAudit
+// credits balance) and act as a NEGATIVE integrity signal here — a failed
+// audit on shards you CLAIMED to hold subtracts standing (it can never be
+// Sybil-amplified, since it only ever reduces). Standing that gates
+// consensus rests on the bond alone. Self-reported serving (servedBytes)
+// is likewise not here: it funds the balance economy, not standing.
+//
+// Invariant A (docs/design/m0-hardening-strategy.md §2): no standing
+// without a verified, identity-bound, deduped, bond-gated proof. Only the
+// bond press satisfies it; the audit press is therefore denied a grant.
 func (l *Ledger) Reputation(n ports.NodeID) int64 {
 	a := l.acct(n)
-	return a.bondedBytes/bondUnit +
-		int64(a.auditsPassed)*25 -
+	return a.bondedBytes/bondUnit -
 		int64(a.auditsFailed)*250 -
 		int64(a.bondFails)*250 -
 		int64(a.equivocations)*equivocationSlash

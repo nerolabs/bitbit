@@ -86,11 +86,11 @@ func TestValidatorRefusesToEquivocate(t *testing.T) {
 	}
 	tn.EnableChain(ch, ti.Signer())
 
-	// Give the proposer and target enough standing to propose/attest.
-	for a := 0; a < 8; a++ {
-		ledger.RecordAudit(tid, ports.HashBytes([]byte{1, byte(a)}), true)
-		ledger.RecordAudit(prop.NodeID(), ports.HashBytes([]byte{2, byte(a)}), true)
-	}
+	// Give the proposer and target enough standing to propose/attest via the
+	// BOND press — PoR audits no longer mint standing (H1). Distinct roots per
+	// identity (dedup-safe); 64 MiB ⇒ 1024 points, over the 100 bar.
+	ledger.RecordBondChallenge(tid, ports.HashBytes([]byte{1}), 64<<20, true, 1)
+	ledger.RecordBondChallenge(prop.NodeID(), ports.HashBytes([]byte{2}), 64<<20, true, 1)
 
 	mkProposal := func(name string) *chain.Block {
 		b := &chain.Block{Version: chain.BlockVersion, Height: 1, Prev: g.Hash(), Entries: []ports.Entry{mkEntry(name)}}
