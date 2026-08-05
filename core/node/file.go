@@ -311,14 +311,27 @@ func (n *Node) resolveProviders(id ports.ChunkID, done func([]ports.NodeID)) {
 		}
 	}
 	add(n.acceptedProviderIDs(id, n.provs.Get(id)))
+	finish := func() {
+		dht.SortByDistance(id, acc)
+		done(acc)
+	}
 	w := n.newWalk(ports.MsgGetProviders, id,
 		func(recs []ports.ProviderRecord) bool {
 			add(n.acceptedProviderIDs(id, recs)) // verify each re-served record (H5)
 			return false                         // keep walking: we want all records, not the first
 		},
 		func([]ports.NodeID) {
-			dht.SortByDistance(id, acc)
-			done(acc)
+			// After the distance walk (which converges onto the NodeIDs nearest the
+			// key — the ones an adversary would surround), also sweep a domain-SPREAD
+			// near set (H5-B), so honest cross-domain record-holders are queried and
+			// key-surround can't suppress discovery. No-op when diversity is off.
+			if n.cfg.DHTDomainCap <= 0 {
+				finish()
+				return
+			}
+			n.sweepProviders(id, n.diverseNear(id, n.cfg.K),
+				func(recs []ports.ProviderRecord) { add(n.acceptedProviderIDs(id, recs)) },
+				finish)
 		})
 	w.step()
 }

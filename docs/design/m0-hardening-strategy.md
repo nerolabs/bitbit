@@ -111,7 +111,7 @@ censorship). **Verdict** = held / broken / residual / undecided as of this writi
 | S2 | PoR audit | proof outsourcing/relay (RT-1) | **H1 (landed):** PoR grants **no standing** (removed the `auditsPassed·25` mint — standing = bond only) + challenge is **identity-bound** (`porProverSeed = H(base‖proverID)`); audits fund balance/durability + a negative integrity signal only (`core/credit` `Reputation`, `core/node/por.go`) | grants no standing (n/a) | ✓ (bond-gated; identity-bound) | n/a | **hardened (H1)** — residual colluding-holder recompute re-priced, not closed → sealed replicas (H7) |
 | S3 | Objective bond weight across TIME | release-and-coast amortization (RT-2) | `BondTTLBlocks` re-challenge decay (G4) + **non-proposer renewal path (H2)** + `effectiveBondTTL` default-on | **`-bond-ttl` derived-on for untrusted objective** ✓ | ✓ | ✓ | **held (H2)** — attest-only validators renew without proposing; released bond decays |
 | S4 | Consensus quorum (propose/attest) | honest-majority false; shed metric Sybil-inflatable | **H4:** Byzantine quorum sizing (`RequiredQuorum` = supermajority n−f over the qualified bonded set) + Nakamoto-coefficient `Mature()` (cost-to-corrupt over bond-distinct operators, revertible escape hatch) (`core/chain`) | `-byzantine-quorum` derived-on for untrusted objective ✓ | — | ✓ | **held (H4)** — two quorums always intersect above the fault bound; one operator's many keys can't trip the wheels. Residual: even stake-splitting (documented); rep-not-slashable is the legacy path (objective mode uses the bond, slashable) |
-| S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery + forges records (B2/B4/J1) | **H5-A:** self-certifying signed provider records (`ports.ProviderRecord`, verified on store + on fetch, `RequireSignedProviders`); prefix-diversity routing/announce (H5-B) still to come | signed-providers on ✓ | — | ✓ (forgery) | **partial (H5-A)** — records can no longer be silently forged (signed, key-bound, expiring); **suppression via key-surround still open** → H5-B (IP/prefix-diversity buckets + disjoint-path/wide-region announce) |
+| S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery + forges records (B2/B4/J1) | **H5-A:** self-certifying signed records (`ports.ProviderRecord`, verified on store + fetch, `RequireSignedProviders`). **H5-B:** failure-domain diversity — per-bucket domain cap (`dht.Table.SetDiversity`) + domain-spread announce & resolve (`diverseNear`/`sweepProviders`), `DHTDomainCap` | signed-providers on ✓, `-dht-domain-cap 2` ✓ | — | ✓ | **held (H5)** — records can't be forged (signed, key-bound, expiring) AND a single-domain key-surround can't suppress discovery (record lands on + is found via honest other-domain nodes). Residual: domain is self-reported → bind to transport-observed /24 for full strength |
 | S6 | Takedown / revocation | global switch | per-operator opt-in, quorum-gated, existence-checked, un-revocable (`core/chain`, `core/denylist`) | honor-revocations off ✓ | — | ✓ | **held** (red team DENIED); missing CT-log + non-globality metric (Memo 04) |
 | S7 | Publisher privacy / issuance | deanonymize publisher | publisher-less ledger + ephemeral publish + Chaumian credits (`core/blindtoken`) | publisher-less default ✓ | — | ✓ | **held for shipped layers**; D3 IP+timing **residual (undecided, Memo 01)** |
 | S8 | Convergent-encryption existence oracle | membership oracle for guessable data | convergent `add` default (`core/crypto`) | **convergent is default** | — | ✗ | **weak (Memo 02)** — flip default to `private` + add Proof-of-Ownership |
@@ -255,12 +255,22 @@ security item must also add its **Invariant B default-denies-attack test**.
     (signed record binds to identity/key; a third-party or mis-signed announce is
     rejected at the store; a fetcher drops injected forged / cross-key-replayed records);
     real-TCP `e2e` green (publish + retrieve under strict signing).
-  - **H5-B — eclipse-suppression via prefix diversity. ▹ TODO (follow-up).** Cap
-    peers-per-prefix in the routing buckets and announce/replicate to a prefix-diverse
-    set (reuse the gossiped `Domain` signal, ideally bound to the transport-observed /24),
-    plus disjoint-path/wide-region lookup, so a key stays discoverable when an adversary
-    owns the k-closest NodeIDs but lacks /24 diversity. Exit criterion (discoverability
-    under key-surround) lands here.
+  - **H5-B — eclipse-suppression via failure-domain diversity. ✅ DONE.** Reuses the
+    gossiped `Domain` signal as the diversity dimension. Three parts: (1) the routing
+    table caps same-domain peers PER BUCKET (`dht.Table.SetDiversity`), so a one-domain
+    Sybil cluster can't fill the buckets near a key; (2) provider records are announced to
+    a domain-SPREAD near set, not just the NodeID-closest (`announceTargets` +
+    `diverseNear`), so honest other-domain nodes hold the record; (3) resolution, after
+    the distance walk converges onto the surrounding NodeIDs, SWEEPS the domain-spread
+    near set (`sweepProviders`), so honest holders are queried. `DHTDomainCap` (0 = off);
+    default `-dht-domain-cap 2` for the daemon + ephemeral fetcher. *Delivered exit
+    criterion (discoverability under key-surround):* `core/node/redteam_h5b_test.go`
+    (`TestRedteamH5B_KeyDiscoverableUnderSingleDomainKeySurround` — an adversary grinds the
+    10 NodeIDs closest to a key, all one domain, and suppresses; with diversity OFF the key
+    is undiscoverable, with it ON discovery succeeds via honest other-domain nodes; plus
+    unit tests for `diverseNear` spread and the routing bucket cap). *Residual:* `Domain`
+    is self-reported — bind it to the transport-observed /24 (or per-AS) for full strength
+    (the same "on-chain/observed signal beats self-report" caveat as H4's stake-splitting).
 - **H6 — Convergent-encryption default (Memo 02).** Flip the default to `private`;
   make convergent opt-in-by-signal; add storage-plane Proof-of-Ownership. *Exit:* a
   guessable-plaintext existence-oracle test fails against the new default; a PoW test
@@ -296,10 +306,11 @@ security item must also add its **Invariant B default-denies-attack test**.
   off-by-default mechanism fails `cmd/silt/invariant_b_test.go`. Still: never call a
   corner "held" because one surface is hardened — check §4; every new mechanism ships
   with its Invariant-B default-denies-attack test (add a row to the harness).
-- **State after H1+H2+H3+H4+H5-A:** the Sybil corner's standing surfaces S1/S2/S3, the
-  consensus quorum S4, and provider-record **forgery** (S5) are held with tests + inverted
-  PoCs + Invariant-A/B guardrails. **Next open backlog:** **H5-B** (finish S5 — key-surround
-  *suppression* via prefix-diversity routing/announce, Memo 08) and **H6** (convergent-
-  encryption default → private + Proof-of-Ownership, S8 `weak`, Memo 02). P3 (H7–H9) stays
-  gated on the §6 decisions (D-S7 durability top). The remaining `weak`/`open` surfaces are
-  S5-suppression and S8; S6/S7 are held for shipped layers.
+- **State after H1+H2+H3+H4+H5:** the Sybil corner's standing surfaces S1/S2/S3, the
+  consensus quorum S4, and the DHT provider surface S5 (both forgery AND key-surround
+  suppression) are held with tests + inverted PoCs + Invariant-A/B guardrails. **Next open
+  backlog:** **H6** (convergent-encryption default → private + Proof-of-Ownership, S8
+  `weak`, Memo 02). P3 (H7–H9) stays gated on the §6 decisions (D-S7 durability top). The
+  only remaining `weak`/`open` standing/DHT surface is **S8**; S6/S7 are held for shipped
+  layers. After H6, every §4 surface is held → the internal pass is done and the gate
+  becomes the **external red-team re-verification** (Andrew-run).

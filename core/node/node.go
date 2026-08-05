@@ -123,6 +123,14 @@ type Config struct {
 	// expiry — used by the sim/tests, where the tick clock has no wall meaning;
 	// the daemon sets a real duration.
 	ProviderRecordTTL ports.Duration
+	// DHTDomainCap is the failure-domain diversity cap for eclipse resistance
+	// (M0 H5-B / Memo 08): at most this many peers sharing one domain are kept per
+	// routing bucket, AND provider records are announced to / resolved from a set
+	// spread across domains — so an adversary that owns the NodeIDs closest to a
+	// key but sits in a SINGLE domain (a ~$4 /24 key-surround) cannot suppress
+	// discovery: the record still lands on, and is found via, honest nodes in other
+	// domains. 0 (default) = off (legacy/sim; no diversity constraint).
+	DHTDomainCap int
 }
 
 func DefaultConfig() Config {
@@ -225,6 +233,12 @@ type Node struct {
 	// kept that), but it cannot compute the nonce tag, which is the
 	// whole point of the tag. Exists so audits have someone to catch.
 	liar bool
+	// eclipser models a malicious node holding the NodeIDs closest to a key (a
+	// key-surround): it DROPS provider announcements and returns NO provider
+	// records, so a lookup that reaches only the surrounding NodeIDs finds nothing.
+	// It still answers routing (FindNode), the way a real eclipser routes you
+	// deeper into its own cluster. Adversary/test seam for H5-B (cf. SetLiar).
+	eclipser bool
 	// shrinkLiar makes the node hold only the FIRST block of each shard, then
 	// answer a challenge reporting PorBlocks=1 and proving over that single
 	// block — the red-team F4 "tail-shard shrink" attack. The auditor must
@@ -350,6 +364,10 @@ func (n *Node) SetEphemeral(v bool) { n.ephemeral = v }
 // SetLiar toggles fake-storage behavior (see the liar field).
 func (n *Node) SetLiar(v bool) { n.liar = v }
 
+// SetEclipser toggles provider-record suppression (see the eclipser field) — the
+// H5-B key-surround adversary that owns the NodeIDs closest to a key.
+func (n *Node) SetEclipser(v bool) { n.eclipser = v }
+
 // SetShrinkLiar toggles the F4 tail-shrink attack (see the shrinkLiar field):
 // the node keeps one block per shard and under-reports its block count.
 func (n *Node) SetShrinkLiar(v bool) { n.shrinkLiar = v }
@@ -427,6 +445,12 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 	if cfg.Domain != "" {
 		n.domainID = domainHash(cfg.Domain)
 	}
+	if cfg.DHTDomainCap > 0 {
+		// Cap same-domain peers per routing bucket (H5-B): an adversary can't fill
+		// the buckets near a key with one-domain Sybils, so honest diverse peers
+		// remain routable.
+		n.table.SetDiversity(n.domainOf, cfg.DHTDomainCap)
+	}
 	if rep, ok := store.(ports.CapacityReporter); ok {
 		n.capRep = rep
 		n.peerCaps = make(map[ports.NodeID]capInfo)
@@ -498,6 +522,12 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 
 // handle is the single entry point for every incoming message.
 func (n *Node) handle(from ports.NodeID, msg ports.Message) {
+	// Learn the sender's failure domain BEFORE observing it, so the routing
+	// table's per-domain diversity cap (H5-B) sees the domain on first contact
+	// and a single-domain Sybil cluster can't crowd out honest peers.
+	if msg.Domain != 0 {
+		n.peerDomains[from] = msg.Domain
+	}
 	// Any message is proof of life — but a short-lived client (publish/fetch
 	// that keeps nothing) will vanish, so routing to it only poisons the
 	// table with ghosts; process its message, but don't add it (#43).
@@ -506,9 +536,6 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 	}
 	if msg.CapTotal > 0 {
 		n.peerCaps[from] = capInfo{used: msg.CapUsed, total: msg.CapTotal}
-	}
-	if msg.Domain != 0 {
-		n.peerDomains[from] = msg.Domain
 	}
 	if msg.BondRoot != (ports.Hash{}) && !msg.Ephemeral {
 		n.peerBonds[from] = bondInfo{root: msg.BondRoot, size: msg.BondSize}
@@ -538,17 +565,23 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		})
 	case ports.MsgGetProviders:
 		// Re-serve the SIGNED records (H5), so the fetcher self-certifies each
-		// instead of trusting a bare NodeID list we could have fabricated.
+		// instead of trusting a bare NodeID list we could have fabricated. An
+		// eclipser (H5-B test seam) suppresses the records while still routing.
+		var recs []ports.ProviderRecord
+		if !n.eclipser {
+			recs = n.provs.Get(msg.Target)
+		}
 		n.reply(from, msg, ports.Message{
 			Kind:         ports.MsgGetProvidersReply,
-			ProviderRecs: n.provs.Get(msg.Target),
+			ProviderRecs: recs,
 			Nodes:        n.closestExcluding(msg.Target, from),
 		})
 	case ports.MsgAddProvider:
 		// The announcer vouches for itself with a self-certifying record (H5); a
 		// nil record is the legacy self-vouch (accepted only when not strict).
 		// Fetchers also hash-verify chunk bytes, so a lying provider wastes time.
-		if rec, ok := n.acceptAnnounce(msg.Target, from, msg.Provider); ok {
+		// An eclipser drops the record (H5-B) but still acks, hiding the suppression.
+		if rec, ok := n.acceptAnnounce(msg.Target, from, msg.Provider); ok && !n.eclipser {
 			n.provs.Add(rec)
 		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgAddProviderAck, OK: true})
