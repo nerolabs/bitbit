@@ -45,9 +45,9 @@ func TestPartitionHealsToHeavierFork(t *testing.T) {
 			ch.AppendGenesis(gb)
 		}
 		nd.EnableChain(ch, ident.Signer())
-		for a := 0; a < 8; a++ { // earn standing so each is a qualified validator
-			ledger.RecordAudit(id, ports.HashBytes([]byte{byte(i), byte(a)}), true)
-		}
+		// Earn standing via the BOND press (a distinct root per node) so each is a
+		// qualified validator — PoR audits no longer mint standing (H1).
+		ledger.RecordBondChallenge(id, ports.HashBytes([]byte{byte(i), 0xb0}), 64<<20, true, 1)
 		nodes = append(nodes, nd)
 		ids = append(ids, id)
 	}

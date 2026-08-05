@@ -84,14 +84,34 @@ func verifyStorageProof(p ports.StorageProof, leaf ports.ChunkID) bool {
 	return manifest.VerifyProof(p.Root, leaf, manifest.Proof{Index: p.Index, Total: p.Total, Path: p.Path})
 }
 
-// porChallengeSeed turns the auditor's monotonic request counter into a
-// challenge seed. Freshness only needs to prevent answer replay across
-// sweeps; a prover lacking the bytes cannot answer any seed, predictable or
-// not, so a deterministic seed keeps the sim byte-identical.
+// porChallengeSeed turns the auditor's monotonic request counter into a per-
+// sweep BASE seed. The old comment claimed "a prover lacking the bytes cannot
+// answer any seed" — RT-1 falsified that: a data-less identity cannot COMPUTE a
+// proof, but it can RELAY the proof of an honest holder that can. porProverSeed
+// (below) folds the challenged identity into the seed so a relayed proof fails.
 func porChallengeSeed(nonce uint64) [32]byte {
 	var nb [8]byte
 	binary.BigEndian.PutUint64(nb[:], nonce)
 	return sha256.Sum256(append([]byte("silt/por/challenge/v1"), nb[:]...))
+}
+
+// porProverSeed binds a challenge to the identity being challenged (M0 hardening
+// H1 / red-team RT-1, Invariant A): the seed a prover answers is H(base ‖
+// proverID), so its coefficients are prover-specific. A data-less identity B
+// that relays honest holder A's aggregated (μ, σ) — computed under A's seed —
+// fails B's verify, since B is graded under H(base ‖ B) ≠ H(base ‖ A). This
+// stops the trivial one-proof-to-N-Sybils relay; the deeper "colluding holder
+// recomputes a fresh proof per Sybil" residual is why PoR grants no STANDING at
+// all (see credit.Reputation) — plain PoR over shared content is not Sybil-
+// resistant (docs/design/m0-hardening-strategy.md §4 S2).
+func porProverSeed(base [32]byte, prover ports.NodeID) [32]byte {
+	h := sha256.New()
+	h.Write([]byte("silt/por/challenge/prover/v2"))
+	h.Write(base[:])
+	h.Write(prover[:])
+	var out [32]byte
+	copy(out[:], h.Sum(nil))
+	return out
 }
 
 // porChallenge reconstructs the por.Challenge both sides expand from. blocks
@@ -258,13 +278,13 @@ func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
 	want int, report *AuditReport, done func()) {
 
 	n.resolveProviders(key, func(provs []ports.NodeID) {
-		n.rid++ // draw a fresh, deterministic seed from the request counter
-		seed := porChallengeSeed(n.rid)
+		n.rid++ // draw a fresh, deterministic base seed from the request counter
+		base := porChallengeSeed(n.rid)
 		var answers []challengeAnswer
 		var challengeNext func(i int)
 		challengeNext = func(i int) {
 			if i == len(provs) {
-				n.gradeAnswers(id, porKey, seed, want, answers, report, done)
+				n.gradeAnswers(id, porKey, base, want, answers, report, done)
 				return
 			}
 			p := provs[i]
@@ -272,7 +292,12 @@ func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
 				challengeNext(i + 1)
 				return
 			}
-			n.request(p, ports.Message{Kind: ports.MsgChallenge, ChunkID: id, PorSeed: seed[:], PorCount: porSampleCount},
+			// Per-prover seed (H1): p is challenged under H(base ‖ p), so a proof
+			// relayed from another holder (computed under a different identity's
+			// seed) fails p's verify. p uses PorSeed verbatim, so no prover-side
+			// change is needed.
+			pseed := porProverSeed(base, p)
+			n.request(p, ports.Message{Kind: ports.MsgChallenge, ChunkID: id, PorSeed: pseed[:], PorCount: porSampleCount},
 				func(resp ports.Message, err error) {
 					if err == nil {
 						report.Challenges++
@@ -295,15 +320,17 @@ func (n *Node) auditLeaf(id ports.ChunkID, key ports.Hash, porKey *por.Key,
 // shard to the root, its reported block count checks out, and its aggregated
 // response satisfies the verification equation. Passing earns rent; failing
 // is slashed.
-func (n *Node) gradeAnswers(id ports.ChunkID, porKey *por.Key, seed [32]byte,
+func (n *Node) gradeAnswers(id ports.ChunkID, porKey *por.Key, base [32]byte,
 	want int, answers []challengeAnswer, report *AuditReport, done func()) {
 
 	anyValid := false
 	for _, a := range answers {
 		// Verify over the AUTHORITATIVE block count (want), not the prover's
-		// self-reported one — the prover cannot shrink its own sample space (F4).
+		// self-reported one — the prover cannot shrink its own sample space (F4) —
+		// and under this prover's OWN seed H(base ‖ prover) (H1), so a proof
+		// relayed from another identity fails here.
 		passed := a.valid && blocksOK(a.blocks, want) &&
-			porKey.Verify(id[:], porChallenge(seed, want, porSampleCount), a.proof)
+			porKey.Verify(id[:], porChallenge(porProverSeed(base, a.prover), want, porSampleCount), a.proof)
 		if n.ledger != nil {
 			n.ledger.RecordAudit(a.prover, id, passed)
 		}

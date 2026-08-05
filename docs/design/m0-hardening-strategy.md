@@ -99,7 +99,7 @@ censorship). **Verdict** = held / broken / residual / undecided as of this writi
 | # | Surface | Threat | Mechanism (code) | Shipped default | Inv A | Inv B | Verdict |
 |---|---|---|---|---|---|---|---|
 | S1 | Storage bond → objective weight + rep | Sybil: N ids < N storage | v3 labeling PoS (G2) + per-root dedup (F1) + anti-release floor (G4) + read-bound VDF (F2) | floor auto-on ✓ | ✓ (sha256(PK)==id, labels from H(pk,n)) | partial | **held** (plot primitive; awaiting external re-verify) |
-| S2 | **PoR audit → +25 rep/pass** | proof outsourcing/relay (RT-1) | `porKey.Verify(chunkID, challenge, proof)` — no prover id; public monotonic seed; no dedup; no bond gate (`core/node/por.go`, `core/credit` `RecordAudit`) | always on | **✗** | n/a | **BROKEN (Critical, RT-1)** |
+| S2 | PoR audit | proof outsourcing/relay (RT-1) | **H1 (landed):** PoR grants **no standing** (removed the `auditsPassed·25` mint — standing = bond only) + challenge is **identity-bound** (`porProverSeed = H(base‖proverID)`); audits fund balance/durability + a negative integrity signal only (`core/credit` `Reputation`, `core/node/por.go`) | grants no standing (n/a) | ✓ (bond-gated; identity-bound) | n/a | **hardened (H1)** — residual colluding-holder recompute re-priced, not closed → sealed replicas (H7) |
 | S3 | Objective bond weight across TIME | release-and-coast amortization (RT-2) | `BondTTLBlocks` re-challenge decay (G4) | **`-bond-ttl` off** | ✓ | **✗** | **BROKEN (High, RT-2)** — blocked on renewal path (§3) |
 | S4 | Consensus quorum (propose/attest) | honest-majority false; shed metric Sybil-inflatable; rep not slashable | rep-weighted quorum, MinProposer/AttesterRep, training wheels + `Mature()` (`core/chain`) | quorum not sized at BFT threshold; shed on head-count | — | — | **weak (Memo 05)**: size quorum at 2f+1/3f+1; shed on cost-to-corrupt over bond-distinct operators |
 | S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery (B2/B4/J1) | plain Kademlia, NodeID=H(pk), free minting, no IP diversity (`core/dht`) | no S/Kad disjoint paths, no IP-diversity buckets, no wide-region | — | — | **open (Memo 08)** — adopt-now stack re-prices by orders of magnitude |
@@ -148,16 +148,22 @@ security item must also add its **Invariant B default-denies-attack test**.
 
 ### P0 — live, exploitable, closes the Sybil corner (do first)
 
-- **H1 — Bind the PoR audit to prover identity (RT-1, Critical). Invariant A.**
-  Fold the challenged `NodeID` into the challenge/coefficient derivation so a proof for
-  A does not verify for B; draw the seed from unpredictable recent chain state (not the
-  public monotonic `n.rid`); add a bond-gate + root/chunk-owner dedup to `RecordAudit`
-  so relayed/echoed proofs and data-less identities earn nothing.
-  *Exit:* an inverted PoC (`TestPorProofIsNotBoundToProver` → now DENIED) at unit tier;
-  a sim showing a data-less relay farm earns **0** standing over the wire; the
-  enumerate-all-presses Invariant-A test includes PoR; `Reputation` no longer rises for
-  a prover that holds none of the bytes. **Class-fix, not point-fix:** the same test
-  must assert *every* standing press satisfies Invariant A.
+- **H1 — Bind the PoR audit to prover identity (RT-1, Critical). Invariant A. ✅ DONE
+  (PR #168).** The decisive fix was architectural: **PoR audits grant no Sybil-resistant
+  standing** — removed the `auditsPassed·25` mint from `credit.Reputation`, so standing
+  rests on the bond press alone (plain PoR over shared content is not Sybil-resistant,
+  memo 03). Plus identity-binding: the challenge seed is now `H(base‖proverID)`
+  (`porProverSeed`), so a relayed proof for A fails B's verify. This also removes the
+  denylist/curation weight a bondless farm got (that reads `Reputation`).
+  *Delivered exit criteria:* `core/credit/redteam_rt1_test.go` (audit passes grant 0
+  standing without a bond; **Invariant-A property test** — no positive standing without a
+  bond; failed audits still penalize); `core/node/redteam_rt1_test.go` (relayed proof
+  fails under prover binding); `sim/por_standing_test.go` (a holder passing audits over
+  the wire earns 0 standing without a bond).
+  *Residual (tracked → H7):* a **colluding bonded holder** can still recompute a fresh
+  proof per Sybil to farm *balance* (not standing); closing that needs sealed replicas.
+  *Follow-up hardening (not blocking):* draw the challenge base seed from unpredictable
+  recent chain state (not `n.rid`); add chunk-owner dedup to the balance credit.
 
 - **H2 — Non-proposer bond renewal path, THEN default `-bond-ttl` on (RT-2, High).
   Invariant B (and unblocks §3 coupling).**

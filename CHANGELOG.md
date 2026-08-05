@@ -9,6 +9,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H1 / RT-1 (Sybil, Critical): PoR audits no longer mint consensus standing —
+  a disk-less relay farm earns nothing** (2026-08-05) — a fresh blind red-team broke
+  the Sybil corner (over the G2 fix) via the proof-of-retrievability audit press:
+  `credit.Reputation` added `auditsPassed·25` with **no bond gate**, and the PoR proof
+  was a pure function of `(chunkID, challenge, data)` — not bound to the prover, and
+  challenged with a shared, publicly-derivable seed. So a data-less identity could
+  **relay** an honest holder's aggregated `(μ, σ)`, pass, and reach propose/attest
+  eligibility (100 rep) with **zero storage** — the code's own "a liar without the
+  bytes cannot answer" comment was false (relay doesn't need the bytes, only a holder
+  that has them). Fix (architectural, per `docs/design/m0-hardening-strategy.md`
+  Invariant A + research memo 03: *plain PoR over shared content is not Sybil-
+  resistant*): **PoR audits grant no Sybil-resistant standing** — removed the mint, so
+  standing rests on the identity-bound storage bond alone; audits now fund only the
+  balance economy and remain a *negative* integrity signal (a failed audit still
+  subtracts, and can never be Sybil-amplified). Defense-in-depth: the challenge is now
+  **identity-bound** (`porProverSeed = H(base‖proverID)`), so a relayed proof for one
+  identity fails another's verify. Regressions: `core/credit/redteam_rt1_test.go` (audit
+  passes grant 0 standing without a bond; an **Invariant-A property test** that no press
+  mints standing without a bond; failed audits still penalize), `core/node/redteam_rt1_test.go`
+  (relayed proof denied), `sim/por_standing_test.go` (holder passing audits over the wire
+  earns 0 standing without a bond). Standing-granting sims/tests updated to earn standing
+  via the bond press. **Residual (tracked):** a *colluding bonded holder* can still
+  recompute a proof per Sybil to farm *balance* (not standing) — closing that needs
+  sealed real-content replicas (backlog H7). **Honest status: built + covered, awaiting
+  external re-verification** (B8).
 - **G2 (Sybil, Critical): the storage bond is now a VERIFIED proof-of-space —
   prefix plots can no longer back N standings from one disk** (2026-08-05) — the
   fix-verification red-team broke the Sybil corner a second time, over the F1 fix

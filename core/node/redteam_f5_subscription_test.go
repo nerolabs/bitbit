@@ -82,13 +82,13 @@ func TestF5_ChainRevocationHonoringIsOptIn(t *testing.T) {
 // to this test so it exercises the real Append path.
 func commitRevocation(t *testing.T, ch *chain.Chain, prop ed25519.PrivateKey, repFn func(ports.NodeID) int64, ledger *credit.Ledger, propID ports.NodeID, root ports.Hash) {
 	t.Helper()
-	// Give the proposer + a quorum of attesters standing.
+	// Give the proposer + a quorum of attesters standing via the BOND press —
+	// PoR audits no longer mint standing (H1). Each identity proves a distinct
+	// bond root (dedup-safe); 64 MiB ⇒ 1024 points, well over the 100 bar.
 	atts := []*identity.Identity{identity.FromSeed(3), identity.FromSeed(4), identity.FromSeed(5)}
-	for a := 0; a < 8; a++ {
-		ledger.RecordAudit(propID, ports.HashBytes([]byte{9, byte(a)}), true)
-		for i, at := range atts {
-			ledger.RecordAudit(at.NodeID(), ports.HashBytes([]byte{byte(20 + i), byte(a)}), true)
-		}
+	ledger.RecordBondChallenge(propID, ports.HashBytes([]byte{9}), 64<<20, true, 1)
+	for i, at := range atts {
+		ledger.RecordBondChallenge(at.NodeID(), ports.HashBytes([]byte{byte(20 + i)}), 64<<20, true, 1)
 	}
 	prev, height := ch.Head()
 	rev := &chain.Block{Version: chain.BlockVersion, Height: height, Prev: prev, Revocations: []ports.Hash{root}}
