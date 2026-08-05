@@ -9,6 +9,21 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H6 (privacy, Memo 02): default publish is `private` — no existence oracle for guessable
+  content** (2026-08-05) — convergent encryption derives the key from the plaintext, so the
+  content address is a deterministic function of the plaintext: anyone who GUESSES it can
+  compute the root and look it up to confirm you stored it (the confirmation attack), and
+  it shipped as the DEFAULT. H6 flips the default publish mode to `private` (a random
+  per-file key) across every publish path — `silt add`, `swarm add`, and the web UI — so
+  identical content encrypts differently each time and can't be probed for; convergent is
+  now explicit opt-in and prints a confirmation-attack warning. Regression:
+  `core/pipeline/redteam_h6_test.go` — the attacker computes the convergent root of a
+  guessed plaintext; under convergent a registry probe HITS (the oracle, documented), under
+  the private default it MISSES, and two private uploads of identical content don't even
+  collide. The Memo 02 "Proof-of-Ownership" idea was deliberately not added: a PoW-to-serve
+  gate contradicts silt's capability model (the link/manifest IS the read capability) and
+  possession is already gated by store-time hash verification + PoR audits, so private-by-
+  default is the substantive fix (reasoning recorded in the strategy doc §7 H6).
 - **H5-B (DHT eclipse, Memo 08): failure-domain diversity — a single-domain key-surround
   can't suppress discovery** (2026-08-05) — H5-A stopped provider records being *forged*;
   this stops them being *suppressed*. An adversary that grinds the NodeIDs closest to a

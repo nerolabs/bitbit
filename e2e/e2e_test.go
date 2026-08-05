@@ -252,8 +252,11 @@ func TestBondEarnedStandingCommitsOverTCP(t *testing.T) {
 	var link, lastOut string
 	deadline := time.Now().Add(30 * time.Second)
 	for {
+		// Bond-earned-standing CONSENSUS test, not encryption: pin convergent so each
+		// retry re-proposes the SAME root while the two validators earn mutual
+		// standing (the private default mints a fresh root per attempt — H6).
 		out, err := runClientAllowErr(t, "swarm", "add", src,
-			"-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+			"-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536", "-mode", "convergent")
 		lastOut = out
 		if err == nil {
 			if link = reAnyLink.FindString(out); link != "" {
@@ -323,7 +326,10 @@ func TestChainRevocationCommitsOverTCP(t *testing.T) {
 	var linkStr, lastOut string
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		out, err := runClientAllowErr(t, "swarm", "add", src, "-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536")
+		// Consensus/revocation test, not encryption: pin convergent so each retry
+		// re-proposes the SAME root as the quorum forms (private mints a fresh root
+		// per attempt — H6).
+		out, err := runClientAllowErr(t, "swarm", "add", src, "-peers", bootstrapA, "-registry", regRef, "-chunk-size", "65536", "-mode", "convergent")
 		lastOut = out
 		if err == nil {
 			if linkStr = reAnyLink.FindString(out); linkStr != "" {
