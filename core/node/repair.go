@@ -71,7 +71,7 @@ func (n *Node) AnnounceHeld(done func(int)) {
 		if p, ok := n.proofs[id]; ok {
 			key = placementKey(p.Root, id, p.Column)
 		}
-		n.provs.Add(key, n.id)
+		n.provs.Add(n.providerRecord(key))
 		held++
 		if !seen[key] {
 			seen[key] = true
@@ -102,7 +102,8 @@ func (n *Node) announceAll(ids []ports.ChunkID, done func()) {
 					send(j + 1)
 					return
 				}
-				n.request(closest[j], ports.Message{Kind: ports.MsgAddProvider, Target: id},
+				rec := n.providerRecord(id) // self-certifying announcement (H5)
+				n.request(closest[j], ports.Message{Kind: ports.MsgAddProvider, Target: id, Provider: &rec},
 					func(ports.Message, error) { send(j + 1) })
 			}
 			send(0)

@@ -108,6 +108,21 @@ type Config struct {
 	// 0 resolves to bond.DefaultLabelSamples (64) — the check is never disabled by
 	// leaving it unset (safe-by-default; sims/tests inherit the full k).
 	BondLabelSamples int
+	// RequireSignedProviders makes this node reject provider records that are not
+	// self-certifying (M0 H5 / Memo 08): on announce it stores/re-serves only
+	// signed records, and a fetch discards any provider record whose signature
+	// doesn't verify — so a node holding the k-closest slots to a key cannot
+	// fabricate provider records for identities that never announced. Off by
+	// default (legacy/sim: unsigned records flow); the daemon defaults it ON for an
+	// untrusted swarm. Requires the node's signing key (SetSigner) to produce its
+	// own signed records.
+	RequireSignedProviders bool
+	// ProviderRecordTTL, when > 0, stamps signed provider records with an expiry
+	// this far ahead of the clock, so a re-served record also proves FRESHNESS
+	// (an eclipsing node can't replay an ancient claim forever). 0 (default) = no
+	// expiry — used by the sim/tests, where the tick clock has no wall meaning;
+	// the daemon sets a real duration.
+	ProviderRecordTTL ports.Duration
 }
 
 func DefaultConfig() Config {
@@ -522,15 +537,20 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			Nodes: n.closestExcluding(msg.Target, from),
 		})
 	case ports.MsgGetProviders:
+		// Re-serve the SIGNED records (H5), so the fetcher self-certifies each
+		// instead of trusting a bare NodeID list we could have fabricated.
 		n.reply(from, msg, ports.Message{
-			Kind:      ports.MsgGetProvidersReply,
-			Providers: n.provs.Get(msg.Target),
-			Nodes:     n.closestExcluding(msg.Target, from),
+			Kind:         ports.MsgGetProvidersReply,
+			ProviderRecs: n.provs.Get(msg.Target),
+			Nodes:        n.closestExcluding(msg.Target, from),
 		})
 	case ports.MsgAddProvider:
-		// The announcer vouches for itself; fetchers verify hashes, so
-		// false claims waste time but can't corrupt anything.
-		n.provs.Add(msg.Target, from)
+		// The announcer vouches for itself with a self-certifying record (H5); a
+		// nil record is the legacy self-vouch (accepted only when not strict).
+		// Fetchers also hash-verify chunk bytes, so a lying provider wastes time.
+		if rec, ok := n.acceptAnnounce(msg.Target, from, msg.Provider); ok {
+			n.provs.Add(rec)
+		}
 		n.reply(from, msg, ports.Message{Kind: ports.MsgAddProviderAck, OK: true})
 	case ports.MsgStoreChunk:
 		if n.freeload || (msg.Proof != nil && n.isDenied(msg.Proof.Root)) {
@@ -554,7 +574,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			if msg.Proof != nil {
 				n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
 			}
-			n.provs.Add(key, n.id)
+			n.provs.Add(n.providerRecord(key))
 			n.reply(from, msg, ports.Message{Kind: ports.MsgStoreChunkAck, OK: true})
 			return
 		}
@@ -564,7 +584,7 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 				ok = false
 			} else {
 				n.Stats.ChunksReceived++
-				n.provs.Add(key, n.id) // we are now a provider
+				n.provs.Add(n.providerRecord(key)) // we are now a provider
 				if msg.Proof != nil {
 					n.proofs[msg.ChunkID] = copyProof(*msg.Proof)
 					if n.proofStore != nil { // persist so a restart re-announces under the right key (#69)
@@ -676,13 +696,13 @@ type walk struct {
 	l           *dht.Lookup
 	kind        ports.MsgKind
 	target      ports.Hash
-	onProviders func([]ports.NodeID) bool // optional; true = stop the walk
-	done        func([]ports.NodeID)      // fires at most once
+	onProviders func([]ports.ProviderRecord) bool // optional; true = stop the walk
+	done        func([]ports.NodeID)              // fires at most once
 	finished    bool
 }
 
 func (n *Node) newWalk(kind ports.MsgKind, target ports.Hash,
-	onProviders func([]ports.NodeID) bool, done func([]ports.NodeID)) *walk {
+	onProviders func([]ports.ProviderRecord) bool, done func([]ports.NodeID)) *walk {
 	return &walk{
 		n:           n,
 		l:           dht.NewLookup(target, n.cfg.K, n.cfg.Alpha, n.table.Closest(target, n.cfg.K)),
@@ -715,7 +735,7 @@ func (w *walk) step() {
 				for _, id := range resp.Nodes {
 					w.n.table.Observe(id)
 				}
-				if w.onProviders != nil && len(resp.Providers) > 0 && w.onProviders(resp.Providers) {
+				if w.onProviders != nil && len(resp.ProviderRecs) > 0 && w.onProviders(resp.ProviderRecs) {
 					w.finished = true // caller has what it needs
 					return
 				}

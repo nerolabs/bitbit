@@ -65,10 +65,10 @@ func TestReprovideAfterRestartUsesColumnKey(t *testing.T) {
 
 	// With the reloaded proof: announced under the column key (correct).
 	n := newNode(true)
-	if !has(n.provs.Get(colendkey), n.id) {
+	if !has(n.provs.IDs(colendkey), n.id) {
 		t.Fatalf("after restart, expected self as provider under the column key")
 	}
-	if has(n.provs.Get(ports.Hash(chunk.ID)), n.id) {
+	if has(n.provs.IDs(ports.Hash(chunk.ID)), n.id) {
 		t.Fatalf("must NOT announce a coded shard under its bare id (the #69 bug)")
 	}
 
@@ -76,10 +76,10 @@ func TestReprovideAfterRestartUsesColumnKey(t *testing.T) {
 	// — undiscoverable to a reader walking to the column key. This is what the
 	// persistence fixes.
 	bug := newNode(false)
-	if has(bug.provs.Get(colendkey), bug.id) {
+	if has(bug.provs.IDs(colendkey), bug.id) {
 		t.Fatalf("without the proof it should not find the column key")
 	}
-	if !has(bug.provs.Get(ports.Hash(chunk.ID)), bug.id) {
+	if !has(bug.provs.IDs(ports.Hash(chunk.ID)), bug.id) {
 		t.Fatalf("without the proof the old code announces under the bare id")
 	}
 }

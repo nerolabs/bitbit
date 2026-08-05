@@ -310,11 +310,11 @@ func (n *Node) resolveProviders(id ports.ChunkID, done func([]ports.NodeID)) {
 			}
 		}
 	}
-	add(n.provs.Get(id))
+	add(n.acceptedProviderIDs(id, n.provs.Get(id)))
 	w := n.newWalk(ports.MsgGetProviders, id,
-		func(ps []ports.NodeID) bool {
-			add(ps)
-			return false // keep walking: we want all records, not the first
+		func(recs []ports.ProviderRecord) bool {
+			add(n.acceptedProviderIDs(id, recs)) // verify each re-served record (H5)
+			return false                         // keep walking: we want all records, not the first
 		},
 		func([]ports.NodeID) {
 			dht.SortByDistance(id, acc)

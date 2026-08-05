@@ -74,6 +74,8 @@ func cmdDaemon(args []string) error {
 	minBondFloor := fs.String("min-bond-floor", "0", "anti-release floor (M0 F1/F2): a bond smaller than this earns NO standing, because it could be released and re-plotted inside the challenge window. Set it ABOVE (challenge-window × plot-throughput): at ~270 MB/s and this daemon's ~2s window that is ~540 MiB, so a real open deployment sets e.g. 1G. 0 = off (safe only for a trusted/demo swarm)")
 	bondAudit := fs.Duration("bond-audit", 60*time.Second, "how often a validator challenges its peers' bonds and refreshes its own standing")
 	bondLabelK := fs.Int("bond-label-k", 64, "labeling-consistency opens per bond challenge (M0 Sybil G2): each recomputes one block's label from its DRSample parents, so a prover holding arbitrary/reused/wrong-size bytes (not a real plot for its identity+size) fails. Soundness error ≤ (1-ε)^k against an ε-short prover. A per-network knob — prover and verifier must MATCH (like -bond-vdf), so set it uniformly across the swarm. Lower it only to shrink on-chain proof size, at a soundness cost. 0 = default (64)")
+	signedProviders := fs.Bool("signed-providers", true, "self-certifying DHT provider records (M0 H5): a node signs its 'I hold this' announcements with its identity key and re-verifies records served back on lookup, so a node holding the k-closest slots to a key cannot fabricate provider records for identities that never announced. Default ON; =false drops to the legacy unsigned path (trusted/demo swarm only)")
+	signedProviderTTL := fs.Duration("signed-provider-ttl", 30*time.Minute, "freshness window stamped on signed provider records (M0 H5): a re-served record older than this is treated as expired, so an eclipsing node can't replay an ancient claim forever")
 	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4 / RT-2): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. LEFT UNSET it defaults ON for an untrusted objective validator (derived cadence); an explicit 0 disables it (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
@@ -152,6 +154,13 @@ func cmdDaemon(args []string) error {
 	cfg.RequestTimeout = ports.Duration(2 * time.Second) // patient vs the 500ms default (real WAN)
 	cfg.BondAuditInterval = ports.Duration(*bondAudit)
 	cfg.BondLabelSamples = *bondLabelK
+	// Self-certifying provider records (M0 H5): ON by default so a node can't
+	// fabricate DHT provider records for identities that never announced — records
+	// are signed by the provider and re-verified on lookup. Records carry an expiry
+	// (freshness) tied to the wall clock. -signed-providers=false drops to the
+	// legacy unsigned path (a trusted/demo swarm only).
+	cfg.RequireSignedProviders = *signedProviders
+	cfg.ProviderRecordTTL = ports.Duration(*signedProviderTTL)
 	// The anti-release floor is SAFE-BY-DEFAULT on the objective/open path (M0
 	// retest G4-residual). Shipping the mechanism but defaulting it OFF left a
 	// doc-following open validator admitting a sub-floor, releasable bond to full
@@ -218,6 +227,7 @@ func cmdDaemon(args []string) error {
 	}
 	clk := walltime.New(loop)
 	nd := node.New(id, cfg, clk, tr, store)
+	nd.SetSigner(ident.Signer()) // sign self-certifying provider records (H5), not just chain blocks
 
 	// -log/-debug: dlog adds the daemon's own milestones (discovery,
 	// bootstrap) to the same artifact the node and transport narrate to.
@@ -906,8 +916,11 @@ func joinSwarm(peers string) (*ephemeral, func(fn func(done func())) error, erro
 	// so the repair/demand fields are harmless (it never caretakes).
 	cfg := node.DefaultConfig()
 	cfg.RequestTimeout = ports.Duration(2 * time.Second)
+	cfg.RequireSignedProviders = true // reject forged/unsigned provider records on fetch (H5)
+	cfg.ProviderRecordTTL = ports.Duration(30 * time.Minute)
 	nd := node.New(ident.NodeID(), cfg, walltime.New(loop), tr, memstore.New())
-	nd.SetEphemeral(true) // a publish/fetch client that keeps nothing — peers must not route to it (#43)
+	nd.SetSigner(ident.Signer()) // sign self-certifying provider records (H5)
+	nd.SetEphemeral(true)        // a publish/fetch client that keeps nothing — peers must not route to it (#43)
 
 	ps, err := discovery.ParseList(peers)
 	if err != nil {
