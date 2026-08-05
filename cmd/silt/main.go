@@ -124,7 +124,7 @@ func openBackend(storeDir string) (ports.ChunkStore, ports.Registry, error) {
 func cmdAdd(args []string) error {
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
 	storeDir := fs.String("store", ".silt", "store directory")
-	mode := fs.String("mode", "convergent", "encryption mode: convergent (dedups) or private")
+	mode := fs.String("mode", "private", "encryption mode: private (default — a random per-file key, so identical content encrypts differently and can't be probed for) or convergent (a plaintext-derived key that dedups identical content across the network, but lets anyone who GUESSES your exact plaintext confirm you stored it — the confirmation attack; M0 H6, only for non-secret/shared data)")
 	chunkSize := fs.Int("chunk-size", pipeline.DefaultChunkSize, "chunk size in bytes")
 	k := fs.Int("k", erasure.DefaultParams.K, "erasure data shards per stripe")
 	n := fs.Int("n", erasure.DefaultParams.N, "erasure total shards per stripe (any k of n recover)")
@@ -136,6 +136,9 @@ func cmdAdd(args []string) error {
 	m, err := crypto.ParseMode(*mode)
 	if err != nil {
 		return err
+	}
+	if m == crypto.Convergent {
+		fmt.Fprintln(os.Stderr, "warning: -mode convergent dedups identical content but is deterministic — anyone who GUESSES your exact plaintext can confirm you stored it (the confirmation attack). Use it only for non-secret, shared data.")
 	}
 	f, err := os.Open(pos[0])
 	if err != nil {

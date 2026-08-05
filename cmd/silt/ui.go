@@ -395,9 +395,9 @@ func (s *uiServer) apiPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	mode := crypto.Convergent
-	if r.FormValue("mode") == "private" {
-		mode = crypto.Private
+	mode := crypto.Private // H6: private by default — convergent must be opted into explicitly
+	if r.FormValue("mode") == "convergent" {
+		mode = crypto.Convergent
 	}
 
 	e, run, err := joinSwarm(s.selfPeer)

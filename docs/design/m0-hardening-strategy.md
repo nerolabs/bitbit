@@ -114,7 +114,7 @@ censorship). **Verdict** = held / broken / residual / undecided as of this writi
 | S5 | DHT routing / provider records | ~$4 key-surround suppresses discovery + forges records (B2/B4/J1) | **H5-A:** self-certifying signed records (`ports.ProviderRecord`, verified on store + fetch, `RequireSignedProviders`). **H5-B:** failure-domain diversity — per-bucket domain cap (`dht.Table.SetDiversity`) + domain-spread announce & resolve (`diverseNear`/`sweepProviders`), `DHTDomainCap` | signed-providers on ✓, `-dht-domain-cap 2` ✓ | — | ✓ | **held (H5)** — records can't be forged (signed, key-bound, expiring) AND a single-domain key-surround can't suppress discovery (record lands on + is found via honest other-domain nodes). Residual: domain is self-reported → bind to transport-observed /24 for full strength |
 | S6 | Takedown / revocation | global switch | per-operator opt-in, quorum-gated, existence-checked, un-revocable (`core/chain`, `core/denylist`) | honor-revocations off ✓ | — | ✓ | **held** (red team DENIED); missing CT-log + non-globality metric (Memo 04) |
 | S7 | Publisher privacy / issuance | deanonymize publisher | publisher-less ledger + ephemeral publish + Chaumian credits (`core/blindtoken`) | publisher-less default ✓ | — | ✓ | **held for shipped layers**; D3 IP+timing **residual (undecided, Memo 01)** |
-| S8 | Convergent-encryption existence oracle | membership oracle for guessable data | convergent `add` default (`core/crypto`) | **convergent is default** | — | ✗ | **weak (Memo 02)** — flip default to `private` + add Proof-of-Ownership |
+| S8 | Convergent-encryption existence oracle | membership oracle for guessable data | **H6:** default publish mode flipped to `private` (random per-file key) across all publish paths; convergent is explicit opt-in with a confirmation-attack warning (`cmd/silt`, `core/crypto`) | **private is default** ✓ | — | ✓ | **held (H6)** — the default publish is unprobeable (a guessed plaintext yields no deterministic address); convergent's confirmation attack is now an opt-in, documented tradeoff. (PoW-to-serve is *not* additive for silt's capability model — the link IS the read capability; possession is already gated by store-time hash-verify + PoR audits) |
 
 ---
 
@@ -271,10 +271,22 @@ security item must also add its **Invariant B default-denies-attack test**.
     unit tests for `diverseNear` spread and the routing bucket cap). *Residual:* `Domain`
     is self-reported — bind it to the transport-observed /24 (or per-AS) for full strength
     (the same "on-chain/observed signal beats self-report" caveat as H4's stake-splitting).
-- **H6 — Convergent-encryption default (Memo 02).** Flip the default to `private`;
-  make convergent opt-in-by-signal; add storage-plane Proof-of-Ownership. *Exit:* a
-  guessable-plaintext existence-oracle test fails against the new default; a PoW test
-  gates dedup-credit/serve.
+- **H6 — Convergent-encryption default (Memo 02). ✅ DONE.** Flipped the default publish
+  mode to `private` (a random per-file key) across every publish entry point (`silt add`,
+  `swarm add`, the web UI); convergent is now explicit opt-in and emits a confirmation-
+  attack warning. So the default publish is unprobeable: a guessed plaintext no longer
+  yields a deterministic content address to look up. *Delivered exit criterion:*
+  `core/pipeline/redteam_h6_test.go` — the attacker computes the convergent root of a
+  guessed plaintext; under convergent the registry probe HITS (the oracle, documented),
+  under the private default it MISSES, and two private uploads of identical content don't
+  even collide.
+  *On the "Proof-of-Ownership" clause:* deliberately **not** added, because a
+  PoW-to-serve gate contradicts silt's capability model — the link/manifest IS the read
+  capability, so anyone holding it is meant to fetch — and possession is already gated by
+  store-time chunk-hash verification plus PoR audits. Convergent's confirmation attack is
+  inherent to cross-file dedup (an attacker who has the guessed plaintext can complete any
+  ownership proof), so the *only* real fix is not using convergent by default; that is
+  what H6 ships. Recorded here so the clause isn't reopened without new reasoning.
 
 ### P3 — the research-frontier tracks (gated on §6 decisions)
 
@@ -306,11 +318,13 @@ security item must also add its **Invariant B default-denies-attack test**.
   off-by-default mechanism fails `cmd/silt/invariant_b_test.go`. Still: never call a
   corner "held" because one surface is hardened — check §4; every new mechanism ships
   with its Invariant-B default-denies-attack test (add a row to the harness).
-- **State after H1+H2+H3+H4+H5:** the Sybil corner's standing surfaces S1/S2/S3, the
-  consensus quorum S4, and the DHT provider surface S5 (both forgery AND key-surround
-  suppression) are held with tests + inverted PoCs + Invariant-A/B guardrails. **Next open
-  backlog:** **H6** (convergent-encryption default → private + Proof-of-Ownership, S8
-  `weak`, Memo 02). P3 (H7–H9) stays gated on the §6 decisions (D-S7 durability top). The
-  only remaining `weak`/`open` standing/DHT surface is **S8**; S6/S7 are held for shipped
-  layers. After H6, every §4 surface is held → the internal pass is done and the gate
-  becomes the **external red-team re-verification** (Andrew-run).
+- **State after H1+H2+H3+H4+H5+H6: every §4 surface is held.** S1/S2/S3 (Sybil standing),
+  S4 (consensus quorum), S5 (DHT: forgery + key-surround suppression), S6/S7 (for shipped
+  layers), and S8 (existence oracle, now private-by-default) all have shipped mechanisms +
+  tests/inverted-PoCs + the Invariant-A/B guardrails. **The internal hardening pass (P0–P2)
+  is complete.** What remains is (a) the **external red-team re-verification pass**
+  (Andrew-run) — the gate to declaring M0 *held*, not merely hardened — and (b) the P3
+  research-frontier tracks (H7 durability / H8 privacy-metadata / H9 takedown-transparency),
+  which stay gated on the §6 product decisions (D-S7 durability is the top one). The field
+  test's D2 adversarial-consensus sub-suite (a real-wire equivocation/partition/low-bond/
+  forged-block run) is the remaining non-security build item.

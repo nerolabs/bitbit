@@ -78,7 +78,7 @@ func swarmAdd(args []string) error {
 	fs := flag.NewFlagSet("swarm add", flag.ExitOnError)
 	peers := fs.String("peers", "", "bootstrap peers: ID@HOST:PORT[,...] (required)")
 	regURL := fs.String("registry", "", "registry URL (required)")
-	mode := fs.String("mode", "convergent", "encryption mode")
+	mode := fs.String("mode", "private", "encryption mode: private (default — random per-file key, unprobeable) or convergent (dedups identical content but is vulnerable to the guessed-plaintext confirmation attack; M0 H6, non-secret data only)")
 	chunkSize := fs.Int("chunk-size", pipeline.DefaultChunkSize, "chunk size in bytes")
 	tokenQuorum := fs.Int("token-quorum", 0, "publisher privacy: acquire a publish token from this many of the -peers (validators) so the publish carries no Publisher identity (0 = off)")
 	allowPublisher := fs.Bool("allow-publisher", false, "record this node's durable Publisher identity on the entry (permanent linkage; off by default for privacy — prefer -token-quorum or an ungated publish)")
@@ -89,6 +89,9 @@ func swarmAdd(args []string) error {
 	m, err := crypto.ParseMode(*mode)
 	if err != nil {
 		return err
+	}
+	if m == crypto.Convergent {
+		fmt.Fprintln(os.Stderr, "warning: -mode convergent is deterministic — anyone who guesses your exact plaintext can confirm you stored it (confirmation attack). Non-secret/shared data only.")
 	}
 	f, err := os.Open(pos[0])
 	if err != nil {
@@ -118,7 +121,7 @@ func swarmAdd(args []string) error {
 	err = nil
 	if rerr := run(func(done func()) {
 		publish := func(tok *ports.PublishToken) {
-			opts := pipeline.Options{ChunkSize: *chunkSize, Mode: m}
+			opts := pipeline.Options{ChunkSize: *chunkSize, Mode: m, Rand: rand.Reader} // Rand needed for the private default (H6)
 			switch {
 			case tok != nil:
 				opts.Token = tok // unlinkable: no Publisher identity
