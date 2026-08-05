@@ -220,11 +220,11 @@ func TestProvidersDeterministicOrder(t *testing.T) {
 	var added []ports.NodeID
 	for i := 0; i < 10; i++ {
 		id := randID(rng)
-		p.Add(key, id)
-		p.Add(key, id) // dedup
+		p.Add(ports.ProviderRecord{Key: key, ID: id})
+		p.Add(ports.ProviderRecord{Key: key, ID: id}) // dedup
 		added = append(added, id)
 	}
-	got := p.Get(key)
+	got := p.IDs(key)
 	if len(got) != 10 {
 		t.Fatalf("got %d providers, want 10", len(got))
 	}
@@ -234,7 +234,7 @@ func TestProvidersDeterministicOrder(t *testing.T) {
 		}
 	}
 	p.Remove(added[0])
-	for _, id := range p.Get(key) {
+	for _, id := range p.IDs(key) {
 		if id == added[0] {
 			t.Fatal("removed provider still present")
 		}

@@ -401,7 +401,11 @@ func (t *Transport) Send(to ports.NodeID, msg ports.Message) error {
 	}
 	env := envelope{From: t.self[:], Addr: t.advertised(), Relay: t.relayService(), Msg: toWire(msg)}
 	contacts := make(map[string]string)
-	for _, list := range [][]ports.NodeID{msg.Nodes, msg.Providers} {
+	provIDs := make([]ports.NodeID, 0, len(msg.ProviderRecs))
+	for _, r := range msg.ProviderRecs { // H5: provider records carry the IDs now
+		provIDs = append(provIDs, r.ID)
+	}
+	for _, list := range [][]ports.NodeID{msg.Nodes, msg.Providers, provIDs} {
 		for _, id := range list {
 			if a := t.lookupAddrs(id).gossip(); a != "" {
 				contacts[id.String()] = a

@@ -9,6 +9,27 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H5-A (DHT eclipse, Memo 08): self-certifying provider records — records can't be
+  silently forged** (2026-08-05) — DHT provider records were unsigned NodeIDs: a node
+  holding the k-closest slots to a content key could fabricate provider records for
+  identities that never announced, or inject fake providers into the records it re-serves
+  on lookup (the forgery half of the ~$4 key-surround). Fix: `ports.ProviderRecord` is a
+  signed "I hold content under key K" claim bound to the provider's identity
+  (`sha256(pubkey) == ID`) and the key, with an optional expiry. A node signs its own
+  announcements with its identity key (`SetSigner`), the store path (`acceptAnnounce`)
+  rejects any record that isn't a valid self-announce for the queried key,
+  `MsgGetProvidersReply` re-serves the signed records, and a fetcher
+  (`acceptedProviderIDs`) drops any record not signed-for-this-key-and-fresh — so a
+  forged, mis-signed, expired, or cross-key-replayed record is silently discarded, while a
+  fetcher still hash-verifies chunk bytes on receipt. `RequireSignedProviders` is on by
+  default for the daemon (`-signed-providers`); unsigned legacy records still flow when
+  it's off (sim/trusted). Wire: new `ProviderRecord` type + `Provider`/`ProviderRecs`
+  message fields, mirrored in the tcpnet CBOR frame. Regressions: `core/node/redteam_h5_test.go`
+  (a signed record binds to identity+key; a third-party or mis-signed announce is rejected
+  at the store; a fetcher drops injected forged / cross-key records; unsigned records flow
+  only in non-strict mode), real-TCP `e2e` green under strict signing. **Follow-up (H5-B):**
+  the *suppression* half of key-surround (prefix-diversity routing + disjoint-path/wide-
+  region announce, so a key stays discoverable when one /24 owns the k-closest NodeIDs).
 - **H4 (consensus safety, Memo 05): Byzantine quorum sizing + Nakamoto-coefficient shed
   metric** (2026-08-05) — consensus safety rested on a FIXED quorum (default 3) and a
   training-wheels shed triggered by a HEAD-COUNT of distinct validators. Both are Sybil-

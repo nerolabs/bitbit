@@ -51,6 +51,33 @@ type wireMsg struct {
 	PorMu     [][]byte `cbor:"23,keyasint,omitempty"`
 	PorSigma  []byte   `cbor:"24,keyasint,omitempty"`
 	PorBlocks int      `cbor:"25,keyasint,omitempty"`
+	// Self-certifying provider records (H5): Provider on MsgAddProvider,
+	// ProviderRecs on MsgGetProvidersReply.
+	Provider     *wireProvRec  `cbor:"26,keyasint,omitempty"`
+	ProviderRecs []wireProvRec `cbor:"27,keyasint,omitempty"`
+}
+
+// wireProvRec mirrors ports.ProviderRecord with CBOR-friendly []byte fields.
+type wireProvRec struct {
+	Key    []byte `cbor:"1,keyasint"`
+	ID     []byte `cbor:"2,keyasint"`
+	PubKey []byte `cbor:"3,keyasint,omitempty"`
+	Expiry int64  `cbor:"4,keyasint,omitempty"`
+	Sig    []byte `cbor:"5,keyasint,omitempty"`
+}
+
+func toWireRec(r ports.ProviderRecord) wireProvRec {
+	w := wireProvRec{Expiry: r.Expiry, PubKey: r.PubKey, Sig: r.Sig}
+	w.Key = append([]byte(nil), r.Key[:]...)
+	w.ID = append([]byte(nil), r.ID[:]...)
+	return w
+}
+
+func fromWireRec(w wireProvRec) ports.ProviderRecord {
+	r := ports.ProviderRecord{Expiry: w.Expiry, PubKey: w.PubKey, Sig: w.Sig}
+	copy(r.Key[:], w.Key)
+	copy(r.ID[:], w.ID)
+	return r
 }
 
 type wireProof struct {
@@ -87,6 +114,16 @@ func toWire(m ports.Message) wireMsg {
 	}
 	w.Nodes = idsToBytes(m.Nodes)
 	w.Providers = idsToBytes(m.Providers)
+	if m.Provider != nil {
+		r := toWireRec(*m.Provider)
+		w.Provider = &r
+	}
+	if len(m.ProviderRecs) > 0 {
+		w.ProviderRecs = make([]wireProvRec, len(m.ProviderRecs))
+		for i, r := range m.ProviderRecs {
+			w.ProviderRecs[i] = toWireRec(r)
+		}
+	}
 	if len(m.Data) > 0 {
 		w.Data = append([]byte(nil), m.Data...)
 	}
@@ -143,6 +180,16 @@ func fromWire(w wireMsg) ports.Message {
 	copy(m.ChunkID[:], w.ChunkID)
 	m.Nodes = bytesToIDs(w.Nodes)
 	m.Providers = bytesToIDs(w.Providers)
+	if w.Provider != nil {
+		r := fromWireRec(*w.Provider)
+		m.Provider = &r
+	}
+	if len(w.ProviderRecs) > 0 {
+		m.ProviderRecs = make([]ports.ProviderRecord, len(w.ProviderRecs))
+		for i, r := range w.ProviderRecs {
+			m.ProviderRecs[i] = fromWireRec(r)
+		}
+	}
 	m.Nonce = w.Nonce
 	m.CapUsed, m.CapTotal = w.CapUsed, w.CapTotal
 	m.Height = w.Height

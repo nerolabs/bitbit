@@ -10,7 +10,63 @@
 // queue, which is what makes same-seed runs byte-identical.
 package ports
 
-import "fmt"
+import (
+	"crypto/ed25519"
+	"fmt"
+)
+
+// ProviderRecord is a self-certifying "I hold content under key Key" DHT
+// announcement (M0 H5 / Memo 08). The provider signs (Key, its identity, expiry)
+// with its own key, so a storing node — and any fetcher the record is later
+// re-served to — can verify the claim was made by the provider ITSELF and is
+// still fresh, instead of trusting whatever a (possibly eclipsing) intermediary
+// hands back. Without this, a malicious node holding the k-closest slots to a key
+// can fabricate provider records for identities that never announced. ID is the
+// provider's NodeID; PubKey/Sig are nil on an UNSIGNED (legacy/trusted) record,
+// which a strict verifier (RequireSignedProviders) rejects.
+type ProviderRecord struct {
+	Key    Hash   `cbor:"1,keyasint"`
+	ID     NodeID `cbor:"2,keyasint"`
+	PubKey []byte `cbor:"3,keyasint,omitempty"`
+	Expiry int64  `cbor:"4,keyasint,omitempty"`
+	Sig    []byte `cbor:"5,keyasint,omitempty"`
+}
+
+// ProviderSigningBytes is the domain-separated message a provider signs to claim
+// a record — binding the content key, the claimant's own NodeID, and the expiry
+// so a signature made for one (key, identity) can't be replayed onto another.
+func ProviderSigningBytes(key Hash, id NodeID, expiry int64) []byte {
+	b := make([]byte, 0, 24+len(key)+len(id)+8)
+	b = append(b, []byte("silt/dht/provider/v1")...)
+	b = append(b, key[:]...)
+	b = append(b, id[:]...)
+	var e [8]byte
+	for i := 0; i < 8; i++ {
+		e[i] = byte(expiry >> (8 * (7 - i)))
+	}
+	return append(b, e[:]...)
+}
+
+// Signed reports whether the record carries a signature at all.
+func (r ProviderRecord) Signed() bool { return len(r.Sig) > 0 }
+
+// Verify reports whether a signed record is authentic and unexpired at time now:
+// the pubkey hashes to the claimed ID (so the signature is bound to that identity),
+// the expiry (if set) has not passed, and the signature checks out. An UNSIGNED
+// record never verifies — callers that accept legacy records must decide that
+// separately (see RequireSignedProviders).
+func (r ProviderRecord) Verify(now int64) bool {
+	if !r.Signed() || len(r.PubKey) != ed25519.PublicKeySize {
+		return false
+	}
+	if HashBytes(r.PubKey) != r.ID {
+		return false // the signature must bind to the identity it claims to be
+	}
+	if r.Expiry != 0 && now > r.Expiry {
+		return false
+	}
+	return ed25519.Verify(ed25519.PublicKey(r.PubKey), ProviderSigningBytes(r.Key, r.ID, r.Expiry), r.Sig)
+}
 
 // NodeID identifies a node. Same 256-bit space as chunk hashes, which
 // is exactly what Kademlia wants: nodes and content live in one metric
@@ -169,6 +225,13 @@ type Message struct {
 	// identity (M0 privacy D3 / F4). Nil ⇒ the legacy fee-at-request path. Only
 	// honored when the issuer requires credits (Node.RequirePublishCredits).
 	Credit *PublishCredit
+	// Provider is the self-certifying record a node sends on MsgAddProvider to
+	// announce itself under Target (M0 H5). Nil ⇒ the legacy self-vouch path
+	// (the authenticated sender is taken as an unsigned provider). ProviderRecs
+	// carries the signed records back on MsgGetProvidersReply so a fetcher can
+	// verify each instead of trusting the responder's re-served NodeID list.
+	Provider     *ProviderRecord
+	ProviderRecs []ProviderRecord
 }
 
 func (k MsgKind) String() string {
