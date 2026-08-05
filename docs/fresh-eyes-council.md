@@ -98,12 +98,20 @@ distributed-systems / cryptography practitioners; lead with the honest
 headline differentiator — silt is built to **hold the privacy ×
 accountability × Sybil trilemma**, refusing to trade any corner away where
 every prior system surrendered one: work-backed, identity-bound reputation
-with **no token, no coin, no speculation**, and publishing that stays
-cryptographically unlinkable from the standing that earns it. That claim
+with **no token, no coin, no speculation**. Its Sybil-resistance is a systemic
+composition — C1 (no discount: a fraction q of standing costs ≈ q·C_honest,
+where C_honest = disk × address-diversity × time × served-demand) + C2 (no quiet
+capture) — held in tension, not a single Sybil-proof primitive. On privacy, silt
+refuses to surveil (absolute); access-unobservability is a metadata-layer goal
+held in tension (the anonymity trilemma is a hard wall), not a blob-layer
+absolute — the standing that earns a fetch is unlinkable from it at the shipped
+layers, but we do not claim access is never observable. That claim
 separates Silt cleanly from storage-coin projects and from tools that read
-as built for wrongdoing. It is a claim we bind to a falsifiable test — held
-only if an *external* red-team can't achieve any of the three failure modes —
-not a victory we declare. Details in [launch-plan.md](launch-plan.md).
+as built for wrongdoing. It is a claim we bind to a falsifiable test: the C1/C2
+composition claim held in tension, verified by an *external* red-team — some
+seams held-not-closed is a PASS under M0's own definition — not a victory we
+declare. Details in [launch-plan.md](launch-plan.md) and
+[design/m0.md](design/m0.md).
 
 ## Governance & operations
 

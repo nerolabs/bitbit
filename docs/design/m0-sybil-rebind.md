@@ -1,22 +1,30 @@
 # M0 Sybil — rebinding the storage bond to identity and size (G2)
 
-**Status: BUILT, awaiting external red-team re-verification.** The construction
-below shipped in `core/bond` v3 with unit + integration + e2e coverage and the
-red-team PoC inverted as a regression (`core/bond/redteam_g2_test.go`,
-`sim/bond_sybil_g2_test.go`). Per the immutables (B8) the corner is **not held**
-until an external adversary denies it against the built code; the carried open
-risks in §8 (tight `ε→k`, on-chain proof size / asymmetric-`k`) are that
-adversary's targets.
+**Status: BUILT (the S1 storage-bond as-built), awaiting external re-verification.**
+This note is the as-built detail for **one axis** of the M0 composition — **D,
+distinct sealed disk per identity**. Read [`m0.md`](m0.md) first for the systemic
+claim the bond serves; the bond is *not* "the Sybil corner," it is one
+non-substitutable factor in `C_honest` (disk × address-diversity × time × served
+demand). The construction below shipped in `core/bond` v3 with unit + integration +
+e2e coverage and the red-team PoC inverted as a regression
+(`core/bond/redteam_g2_test.go`, `sim/bond_sybil_g2_test.go`).
 
-> **Live verdict.** An external red-team broke the Sybil corner twice: first via a
-> shared-plot Sybil (F1, fixed by per-root dedup) and then — over the fix code — via
-> **prefix plots** (G2), which dedup structurally cannot catch. This note's fix is
-> now built; M0 is held only when all three corners are denied by an external
-> adversary against the *built* code, so treat it as hardened-not-held until that
-> pass returns.
+> **How this fits the systemic target.** This primitive was broken twice as a
+> *standalone* Sybil defense — a shared-plot Sybil (F1, fixed by per-root dedup) and
+> then, over the fix code, **prefix plots** (G2, which dedup structurally cannot
+> catch). That is *expected*: no single primitive is Sybil-proof under free identity
+> + no permanent center (Douceur), so a primitive failing a standalone Sybil-proof
+> test is not an M0 failure. The bond's job is to make axis D real. M0 holds only if
+> the *composition* satisfies C1 + C2 and survives the §7 seams under external
+> re-verification — not when "the Sybil corner is denied." The carried open risks in
+> §8 (tight `ε→k`, on-chain proof size / asymmetric-`k`) are targets for that pass.
 
-Companion docs: [m0-sybil-bond.md](m0-sybil-bond.md) (the F1/F2/F3 structural pass),
-[gate4-m0-mechanism.md](gate4-m0-mechanism.md) (the M0 mechanism spine).
+**This is the S1 (storage-bond) as-built detail** behind the systemic M0 spec —
+read [`m0.md`](m0.md) first for the composition claim this bond serves as one
+axis (D — distinct sealed disk per identity). The earlier finding-by-finding
+design notes (the F1/F2/F3 structural pass and the original Gate-4 mechanism
+spine) are now historical in
+[`/archive/design-history/`](../../archive/design-history/).
 
 ---
 
@@ -244,7 +252,8 @@ a regression (build-immutable).
    `BondReg` (`MsgSubmitBondReg`) for inclusion by whoever proposes next (mirroring
    `pendingSlashes`), and `BondTTLBlocks` is now safe-by-default on the untrusted objective
    posture (`effectiveBondTTL`). The renewal-path prerequisite for the accumulation
-   argument is therefore met; see `docs/design/m0-hardening-strategy.md` §3, §7 H2.
+   argument is therefore met; see [`m0.md`](m0.md) §6 (surface S3) and the
+   archived hardening strategy `archive/design-history/m0-hardening-strategy.md` §3.
 3. **Plot throughput `B`.** The 1 GiB floor scales linearly in `B`; `~270 MB/s` should
    be re-measured on target hardware with indegree-4 DRSample.
 4. **Migration.** v2 plots must re-plot to v3. The format guard forces it, but the

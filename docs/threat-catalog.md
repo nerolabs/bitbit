@@ -11,21 +11,25 @@ suspected-but-unverified in code (verifying these is itself launch work).
 
 A few structural through-lines, stated once:
 
-- **Free identity (Sybil) is the taproot.** Node IDs are `SHA-256(pubkey)`
-  and minting a keypair is free, so most of the worst items below reduce to
-  "an attacker with many cheap identities." Minting stays free, but consensus
-  **standing** now costs token-less, work-backed, identity-bound storage
-  (the challenged bond — T1/#82), so the downstream reputation risks (D1/D3)
-  are priced rather than free. The **real mechanism is now built** (Gate 4):
-  the bond is a proof-of-**space-time** (a space-hard identity-bound plot × a
-  Wesolowski VDF, persisted, N Sybils cost N real disks); the proof-of-retrieval
-  verifies possession **without fetching**; equivocation is slashed and forks
-  reconcile to the heavier-standing chain — proven at unit + sim + real-daemon
-  e2e, with independent review + the multi-machine field test (#52) the
-  remaining bar (residuals labelled: not yet formally depth-robust/memory-hard;
-  §6). A
-  hard proof-of-work / space primitive on *minting* stays deferred; we say so
-  loudly.
+- **Free identity (Sybil) is the taproot — and Sybil-resistance is a
+  *composition*, not a primitive.** Node IDs are `SHA-256(pubkey)` and minting a
+  keypair is free, so most of the worst items below reduce to "an attacker with
+  many cheap identities." Minting stays free; what costs is consensus **standing**.
+  Per the composition reframe ([`design/m0.md`](design/m0.md)), **no single
+  primitive can be Sybil-proof** under free identity + no permanent center
+  (Douceur) — so a primitive failing a standalone "is-it-Sybil-proof?" test is
+  *expected*, not a failure. The guarantee is **systemic: C1 (no discount) + C2 (no
+  quiet capture)**, held in tension, where forging N standings costs N× of *every*
+  non-substitutable resource — `C_honest = disk × address-diversity × time ×
+  served-demand`. The parts that make each axis real are built and internally
+  hardened (Gate 4): an identity-bound proof-of-**space-time** bond over a proven
+  depth-robust graph (axis D), a proof-of-retrieval that verifies possession
+  **without fetching**, signed provider records + failure-domain diversity against
+  key-surround (axis A), and equivocation slashing with forks reconciling to the
+  heavier-standing chain — proven at unit + sim + real-daemon e2e. The internal
+  hardening pass is complete; **external re-verification against the systemic C1/C2
+  claim is the remaining bar.** A hard proof-of-work on *minting* stays deferred;
+  we say so loudly.
 - **Day one is a security parameter.** Nearly every attack is easiest on a
   tiny network — eclipse, quorum capture, version-floor evasion all peak at
   launch, the worst possible moment. The launch strategy is a control, not
@@ -79,9 +83,9 @@ limits operator-configurable with sane defaults.
 **Relay (the public node)**
 - A16 **Relay slot exhaustion / free-CDN abuse** ~ — hold the per-peer splice slots (default raised 8→16, global 64→128 for #65 fan-out), or pump bulk NAT↔NAT bytes on someone else's dime → per-identity slot + byte quotas, throughput timeouts, credit-metering. **Structural relief now BUILT: hole-punching** (#27) upgrades a relay path to a direct connection through cone NAT (proven, CI-gated), so bulk bytes leave the relay entirely — the relay is demoted to rendezvous. Symmetric-NAT peers still relay; per-identity abuse quotas still open.
 
-## B. Sybil / eclipse (the taproot — top open weakness)
-- B1 **Bulk identity minting** ~ — minting keypairs is still free, BUT consensus STANDING now costs challenged, held storage (T1/#82 bond): a fresh identity has no standing until it proves an identity-bound storage bond peers can challenge, so the downstream (D1/D3) is much reduced. PoW/stake on *minting* still deferred; the bond is now a real proof-of-space-time (persisted, identity-bound so N ids need N plots), not yet a formally depth-robust / memory-hard label function — labeled.
-- B2 **Eclipse a key's neighborhood** ✗ — surround a chunk's key to suppress its provider records (censor discovery of one file).
+## B. Sybil / eclipse (the taproot — a composition, not a single primitive)
+- B1 **Bulk identity minting** ~ — minting keypairs is still free; consensus STANDING costs the **composition**, not one primitive. Earning a fraction *q* of standing costs ≈ *q* of every non-substitutable resource — `C_honest = distinct sealed disk × address/AS diversity × elapsed time × served demand` ([`design/m0.md`](design/m0.md) §3). The storage bond (axis D) is a real proof-of-space-time — persisted, identity-bound, over a **proven depth-robust graph** (DRSample, G2) — so one disk cannot back many identities; the other axes are priced by their own parts. A standalone primitive failing "is-it-Sybil-proof?" is expected (Douceur), not a failure. PoW/stake on *minting* still deferred. Awaiting external re-verification of the composition (C1/C2).
+- B2 **Eclipse a key's neighborhood** ~ — surround a chunk's key to suppress its provider records (censor discovery of one file). **Now addressed (H5):** provider records are self-certifying (signed, key-bound, expiring — cannot be forged) and announced/resolved over a failure-domain-diverse near set, so a single-domain key-surround can't suppress discovery. Residual: `Domain` is self-reported — bind to the transport-observed /24 for full strength.
 - B3 **Size-estimate bias** ~ — skew XOR-density estimate via placed identities (the #43 family; partly fixed for ephemeral clients).
 - B4 **Eclipse of new nodes** ✗ — feed a joining node a poisoned peer set (see discovery D-layer, F14).
 

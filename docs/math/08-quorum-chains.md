@@ -33,8 +33,13 @@ bond, and validators challenge each other's bonds over the wire,
 verifying against only the committed Merkle root. Serving alone no
 longer buys standing (two colluding nodes could wash-mint served-bytes
 for free); standing is bond-gated, must be *sustained* (it decays if a
-bond stops being re-proven), so N Sybil identities cost N distinct bonds
-on N disks. So the rule is reputation-weighted quorum:
+bond stops being re-proven). No single primitive here is Sybil-proof:
+M0's Sybil-resistance is a **systemic composition** — C1 (no discount: a
+fraction *q* of standing costs ≈ *q*·C_honest) + C2 (no quiet capture) —
+held in tension, where C_honest = disk × address-diversity × time ×
+served-demand. So N standings cost N× of every non-substitutable resource
+(disk × address-diversity × time × served-demand), not just N distinct
+bonds on N disks. So the rule is reputation-weighted quorum:
 
 ```
 a block commits iff:
@@ -51,13 +56,20 @@ Forge any byte and every signature dies at once (the tamper test in
 
 ## Why the quorum math holds up
 
-- **You can't manufacture standing.** Reputation attaches to
-  NodeID = SHA-256(pubkey). A Sybil flood of fresh keys is a flood of
-  zeros: each new identity must seal and sustain a challenged storage
-  bond (which costs real, held storage on a real disk) before its
-  signature counts. The rate limit on writing history is the rate at
-  which strangers can earn trust — exactly Andrew's rule that "no single
-  node agrees until reputation is highly established."
+- **No cheap standing (composition, not a lone primitive).** Reputation
+  attaches to NodeID = SHA-256(pubkey). The per-primitive claim "you
+  can't manufacture standing" is retired — by Douceur, no single
+  primitive is Sybil-proof, and one failing a standalone Sybil-proof test
+  is expected, not an M0 failure. What holds instead is the **systemic
+  composition** — C1 (no discount: a fraction *q* of standing costs
+  ≈ *q*·C_honest) + C2 (no quiet capture) — held in tension: N standings
+  cost N× of every non-substitutable resource (C_honest = disk ×
+  address-diversity × time × served-demand). The bond (one axis — D — of
+  that composition) is where this note's mechanism bites: each identity
+  must seal and sustain a challenged storage bond before its signature
+  counts. The rate limit on writing history is the rate at which
+  strangers can earn trust — exactly Andrew's rule that "no single node
+  agrees until reputation is highly established."
 - **Validators don't trust each other's arithmetic.** Every replica
   re-validates everything: latecomers syncing the chain re-check every
   signature, reputation, and quorum themselves. A lying peer can waste
@@ -82,13 +94,14 @@ a hosted registry is concrete: no single owner, replicated history,
 tamper-evidence, and gatekeeping by earned standing rather than by
 whoever runs the server.
 
-One more piece of honest fine print: the bond that backs standing is a
-*first cut*. The bond is currently held in RAM and its seal is
-proof-of-*space*-lite — not yet memory-hard, so it is a labeled
-placeholder, not the finished cost function. Hardening it (a
-memory-hard seal, disk-persisted bonds) is a V1 target; the interface
-and the outcome — standing costs sustained, challenged storage — are in
-place today.
+One more piece of honest fine print: the bond that backs standing is
+**one axis (D — distinct sealed disk per identity) of M0's systemic
+composition**, not "the Sybil corner." The earlier RAM-held,
+proof-of-space-*lite* placeholder is stale: post-G2/H2, the
+disk-persisted, byte-bound depth-robust-graph plot **shipped** (see
+[`../design/m0-sybil-rebind.md`](../design/m0-sybil-rebind.md) for the
+bond as-built). The outcome — standing costs sustained, challenged,
+identity-bound storage on a real disk — is in place today.
 
 Code: `core/chain` (blocks, rules), `core/node/chainrole.go` (propose /
 attest / commit / sync), `credit.Reputation` (the standing formula),

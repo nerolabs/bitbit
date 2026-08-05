@@ -33,8 +33,8 @@ To add an entry: drop a new dated file in this directory, run
 
 ## Archived, not an entry
 
-[`genesis-handoff.md`](genesis-handoff.md) is the original project-inception
-brief, kept here as frozen history. It is deliberately **undated**, so the
-generator skips it (like this README) — it is not rendered to the site. It is
-preserved for provenance (several code comments cite "the HANDOFF"); its banner
-flags the fragments that now contradict canon.
+The original project-inception brief (`genesis-handoff.md`) has been moved to
+[`/archive/process/genesis-handoff.md`](../../archive/process/genesis-handoff.md)
+as frozen history — it is preserved for provenance (several code comments cite
+"the HANDOFF"), and its banner flags the fragments that now contradict canon. It
+was never a dated entry, so it was never rendered to the site.

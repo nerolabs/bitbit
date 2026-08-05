@@ -2,7 +2,9 @@
 
 > Status: **canon.** Ratified 2026-08-01 (#54); amended 2026-08-02 to add the
 > mission-immutable (M0), a three-tier structure (immutable / tenet / evolving),
-> and the build principle B8. Changing an **Immutable** (Part 0 + the six in
+> and the build principle B8; amended 2026-08-05 to reframe M0's Sybil corner as
+> a systemic **composition** claim (C1 no-discount + C2 no-quiet-capture) rather
+> than a Sybil-proof primitive. Changing an **Immutable** (Part 0 + the six in
 > Part IX) requires deliberate, reviewed consensus and is close to redefining
 > the project. **Tenets** are canon too, amendable with reviewed consensus and
 > evidence. **Evolving** parameters are expected to change as we learn.
@@ -21,8 +23,10 @@ to refuse to trade any corner away.** Three properties every prior system in
 this space has been forced to trade off against each other, held together
 without sacrificing one for the other two:
 
-- **Privacy** — publishing is *unlinkable* to a durable identity; who fetches
-  what is *unsurveilled*.
+- **Privacy** — publishing is *unlinkable* to a durable identity; and silt
+  *refuses to surveil* who fetches what, pursuing access-privacy to the
+  metadata-layer limit the anonymity trilemma allows (not an absolute blob-layer
+  guarantee).
 - **Accountability** — genuinely harmful content can be removed, curators are
   themselves accountable, and takedown is **pluralistic** — never a global
   switch.
@@ -37,9 +41,9 @@ project.**
 problem all at once; it is the refusal to trade a corner away, and a design in
 which the corners *co-mature* rather than arriving finished. Precisely:
 
-- **Privacy is architectural from day one** — convergent encryption, opaque
-  ciphertext, unsurveilled access, blind-signed publish tokens. It does not wait
-  for the network to grow.
+- **Privacy is architectural from day one** — private-by-default encryption,
+  opaque ciphertext, a refuse-to-surveil access posture, blind-signed publish
+  tokens. It does not wait for the network to grow.
 - **Accountability is content-level and reactive from day one** — takedown acts
   on a *hash*, pluralistically and after the fact; it is never identity-level,
   never pre-emptive, never a global switch.
@@ -53,8 +57,16 @@ which the corners *co-mature* rather than arriving finished. Precisely:
 **M0 is falsifiable, not a slogan.** It is *held* if and only if the adversarial
 red-team suite (V3), written by a party *other than the author* (see B8),
 **denies all three failure modes**: publish→identity linkage (privacy),
-identity-level or global takedown (accountability), and cheap Sybil-farm
-standing (Sybil-resistance). "Did we hold M0?" therefore has a yes/no answer, on
+identity-level or global takedown (accountability), and **Sybil-farm standing
+*at a discount* (Sybil-resistance)** — where the Sybil mode is the *systemic*
+claim, not any single primitive: **C1 — no discount:** no strategy earns a
+fraction *q* of consensus standing for less than ≈ *q* × the real resource an
+honest provider pays for that much *served, sustained, address-diverse* storage;
+**C2 — no quiet capture:** the objective concentration metric keeps the minimum
+colluding *operator* set that reaches quorum capture above a target *k*, sampled
+Byzantine-robustly. A single bond or proof failing a standalone
+"is-it-Sybil-proof?" test is **not** an M0 failure if the *composed* system
+satisfies C1 + C2 (see B8). "Did we hold M0?" therefore has a yes/no answer, on
 the board, that an outsider can check — not a victory declared by the builder.
 
 Everything below is either a corner made structural, or the discipline that
@@ -73,6 +85,20 @@ The load-bearing, field-defining claim is therefore:
 > **Token-less, work-backed, identity-bound reputation that publishing stays
 > cryptographically unlinkable from** — cheap for one honest node, ruinous for a
 > Sybil farm, with no coin and no capital lockup.
+
+**Where the ruin comes from — composition, not a lone primitive.** No single
+mechanism can *prevent* Sybils under free minting + no permanent center
+(Douceur); the guarantee lives in the *system*. Each part denies one economy of
+scale a Sybil relies on — one plot backing many identities (size-bound bond),
+synthetic bytes standing in for real storage (unique-sealed real content),
+self-dealt demand (witnessed, *unlinkable* demand receipts that reuse the
+blind-token primitive), free keys massed near a target (address/AS-diversity
+buckets), instant standing (VDF elapsed time + audited accrual). Composed so
+every shortcut on one axis trips another axis's check, **forging N standings
+costs N× of *every* non-substitutable resource** — which is honest provision.
+Sybil-resistance is therefore *re-pricing + concentration-bounding*, not
+prevention; the residual — an honest whale who genuinely provides that much — is
+*bounded* by C2's shed metric, not eliminated.
 
 This is not a labeled placeholder for V1 (see Part IX): it *is* the mission, so
 it is the one mechanism deliberately pulled into V1 scope, and it must ship
@@ -175,7 +201,13 @@ hand-waved. **The adversary must be external.** Self-marked homework is not
 adversarial proof: the attacks that certify a novel composition must be written
 by a party *other than its author* — an independent audit, a public bounty, or a
 separate red-team — because single-author crypto graded by its own author is the
-exact failure mode this tenet exists to forbid. Boring parts; a novel car.
+exact failure mode this tenet exists to forbid. **The suite tests the
+composition, not the parts.** Because the novelty *is* the composition, the
+certifying attacks target the system-level claim (M0's C1 + C2), not each
+primitive in isolation — a primitive that fails a standalone "Sybil-proof" test
+is *expected* (that is Douceur, not a defect) and counts as an M0 failure only
+if the *composed* system admits a discount (¬C1) or a quiet capture (¬C2).
+Boring parts; a novel car.
 Novel-and-unproven is worse than me-too — it ships insecurity to the exact
 audience we need to convince.
 
@@ -221,8 +253,29 @@ storing and repairing is a net cost with no matching reward decays to zero the
 moment altruism runs out — this is the wound that killed Freenet and GNUnet, one
 genre earlier. So durability is not "solved" until the caretaker who repairs a
 stripe they neither own nor can read is **paid by the demand that content
-serves** (ties to caretakers #44 and the economics gates). If we cannot state
-the equilibrium in which repair funds itself, we have not decided durability —
+serves** (ties to caretakers #44 and the economics gates). **This is the same
+demand that prices Sybil standing:** the durability budget and the Sybil budget
+are one ledger — the served, sustained real content a node holds is both what
+earns its repair reward *and* what backs its consensus standing (M0), so stating
+S7's equilibrium and holding M0's Sybil corner are the *same* mechanism, one
+ledger read from two sides, not two claims competing for the same disk.
+
+**The funding model (decided, per the durability research):** no *speculative
+external* token — but silt's internal credit unit is made **durable, escrowable,
+and forwardable in time**, and durability is funded by a **per-object durability
+escrow** (a prepaid credit reserve) that **auto-skims** a fixed fraction of each
+object's serving revenue back into that object's reserve, paying repair bounties
+scaled by how under-replicated a stripe is (rarest-shard first). These credits
+fund *durability* and confer *no* consensus standing — standing stays
+work-backed and coin-free. The open construction is **center-less
+proof-of-repair** (a bounty pays only on a succinct proof the shard was correctly
+regenerated, verifiable without reading plaintext; a false claim slashes the
+bond) — a primitive that does not yet exist and is the durability track's
+necessary invention (see [decisions.md](decisions.md) D-S7).
+
+If we
+cannot state the equilibrium in which repair funds itself, we have not decided
+durability —
 and it is durability that decides whether files exist in three years, not
 whether they exist today.
 
@@ -300,12 +353,21 @@ threshold *is* the safety property.
 1. **Never force a registry or relay operator to also store or serve content.**
 2. **Never enable silent or global censorship.** Takedown is transparent,
    consensual, and pluralistic — never a single kill switch.
-3. **Never surveil access.** Who fetches what is not observable.
+3. **Never surveil access.** silt builds no mechanism to observe or link
+   who-fetches-what, and pursues access-privacy to the anonymity trilemma's
+   metadata-layer limit — a goal held in tension (bounded by that wall and by
+   anonymity-set size), not an absolute blob-layer guarantee. The refusal to
+   build surveillance is absolute.
 4. **Never a silent-loss failure shape** (see S3).
 5. **Never bake in a special or central node** (see T1).
 6. **Never trust bytes without verifying** (see B3).
 7. **Never let the economy reward useless or harmful work** — reward tracks
    value delivered to the layer above.
+8. **Never build a decryption backdoor.** Core holds no capability to decrypt
+   stored content, and silt ships no threshold- or quorum-decryption of it.
+   Accountable disclosure, if it ever exists, is an Aslan-layer choice made by
+   parties who can already read — never a core capability (reinforces immutable
+   #1 content-blind, T3).
 
 ---
 
@@ -317,7 +379,8 @@ threshold *is* the safety property.
 - **Outcomes:** available when asked; authentic; private access; runs no
   infrastructure; a given link keeps working.
 - **Promise:** a link is enough — retrieval, verification, and durability are
-  the network's job, and no one can see what you fetched.
+  the network's job, and silt never surveils what you fetch (access-privacy is
+  pursued to the metadata-layer limit the trilemma allows).
 
 **2. Publishers / creators.**
 - **Outcomes:** content stays available as long as intended, and they can *tell
@@ -457,7 +520,9 @@ reviewed consensus.**
 - **M0 — the mission:** *hold* the privacy × accountability × Sybil trilemma —
   refuse to trade any corner away; abandoning any corner abandons the project.
   Held **iff** the external V3 red-team suite denies all three failure modes
-  (Part 0). Not a victory claim — a refusal, bound to a falsifiable test.
+  (Part 0) — where the Sybil mode is the *systemic* C1 + C2 claim (no discount,
+  no quiet capture), not a per-primitive test. Not a victory claim — a refusal,
+  bound to a falsifiable test.
 - The six corners made structural:
   1. **Content-blind by construction** (B4) — hosts store ciphertext they cannot
      read or choose.
@@ -470,10 +535,28 @@ reviewed consensus.**
      training wheels, not a center, and the decentralized path exists from day
      one. What is forbidden is a *standing* dependency on any node — not the
      honest admission that a young network leans on scaffolding while it matures.
-  4. **Access is unsurveilled** (Don't #3) — who fetches what is never
-     observable.
+     M0's Sybil soundness is *conditional* on this maturation: the composition
+     (C1) is sound in the mature regime, the anchors scaffold the young one, and
+     the bridge is the **shed metric** — cost-to-corrupt / Nakamoto-coefficient
+     over bond-distinct *operators*, sampled Byzantine-robustly. The bet, stated
+     plainly: maturity is reached before the scaffolding can be captured.
+  4. **Access is unsurveilled — silt refuses to surveil, and pursues
+     access-privacy to the trilemma's limit** (Don't #3). silt builds *no*
+     mechanism to log or link who-fetched-what, and pushes access-privacy as far
+     as proven crypto allows at the **metadata layer** (mixnet transport, private
+     lookup, unlinkable retrieval tokens). What is *never* guaranteed is
+     blob-layer unobservability against a global adversary — the anonymity
+     trilemma is a hard wall (strong anonymity + low bandwidth + low latency: pick
+     two), and a participating node sees the keys it routes and serves. So this
+     corner is the **refusal to surveil** (absolute) plus **access-unobservability
+     held in tension** (metadata-layer, bounded by anonymity-set size) — not an
+     absolute blob-layer guarantee.
   5. **No silent or global censorship** (Don't #2) — takedown is transparent,
-     consensual, and plural; never one switch.
+     consensual, and plural; never one switch. Every honored revocation is
+     committed to an append-only **transparency log** (CT-style, with
+     inclusion/consistency proofs), so silt can *prove* it never flipped a global
+     switch — the goal being a formal **non-globality** guarantee (how much
+     survived, on how many independent hosts).
   6. **Core carries zero meaning, forever** (T3) — the Aslan boundary.
 
 **Build-immutables — held at the same amendment bar, but about *how we build*,
@@ -500,7 +583,12 @@ security-gated-updates (R4), and the per-persona promises and tradeoff stances
 
 **Evolving — expected to change as we learn.** Specific algorithms and
 parameters (erasure k/n, replication factor, cache policy, DHT constants), the
-*exact* economic mechanism, and which roles ship first.
+*exact* economic mechanism, and which roles ship first — **including the
+Sybil-cost parameters that keep C1 + C2 true at the network's current size:** the
+non-substitutable-resource weights in `C_honest` (disk × address-diversity ×
+time × served demand), the concentration threshold *k*, the demand-attestation
+ratio, and the audit/decay windows. These are *held in tension* and re-tuned as
+the network grows — **not closed.**
 
 > **The principle-not-mechanism rule, and its one exception.** A tenet gates V1
 > as a *principle*, never as a *mechanism* — "reward tracks value" is canon, but
@@ -552,3 +640,32 @@ parameters (erasure k/n, replication factor, cache policy, DHT constants), the
   there. Prompted by finding the integrated hole-punch gap (#27 Phase 3) *locally*
   via the Docker NAT harness, not at CI: the discipline that made that possible is
   now canon (Andrew).
+- **2026-08-05 (composition thesis)** — Reframed M0's Sybil corner as a *systemic*
+  claim held by **composition**, not a Sybil-proof primitive (per
+  `docs/design/m0.md`, from the research capstone `09-m0-as-composition.md`).
+  Defined the Sybil failure mode as **C1 (no discount)** + **C2 (no quiet
+  capture)** and made it the V3 target; clarified in **B8** that the red-team
+  certifies the *composition*, so a primitive failing a standalone Sybil-proof
+  test is Douceur, not an M0 failure. **Fused S7 with the Sybil corner** —
+  durability budget = Sybil budget = one ledger. Made immutable #3's young→mature
+  maturation an explicit *bet* bridged by the shed metric (cost-to-corrupt /
+  Nakamoto-over-operators). Named Sybil-resistance as *re-pricing +
+  concentration-bounding*, not prevention, with the honest-whale residual
+  *bounded* (not eliminated) by C2, and moved its parameters to the evolving tier.
+  This is the reset that changes what "done" means for the Sybil corner: from an
+  impossibility (a Sybil-proof primitive) to a reachable target (C1 + C2 at
+  stated parameters).
+- **2026-08-05 (deferred decisions)** — Recorded owner decisions derived from the
+  accepted research package (see [decisions.md](decisions.md)). **D-PRIV:** amended
+  immutable #4 from an absolute ("never observable") to *refuse-to-surveil*
+  (absolute) + *access-unobservability held in tension* at the metadata layer (the
+  anonymity trilemma is a hard wall; blob-layer unobservability is not
+  guaranteed); Don't #3 and the Part 0 / persona echoes harmonized. **D-S7:**
+  relaxed "no token" to "no *speculative external* token" and stated the durability
+  funding model in S7 (internal escrowable credit reserve + auto-skim + rarest-shard
+  bounty; standing stays coin-free); center-less proof-of-repair routed to research
+  as the open construction. **D-TAKEDOWN:** immutable #5 now commits every honored
+  revocation to a CT-style transparency log toward a formal non-globality
+  guarantee. **D-DISCLOSURE:** added Don't #8 (no decryption backdoor at core).
+  D-CRYPTO-AGILITY (post-V1) and D-ANCHORS (launch-config) are recorded in
+  decisions.md only.

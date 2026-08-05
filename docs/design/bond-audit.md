@@ -1,5 +1,13 @@
 # Bond audit — challenging held storage over the wire
 
+> **Historical / first-cut design note (2026-08-01).** This is an early design
+> note for the bond *primitive* alone. For the current as-built, read
+> [`m0.md`](m0.md) §6 (S1 — the shipped surface) and
+> [`m0-sybil-rebind.md`](m0-sybil-rebind.md) (the v3 bond as-built). The bond is
+> **one axis (D — distinct sealed disk per identity) of M0's systemic
+> composition**, not "the Sybil corner"; the systemic claim lives in `m0.md`, not
+> in this one primitive.
+
 **Status: design, 2026-08-01.** This is the wire protocol that turns the
 `core/bond` primitive and `credit.RecordBondChallenge` (#78) into a live
 mechanism: validators challenge *each other's* storage bonds over the network,
@@ -8,8 +16,9 @@ storage — not self-reported serving. It is deliberately written before the
 code because it adds wire surface, and the roadmap's rule is not to ossify the
 wire on a live network.
 
-This is the **Sybil corner of the M0 trilemma** (privacy × accountability ×
-Sybil) — the corner silt exists to *hold*, not trade away. The bond makes
+This is **one axis (D — distinct sealed disk) of the M0 composition** (see
+[`m0.md`](m0.md) §3); the systemic claim lives in `m0.md`, not in this one
+primitive. The bond makes
 standing *cost* something — token-less, work-backed, identity-bound — while
 publishing stays unlinkable from standing (via the blind publish tokens,
 F1/#84). The design here is a **first cut**: it proves the mechanism
@@ -95,6 +104,12 @@ now extended to storage. A Sybil must satisfy *many* independent challengers,
 each of which it must actually answer (i.e. actually store the bond).
 
 ## The node's own bond
+
+> **Superseded — historical.** The in-RAM, space-lite state described in this and
+> the following section is a first-cut placeholder. It is **superseded by the v3
+> rebind** ([`m0-sybil-rebind.md`](m0-sybil-rebind.md)): the disk-persisted,
+> byte-bound depth-robust-graph plot shipped. The text below is kept for history,
+> not as a description of current behavior.
 
 At startup a validator seals its bond from its `NodeID` and a size (default =
 its capacity pledge, or a `-bond` size) and **holds it**. Holding it on disk is

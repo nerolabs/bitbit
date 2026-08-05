@@ -35,8 +35,12 @@ the final gate before any outreach.
 ## Positioning
 
 **Lead with the trilemma.** silt exists to *hold* the
-privacy × accountability × Sybil trilemma — to refuse to trade any corner away,
-where prior systems bought any two by sacrificing the third. The headline differentiator
+privacy × accountability × Sybil trilemma — not by trading a corner away, but by
+composition held in tension. Sybil resistance in particular is a **systemic
+composition — C1 (no discount: a fraction q of consensus standing costs
+≈ q·C_honest) + C2 (no quiet capture) — held in tension, not a single
+Sybil-proof primitive**, where prior systems bought any two corners by
+sacrificing the third. The headline differentiator
 is **token-less, work-backed, identity-bound reputation that publishing stays
 cryptographically unlinkable from** — no coin, no stake, no speculation;
 standing is *earned*, and the act of publishing can't be tied back to the
@@ -51,18 +55,23 @@ tool for wrongdoing — that framing attracts the wrong users and paints a
 target.
 
 The honest one-line differentiators:
-- **The trilemma, held — no corner traded away.** Privacy *and*
-  accountability *and* Sybil resistance together — not two of three. No token,
-  no coin, no speculation; standing is earned reputation, and publishing is
-  unlinkable from it. (A refusal to sacrifice a corner, proven by an external
-  red-team — not a "solved it" boast.)
+- **The trilemma, held in tension — not a corner traded away.** Privacy *and*
+  accountability *and* Sybil resistance together — not two of three. Sybil
+  resistance is a systemic composition (C1 no-discount + C2 no-quiet-capture),
+  not a single Sybil-proof primitive. No token, no coin, no speculation;
+  standing is earned reputation, and publishing is unlinkable from it. (A
+  refusal to sacrifice a corner — the internal hardening pass is complete; M0
+  awaits EXTERNAL re-verification against the systemic C1/C2 claim. Not a
+  "solved it" boast.)
 - **No token, no coin, no ICO.** Access is *earned* (reputation from
   audits + serving), not bought. This separates Silt from the
   storage-coin field (Filecoin/Storj/Sia) and from speculation entirely.
 - **Boring parts, novel car.** The primitives are best-in-class and
   *proven* — Reed-Solomon, Kademlia, convergent encryption, memory-hard
-  work — and the novelty is the *composition*, backed by spec and a
-  red-team suite. Said plainly, this reads as credibility, not hype.
+  work — and the novelty is the *composition*, backed by spec and a build-time
+  test harness. The internal hardening pass is complete; M0 awaits EXTERNAL
+  re-verification against the systemic C1/C2 claim. Said plainly, this reads as
+  credibility, not hype.
 - **The infrastructure is not the content.** A daemon can't read what it
   holds; meaning lives in a separate layer. Neutral carrier, by design.
 - **It heals itself.** Erasure coding + a repair loop mean files survive

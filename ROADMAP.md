@@ -98,11 +98,15 @@ wire-sensitive, so it lands before the network grows, demoting the public relay
 from every-byte to rendezvous. Design in `docs/design/cross-network.md`.
 
 **Gate 4 — The car: the mission mechanism, real and multi-machine (the long
-pole).** Replace the labeled placeholders with the genuine M0 composition, built
-from best-in-class components (B8), and prove it. **Status: the mechanism is
-BUILT and internally tested (PRs #117–#126); the remaining bar is independent
-review + the multi-machine field test (4e/#52) + the external V3 red-team, which
-renders M0's yes/no verdict.** The sub-items:
+pole).** Replace the labeled placeholders with the genuine M0 **composition**,
+built from best-in-class components (B8), and prove it. M0's Sybil-resistance is
+the systemic claim **C1 (no discount) + C2 (no quiet capture)**, held in tension —
+not a single Sybil-proof primitive (Douceur). **Status: the parts that make each
+axis of `C_honest` (disk × address-diversity × time × served-demand) real are
+BUILT and internally hardened (PRs #117–#126 + the H1–H6 hardening pass); the
+internal pass is complete. The remaining bar is external re-verification against
+the C1/C2 claim + the multi-machine field test (4e/#52) — which together render
+M0's yes/no verdict.** The sub-items:
 - **4a (#90) — Real proof-of-retrieval / proof-of-storage.** Adopt a published,
   peer-reviewed scheme (the compact-PoR / PDP / proof-of-space family); the
   novelty is not the primitive but the binding.
@@ -111,11 +115,13 @@ renders M0's yes/no verdict.** The sub-items:
   construction: cheap for a challenger to verify, expensive to fake,
   identity-bound.
 - **4c (#92) — Identity-bound, time-integrated, *unlinkable* standing.** Bind 4a/4b to
-  identity and time so standing = the integral of sustained proof (cheap for one
-  honest node, N× ruinous for a Sybil farm, no coin/stake), while the blind
-  publish token keeps publishing cryptographically unlinkable from that standing.
-  *This is M0. It ships specified + adversarially proven by an **external**
-  red-team (V3/B8), or it does not ship.*
+  identity and time so standing is the integral of sustained proof over the
+  non-substitutable axes (disk × diversity × time × demand), coin- and stake-free,
+  while the blind publish token keeps publishing cryptographically unlinkable from
+  that standing. *This is the core of M0's C1 (no discount). It holds only if the
+  **composition** satisfies C1 + C2 under an **external** red-team (V3/B8) — a
+  primitive passing in isolation is not enough, and a primitive failing in
+  isolation is expected (Douceur), not an M0 failure.*
 - **4d (#93) — Persistence + issuer distribution.** Bond and RSA issuer key
   persist across restart; on-chain issuer registration.
 - **4f (#100) — Consensus equivocation detection + slashing + fork handling.**
@@ -127,17 +133,17 @@ renders M0's yes/no verdict.** The sub-items:
   bonds, tokens, and consensus across real machines and real NAT. Sim + one host
   is not "done."
 
-**Chain-permanence prerequisites (land before any persistent network writes
-blocks).** The chain is append-only with no reorg, so a wrong record shape written
-first is *unrecoverable*. The build-vs-intention audit (`docs/reviews/build-vs-
-intention-2026-08-02.md`) found three: tokened publish is not the default, so the
-chain writes a permanent `Publisher→root` identity map (#97, the M0 privacy corner
-silently surrendered in history); `Block`/`Entry` carry no version field, so any
-Gate-4 record change is a silent hard fork (#98); and the non-chain `Gated`
-registry hard-requires a Publisher (#99). These are cheap now and impossible later.
-The pre-code design constraints (off-loop crypto vs. B2; cross-layer
-unlinkability; the subjective-reputation partition boundary) live in
-`docs/design/gate4-m0-mechanism.md`.
+**Chain-permanence prerequisites — CLOSED.** The chain is append-only with no
+reorg, so a wrong record shape written first is *unrecoverable*. The
+build-vs-intention audit (archived at
+`/archive/reviews/build-vs-intention-2026-08-02.md`) found three, all now fixed and
+merged: private publish is the default so the chain writes no permanent
+`Publisher→root` identity map (#97, reinforced by H6's private-by-default publish);
+`Block` carries a hash-committed version era so a record-shape change can't
+silently hard-fork (#98); and the `Gated` registry no longer hard-requires a
+Publisher (#99). The current M0 design constraints live in
+[`docs/design/m0.md`](docs/design/m0.md) (superseded pre-code notes are in
+`/archive/design-history/gate4-m0-mechanism.md`).
 
 > **The binding is the hard part, not the primitives.** "Adopt best-in-class,
 > don't invent" (B8) does *not* make Gate 4 easy — it *relocates* the research

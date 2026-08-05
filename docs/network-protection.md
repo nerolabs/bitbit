@@ -51,19 +51,23 @@ hide behind. So the core is defended natively:
   rendezvous. Symmetric-NAT peers still relay, and per-identity relay quotas
   stay open (A16).
 
-Honest gap: minting an identity is still cheap. What is no longer free is
-**consensus standing** — it now costs a token-less, work-backed,
-identity-bound storage bond that peers can challenge (T1/#82), so bulk
-identities can't farm reputation or capture a quorum on the cheap. The **real
-mechanism is now built** (Gate 4: a proof-of-space-time bond — a space-hard
-identity-bound plot × a Wesolowski VDF, persisted; a verify-without-fetch
-proof-of-retrieval; fork-choice reconciliation; equivocation slashing), proven
-at unit + sim + real-daemon e2e — with independent review + the multi-machine
-field test (#52) the remaining bar, so
-Sybil-driven attacks (bulk identities to eclipse, or evade per-identity
-limits) remain our **top open weakness** and the real primitive is V1 work.
-A hard proof-of-work / proof-of-space primitive on *minting* stays deferred.
-We do not hide any of this; it is the review we most want.
+Honest gap: minting an identity is still cheap — and by theorem (Douceur) no
+single primitive can make it otherwise under free minting and no permanent
+center. So a primitive failing a standalone "is-it-Sybil-proof?" test is
+expected, not an M0 failure. What resists Sybils is not one mechanism but a
+**systemic composition — C1 (no discount: a fraction q of consensus standing
+costs ≈ q·C_honest) + C2 (no quiet capture) — held in tension, not a single
+Sybil-proof primitive.** `C_honest` is a product of non-substitutable factors:
+disk × address-diversity × time × served-demand, so no cheap shortcut on one
+axis buys past another. The mechanisms that instantiate this are built — the
+storage bond, the verify-without-fetch proof-of-retrieval, fork-choice
+reconciliation, equivocation slashing, signed provider records — proven at
+unit + sim + real-daemon e2e. **The internal hardening pass is complete; M0
+awaits EXTERNAL re-verification against the systemic C1/C2 claim** (independent
+review + the multi-machine field test, #52). A hard proof-of-work /
+proof-of-space primitive on *minting* stays deferred; it would not change the
+theorem. We do not hide any of this; it is the review we most want. See
+[`design/m0.md`](design/m0.md) for the composition claim in full.
 
 ## How the network responds to a zero-day (change management)
 Assume the fix exists (GitHub is our source of truth; dependency fixes flow
@@ -130,9 +134,12 @@ shedding them is mechanical. Hardening this to the real, multi-machine
 mechanism is V1 work.
 
 ## What we do NOT claim (see threat-model.md for the full list)
-Not anonymous · not audited · not Byzantine-fault-tolerant · not
-Sybil/eclipse-hardened · not a proof-of-space system · not censorship-proof
-against a resourceful adversary · not production-ready. And your operator
+Not anonymous · not audited · not Byzantine-fault-tolerant · no single
+Sybil-proof primitive (impossible by Douceur — a standalone primitive failing
+that test is expected, not an M0 failure; resistance is the systemic C1/C2
+composition, and eclipse/S5 is addressed by the H5 composition — signed
+provider records + failure-domain diversity) · not a proof-of-space system ·
+not censorship-proof against a resourceful adversary · not production-ready. And your operator
 legal exposure varies by jurisdiction and is unsettled for this class of
 system — run a node only with a denylist you trust and an understanding of
 your local law. This is not legal advice.

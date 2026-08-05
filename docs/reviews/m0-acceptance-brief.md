@@ -40,8 +40,10 @@ doing it*:
   served.
 - **Erasure-coded durability** — a file survives losing nodes.
 - **NAT traversal** — two nodes behind home routers can still exchange data.
-- **Earned standing** — a validator must prove real held storage (a bond) over
-  time to write to the chain; a node that proves nothing cannot.
+- **Earned standing** — a validator must prove real held storage over time to
+  write to the chain; a node that proves nothing cannot. Standing is the
+  **composition** (disk × address-diversity × time × served-demand — `C_honest`
+  in `docs/design/m0.md`), not the bond alone.
 - **Unlinkable publish** — a published entry carries no durable Publisher
   identity by default.
 - **Per-hash takedown** — an operator can refuse a specific root; there is no
@@ -59,9 +61,11 @@ For each: follow the documented steps, record what actually happens, and mark
    a *different* node/process.
 3. **Care link** — repair/audit a file with a `siltcare:` link; confirm you
    cannot read its contents.
-4. **Become a validator** — run a node that earns standing by proving real held
-   storage over time, and helps commit a publish through consensus on the
-   *earned-standing* path (not a trusted rubber-stamp where any node can write).
+4. **Become a validator** — run a node that earns standing (the composition —
+   disk × address-diversity × time × served-demand, `C_honest` in
+   `docs/design/m0.md` — not the bond alone) by proving real held storage over
+   time, and helps commit a publish through consensus on the *earned-standing*
+   path (not a trusted rubber-stamp where any node can write).
 5. **Multi-validator convergence** — stand up several validators; publish; every
    replica ends up agreeing on the committed history.
 6. **Fault tolerance** — kill one validator mid-flight; a quorum of the rest
