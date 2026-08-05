@@ -156,6 +156,12 @@ func (n *Node) ProposeRevocation(roots []ports.Hash, attesters, broadcast []port
 // proposeBlock signs b, gathers attestations to quorum, commits locally,
 // and broadcasts — shared by entry and revocation proposals.
 func (n *Node) proposeBlock(b *chain.Block, attesters, broadcast []ports.NodeID, quorum int, done func(error)) {
+	// Gather at least what ValidateCommit will demand: with Byzantine quorum sizing
+	// (H4) the chain requires 2f+1 over the qualified set, which can exceed the
+	// caller's floor. Under-gathering would just fail our own Append; raise it here.
+	if req := n.chain.RequiredQuorum(); req > quorum {
+		quorum = req
+	}
 	// Objective fork-choice (F6): a proposer attaches its own live bond
 	// registration, so proposing IS registering — an anchor bootstrapping the
 	// network records its real bond in its first block, and every validator

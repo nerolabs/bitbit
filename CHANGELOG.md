@@ -9,6 +9,31 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Fixed
+- **H4 (consensus safety, Memo 05): Byzantine quorum sizing + Nakamoto-coefficient shed
+  metric** (2026-08-05) — consensus safety rested on a FIXED quorum (default 3) and a
+  training-wheels shed triggered by a HEAD-COUNT of distinct validators. Both are Sybil-
+  fragile: a fixed 3 among 30 validators no longer guarantees two quorums share an honest
+  node (quorum-intersection safety is lost as the set grows), and one operator spinning up
+  many keys could trip the head-count maturity, then capture consensus once the anchors
+  shed. Fix, per Memo 05 (*safety is quorum arithmetic at the Byzantine threshold, not
+  reputation weight*): (1) `Config.ByzantineQuorum` sizes a commit's support set (proposer
+  + attesters) at a supermajority **n−f** of the qualified bonded set (f = ⌊(n−1)/3⌋), so
+  any two quorums intersect in ≥ f+1 ≥ 1 honest validator; the proposer gathers
+  `max(floor, RequiredQuorum())` and `ValidateCommit` enforces it. (2) `Mature()` now
+  measures the **Nakamoto coefficient** over the participating non-anchor bonded set
+  (`validatorsSeen ∩ current bond`) — the min number of bond-distinct operators needed to
+  reach ⅓ of the weight — which is participation-gated (no fake-genesis decentralization),
+  weight-aware (a set dominated by one bond has coefficient 1 → stays immature no matter
+  how many satellite keys), and revertible (a lapsed bond drops out → the wheels re-engage,
+  the post-shed escape hatch). Both default-on for the untrusted objective posture
+  (`effectiveByzantineQuorum`, `-byzantine-quorum`). Regressions: `core/chain/h4_consensus_test.go`
+  (`TestBFTQuorumIntersectionAboveFaultBound` proves two quorums always intersect above the
+  fault bound for every set size; `TestByzantineQuorumScalesWithValidatorSet` +
+  `TestFixedQuorumUnsafeWithoutByzantineSizing`; `TestMaturityNakamotoResistsOneOperator`
+  shows one operator's many keys can't trip the wheels), `cmd/silt/invariant_b_test.go`
+  (S4 default-on). Residual (documented): an operator that splits stake into many EQUAL
+  bonds still inflates the coefficient — stake concentration is invisible on-chain — but it
+  pays the full cost-to-corrupt and the Byzantine quorum bounds it to ≤ ⅓ of weight.
 - **H2 / RT-2 (Sybil, High): bond standing decays across time by default — release-and-
   coast denied** (2026-08-05) — the blind red team broke the Sybil corner (over the G2
   fix) through the *time* axis: a validator registered a genuine bond once, **released
