@@ -8,6 +8,37 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Changed
+- **M0 reframed as a systemic composition (not a Sybil-proof primitive); tenets amended and
+  docs reset** (2026-08-05) — Adopting the research capstone (`09-m0-as-composition.md`), M0's
+  Sybil corner is now stated as a **systemic** claim — **C1 (no discount) + C2 (no quiet
+  capture)**, held in tension — rather than a per-primitive "Sybil-proof" claim that is false by
+  theorem (Douceur: no single primitive prevents Sybils under free identity + no permanent
+  center). This changes what "done" means: a primitive failing a standalone is-it-Sybil-proof
+  test is *expected*, not an M0 failure; the verdict target is the composition and its seams.
+  - **`docs/TENETS.md` amended** (see the amendment log). Decisions derived from the accepted
+    research package and recorded: **D-PRIV** — immutable #4 requalified from an absolute
+    ("access never observable") to *refuse-to-surveil* (absolute) + *access-unobservability held
+    in tension* at the metadata layer (the anonymity trilemma is a hard wall). **D-S7** — S7 now
+    states the durability funding model (internal escrowable credit reserve; **no *speculative
+    external* token**); center-less proof-of-repair is the open construction, routed to research.
+    **D-TAKEDOWN** — immutable #5 commits every honored revocation to a CT-style transparency log
+    toward a formal non-globality guarantee. **D-DISCLOSURE** — new Don't #8 (no decryption
+    backdoor at core). B8/S7/immutable-#3 threaded with the composition thesis (C1/C2; the
+    one-ledger S7↔Sybil-budget fusion; the young→mature maturation bet).
+  - **New `docs/design/m0.md`** — the single M0 spec (thesis + interlock + surface map S1–S8 +
+    the 7 composition seams = the red-team/build target + open decisions + open problems).
+  - **New `docs/decisions.md`** — the decision ledger, each entry splitting derived direction
+    from deferred construction.
+  - **New `docs/reviews/research-brief.md`** — open questions for the research team (the two
+    constructions the memos self-flagged non-existent — center-less proof-of-repair and the
+    non-globality metric — plus the seam stress-tests).
+  - **`/archive/`** — the finding-by-finding history moved out of the live tree (5 M0 design
+    notes, 5 red-team/acceptance/audit reports, the genesis handoff) behind an index README;
+    nothing deleted. The live tree now carries one current (composition) viewpoint.
+  - **Every remaining non-code doc reconciled** to the composition framing (README, ROADMAP,
+    threat-catalog, the 3 review briefs, and 10 others). No code behavior changed.
+
 ### Fixed
 - **H6 (privacy, Memo 02): default publish is `private` — no existence oracle for guessable
   content** (2026-08-05) — convergent encryption derives the key from the plaintext, so the

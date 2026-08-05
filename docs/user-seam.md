@@ -88,8 +88,12 @@ swarm + node death) and [`cross-network-runbook.md`](cross-network-runbook.md)
 
 ## Role 4 — Trust / validator operator (the M0 surface)
 
-This is where consensus standing is **earned** and publishing stays unlinkable
-— the heart of the trilemma, and the surface the QA phase exists to probe. The
+This is where consensus standing is **earned** and publishing stays unlinkable.
+M0's Sybil-resistance is a systemic composition — C1 (no discount: a fraction q
+of standing costs ≈ q·C_honest) + C2 (no quiet capture) — held in tension, not a
+single Sybil-proof primitive. A primitive failing a standalone Sybil-proof test
+is expected (Douceur), not an M0 failure. This is the surface the QA phase exists
+to probe. The
 commands below are the actually-tested flow (see `e2e/e2e_test.go`
 `TestBondEarnedStandingCommitsOverTCP`).
 
@@ -169,8 +173,12 @@ Runnable as [`examples/flows567-convergence-fault-restart.sh`](../examples/READM
   still commits.
 - **Restart-standing** — restart a validator; it rejoins with standing intact
   (the persisted plot), no re-plot delay, and its chain catches up to the head.
-- **The three M0 denials** — see [the red-team brief](reviews/m0-redteam-brief.md)
-  and the design doc's §6.
+- **The C1/C2 composition claim** — the target is not a set of per-primitive
+  validator denials but the systemic claim: no strategy earns
+  consensus-controlling standing more cheaply than honestly providing that much
+  real, served, sustained, address-diverse storage (C1), and honest wealth cannot
+  silently concentrate past capture (C2). See
+  [the red-team brief](reviews/m0-redteam-brief.md) and the design doc's §6.
 
 ---
 

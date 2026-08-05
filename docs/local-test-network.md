@@ -289,6 +289,12 @@ validator restart — is the heart of M0. It has its own runnable playbooks:
 - **[`user-seam.md`](user-seam.md)** §Role 4 — the validator operations
   reference, with a concrete copy-paste recipe.
 
+> **What the trust plane actually claims.** The trust plane's Sybil resistance
+> is the *composition* (disk × address-diversity × time × served-demand held in
+> tension), not any single sim's "fresh identities cannot write" line — a lone
+> primitive failing a standalone Sybil-proof test is expected-by-Douceur in
+> isolation, not an M0 failure. See [`design/m0.md`](design/m0.md) §3.
+
 ## Cleanup
 
 `Ctrl-C` each daemon. The stores are just directories — remove them when

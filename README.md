@@ -4,8 +4,9 @@ A content-addressed, erasure-coded, distributed file store — built as a
 real product from day one, simulated in-process until it needs real
 sockets. The design canon is [`docs/TENETS.md`](docs/TENETS.md) and the
 path to V1 is [`ROADMAP.md`](ROADMAP.md); `docs/math/` has friendly
-explanations of the math, and the original genesis brief is archived at
-[`docs/buildlog/genesis-handoff.md`](docs/buildlog/genesis-handoff.md).
+explanations of the math, and the current M0 security spec is
+[`docs/design/m0.md`](docs/design/m0.md). Superseded history lives under
+[`/archive/`](archive/).
 
 > **Early & experimental — 0.x, unaudited.** Silt is published to get
 > technical feedback, not to be trusted with data you can't afford to
@@ -25,20 +26,24 @@ erasure-coded, peer-served chunks with NAT traversal — is
 silent-loss failure shapes fixed (#46/#60/#64), and cross-network
 publish/fetch proven through cone NAT via TCP hole-punching (CI Docker
 harness). The **trust plane** — consensus-secured registry, reputation,
-and revocation — is where the M0 trilemma lives, and its **real mechanism
-is built, independently red-teamed, and hardened against every finding**
-(Gate 4): a real verify-without-fetch proof-of-retrieval, a
-proof-of-**space-time** bond (a space-hard identity-bound plot over a proven
-depth-robust graph, with the VDF seeded from a plot read so releasing the
-space forfeits the answer), objective on-chain-bond fork-choice so partitions
-heal to the heavier-standing chain, publisher-unlinkable publishing (ephemeral
-identity + prepaid blind-signed credits + a canonical issuer set), and
-per-operator, existence-checked, reversible takedowns. These mechanisms have
-been **hardened through independent adversarial review** and are covered at the
-unit, in-process-simulation, and real-daemon end-to-end tiers. What they are
-**not** yet: **externally re-verified**. M0 is *held* only when a fresh external
-red-team denies all three failure modes; that pass (plus an operator acceptance
-round) is still ahead. M0 ships proven or it does not ship.
+and revocation — is where M0 lives. M0's Sybil-resistance is a **systemic
+composition held in tension**, not a single Sybil-proof primitive (no such
+primitive can exist under free identity + no permanent center — that's Douceur).
+The claim is **C1 — no discount** (earning a fraction *q* of consensus standing
+costs ≈ *q* × the real resource an honest provider pays: disk × address-diversity
+× time × served-demand) **plus C2 — no quiet capture** (honest standing can't
+silently concentrate past the capture threshold). The parts that make each axis
+real are built and internally hardened (Gate 4): a verify-without-fetch
+proof-of-retrieval, an identity-bound proof-of-**space-time** bond over a proven
+depth-robust graph, objective on-chain-bond fork-choice so partitions heal to the
+heavier-standing chain, publisher-unlinkable publishing (ephemeral identity +
+prepaid blind-signed credits), and per-operator, existence-checked, reversible
+takedowns — covered at the unit, in-process-simulation, and real-daemon end-to-end
+tiers. What they are **not** yet: **externally re-verified.** A primitive failing a
+standalone "is-it-Sybil-proof?" test is *expected* (Douceur), not an M0 failure;
+M0 is *held* only when a fresh external red-team finds no discount (¬C1), no quiet
+capture (¬C2), and no broken composition seam. That pass (plus an operator
+acceptance round) is still ahead. M0 ships proven or it does not ship.
 
 The 0.x releases are **experimental learning releases**, not steps to
 V1: the cadence is learning phase → feature-complete = 0.9.0 (RC line)

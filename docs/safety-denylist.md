@@ -18,9 +18,12 @@ tracking numbers.
 
 You cannot, and should not, rewrite an immutable chain. So takedown is
 not a deletion — it is an **addition**: an append-only *revocation
-record* (a tombstone) is committed to the chain. Two properties keep this
-from becoming a global kill switch (hardened after the M0 red-team, F5):
-the revocation may only name a root **already published on the chain**
+record* (a tombstone) is committed to the chain. The mechanism keeps this
+from becoming a global kill switch — it is per-operator opt-in,
+quorum-gated, existence-checked, and reversible (see
+[`design/m0.md`](design/m0.md) S6), and it awaits external
+re-verification: the revocation may only name a root **already published
+on the chain**
 (a quorum cannot censor a hash that was never there), and honoring a
 chain revocation is a **per-operator subscription**
 (`node.SetHonorChainRevocations`, off by default) — following the chain

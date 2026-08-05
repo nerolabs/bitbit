@@ -60,7 +60,9 @@ review. The branch is protected to enforce it.
 
 ## Safety
 
-Silt is designed to be governable without being surveillable (see
+Silt is designed to be governable without silt itself becoming a surveillance
+tool — access-privacy is pursued to the anonymity trilemma's metadata-layer
+limit, not claimed as an absolute (see
 [docs/safety-denylist.md](docs/safety-denylist.md)). If a change touches
 storage, serving, the chain, or the takedown path, call out the
 safety implications in your PR. To report a security vulnerability,
