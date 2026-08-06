@@ -4,7 +4,7 @@
 > and is substantially built; the milestone/wave/tier markers here are
 > **retired**. **Do not mine this document for current design** — for that, the
 > single source of truth is the GitHub **`V1`** milestone and its issues, narrated
-> in [`ROADMAP.md`](../../ROADMAP.md), with canon in [`docs/TENETS.md`](../TENETS.md)
+> in [`ROADMAP.md`](../../ROADMAP.md), with canon in [`docs/TENETS.md`](../../docs/TENETS.md)
 > and shipped history in [`CHANGELOG.md`](../../CHANGELOG.md).
 >
 > **Two fragments below now *contradict* immutables — they are archaeology, not

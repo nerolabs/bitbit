@@ -3,7 +3,7 @@
 How to introduce Silt to the people who will run nodes and improve the
 software — and only those people, on purpose. Positioning here is a
 safety control as much as a growth lever (see the
-[fresh-eyes council](fresh-eyes-council.md)).
+[fresh-eyes council](../archive/reviews/fresh-eyes-council.md)).
 
 ## The first launch must be credible from day one
 

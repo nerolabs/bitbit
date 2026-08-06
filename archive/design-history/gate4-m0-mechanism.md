@@ -1,6 +1,8 @@
 # Gate 4 — the M0 mechanism: design + threat model (pre-code)
 
-> **Status: design doc, ahead of code.** ROADMAP requires Gate 4 to own a
+> **Status: ARCHIVED / SUPERSEDED — current source of truth is
+> [`docs/design/m0.md`](../../docs/design/m0.md).** (Was: design doc, ahead of
+> code.) ROADMAP requires Gate 4 to own a
 > design doc + threat model + an **external** adversary plan *before*
 > implementation — the binding, not the primitives, is the research (B8). This
 > is that document. It is a spec a skeptic can read, not the line-level

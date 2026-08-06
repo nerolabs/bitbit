@@ -3,7 +3,8 @@
 Silt is infrastructure owned by none and run by its participants. This
 document states the stance that shapes the architecture; the details of
 safety and policy live in [docs/safety-denylist.md](docs/safety-denylist.md)
-and the [fresh-eyes council](docs/fresh-eyes-council.md).
+and the [fresh-eyes council](archive/reviews/fresh-eyes-council.md) (archived; a
+new council is planned — see [`docs/reviews/fresh-eyes-council-brief.md`](docs/reviews/fresh-eyes-council-brief.md)).
 
 Silt is **use-agnostic**: it takes zero position on what the network is
 used for. It is neutral, content-blind storage — the code cannot know or

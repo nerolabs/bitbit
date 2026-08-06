@@ -28,8 +28,8 @@
   <div class="row">
     <label class="dim">mode</label>
     <select id="mode" style="width:auto">
-      <option value="convergent">convergent — dedups globally; fine for shareable data</option>
-      <option value="private">private — random keys; existence stays secret</option>
+      <option value="private">private (default) — random keys; existence stays secret</option>
+      <option value="convergent">convergent — dedups globally, but a guessed plaintext can be confirmed</option>
     </select>
     <button id="go" disabled>publish</button>
   </div>

@@ -2,7 +2,7 @@
 
 > **Superseded in part (2026-08-05):** a later red-team pass broke the Sybil corner
 > again via **prefix plots** (G2), which per-root dedup cannot catch. The construction
-> that closes it is in [m0-sybil-rebind.md](m0-sybil-rebind.md); read that first.
+> that closes it is in [m0-sybil-rebind.md](../../docs/design/m0-sybil-rebind.md); read that first.
 
 > **Status: F1/F2/F3 structural fix SHIPPED (2026-08-04) in `core/bond` +
 > `adapters/diskplot`; this doc is the spec it was built to.** The external M0

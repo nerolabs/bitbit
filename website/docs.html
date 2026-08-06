@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Silt documentation</title>
-<meta name="description" content="Silt documentation: the CLI, the link format, the daemon HTTP API, and how reputation-quorum consensus works.">
+<meta name="description" content="Silt documentation: the CLI, the link format, the daemon HTTP API, and how bonded-quorum consensus works.">
 <link rel="canonical" href="https://silthq.com/docs.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,8 +87,10 @@ siltcare:v1:<span class="o">&lt;root&gt;</span>:<span class="g">&lt;layout-key&g
   <p class="dim" style="font-size:0.85rem;margin-top:-0.6rem">Each of the two
   values is a 32-byte hash in compact base64url (43 characters); older
   64-character hex links still parse.</p>
-  <p>The key is content-derived, so identical files produce identical links —
-  deduplication reaches all the way up to the handle you share. From the link key
+  <p>By default the key is random, so publishing the same bytes twice yields
+  different links and their existence can't be probed; in opt-in <b>convergent</b>
+  mode the key is content-derived, so identical files dedup up to the handle you
+  share (at the cost of a confirmation-of-file attack). From the link key
   the software derives, one-way, a <b>layout key</b> (stripe structure — enough to
   repair and audit) and a <b>content key</b> (the decryption material). Hand a
   caretaker the care link and they can keep your file alive forever without ever
@@ -121,14 +123,23 @@ siltcare:v1:<span class="o">&lt;root&gt;</span>:<span class="g">&lt;layout-key&g
   <p>An attestation is an Ed25519 signature over the block hash, which covers the
   block's height, its parent, and its entries — so a signature endorses exact
   content in an exact place in history. Every replica re-validates all of it;
-  latecomers re-check the whole chain as they sync. Reputation is each validator's
-  <em>own</em> view — audits it ran, serving it saw — so lying to one validator buys
-  nothing with the others.</p>
-  <p>This is deliberately not proof-of-work. It's cheap, final immediately, and
-  honest about its trust model: a quorum chain for a network with an honest
-  validator majority. The founding <b>genesis</b> block is the one exception — it
-  needs no quorum, because it is declared identically on every node rather than
-  agreed, exactly as Bitcoin hardcodes its first block.</p>
+  latecomers re-check the whole chain as they sync.</p>
+  <p>The default untrusted posture makes fork-choice <b>objective</b>: a validator's
+  weight is its <b>on-chain proof-of-space-time bond</b> — challenged storage that
+  costs real, identity-bound disk — recomputed identically by every replica, with
+  quorums sized to a Byzantine supermajority (n&minus;f), so divergent replicas agree
+  and forks heal. Standing is not free reputation: it is priced across the
+  non-substitutable axes of <span class="mono">C_honest = disk &times; address-diversity
+  &times; time &times; served-demand</span>, so forging a fraction <em>q</em> of it
+  costs roughly <em>q</em> of honest provision (<b>C1, no discount</b>), and a
+  concentration metric over bond-distinct operators keeps a quiet cartel from capturing
+  the quorum (<b>C2, no quiet capture</b>). This is Silt's mission — held as a
+  composition in tension, not a single primitive — detailed in
+  <a href="https://github.com/nerolabs/silt/blob/main/docs/design/m0.md">docs/design/m0.md</a>.</p>
+  <p>This is deliberately not proof-of-work. It's cheap and final immediately. The
+  founding <b>genesis</b> block is the one exception — it needs no quorum, because it
+  is declared identically on every node rather than agreed, exactly as Bitcoin
+  hardcodes its first block.</p>
 
   <h2>Going deeper</h2>
   <p>The repository carries a set of short, friendly notes on the mathematics —

@@ -37,12 +37,16 @@ CHANGELOG breadcrumbs still point here.
 | `m0-consensus.md` (F6/F7) | `docs/design/m0.md` §6 S4 |
 | `m0-privacy-issuance.md` (F4) | `docs/design/m0.md` §6 S7 + open decision D-PRIV |
 | `m0-hardening-strategy.md` (the H1–H6 backlog + surface map) | `docs/design/m0.md` (surface map §6, seams §7, decisions §9) |
+| `bond-audit.md` (first-cut bond-audit wire note, 2026-08-01) | `docs/design/m0-sybil-rebind.md` + `m0.md` §6 S1; a live wire-stub remains at `docs/design/bond-audit.md` |
 
 ### `reviews/` — red-team, acceptance, and audit **reports** (point-in-time)
 The *reports* are snapshots of a specific commit and carry outdated verdicts.
 `M0-REDTEAM-REPORT.md`, `M0-REDTEAM-VERIFICATION.md`,
 `build-vs-intention-2026-08-02.md`, `fresh-eyes-2026-08-02-intention.md`,
-`gates-1-3-completeness-2026-08-02.md`.
+`gates-1-3-completeness-2026-08-02.md`, and `fresh-eyes-council.md` (the first
+cross-functional Legal/T&S/PR council, 2026-08-02 — a **new** council is planned,
+brief at `docs/reviews/fresh-eyes-council-brief.md`; its findings live on in
+`docs/risk-register.md` + `docs/launch-plan.md`).
 **The living review *briefs* stayed in `docs/reviews/`** and are rewritten to the
 current C1/C2 + seams understanding — a brief is a standing target, a report is a
 dated result.

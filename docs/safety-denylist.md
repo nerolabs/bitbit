@@ -59,7 +59,13 @@ private and governable.
   (redundancy decays), and the registry won't resolve the root — so
   keeping content alive against the compliant majority is costly and
   degrades over time. This is the same reality as DNS blocklists, mail
-  RBLs, and PhotoDNA: effectiveness scales with adoption.
+  RBLs, and PhotoDNA: effectiveness scales with adoption. The transparency
+  direction makes this bound **measurable**: per decision **D-TAKEDOWN**,
+  the non-globality of any takedown is a *constructed* metric — a survivor
+  Nakamoto-coefficient over failure domains, published as a certified
+  lower bound ≥ t through a ZK threshold predicate that reveals only the
+  scalar t — so "no takedown is global" is a checkable quantity, not just
+  a claim.
 - **Post-hoc, mostly.** Novel illegal content is not on any list when
   first published, so it will land before it can be denied. Takedown is
   therefore primarily reactive; a pre-publish check catches only
