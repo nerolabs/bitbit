@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Silt — the infrastructure is not the content</title>
-<meta name="description" content="Silt is resilient, private-by-architecture, neutral storage infrastructure — owned by none, run by its participants, funded by no token. Nodes store and serve encrypted ciphertext they cannot read. Run a node, or build on it.">
+<meta name="description" content="Silt is resilient, content-blind, neutral storage infrastructure — owned by none, run by its participants, funded by no speculative external token. Nodes store and serve encrypted ciphertext they cannot read. Run a node, or build on it.">
 <link rel="canonical" href="https://silthq.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,16 +34,17 @@
       <i style="height:4%;background:#6e5124"></i><i style="height:12%;background:#241f18"></i>
       <i style="height:8%;background:#332619"></i><i style="height:14%;background:#1d1913"></i>
     </div>
-    <p class="eyebrow settle">Private by architecture · no token · earned standing</p>
+    <p class="eyebrow settle">Content-blind by architecture · no speculative token · earned standing</p>
     <h1 class="thesis settle settle-2">The infrastructure is <em>not</em> the content.</h1>
     <p class="sub settle settle-3">
-      Silt is resilient, private-by-architecture, neutral storage
+      Silt is resilient, content-blind, neutral storage
       infrastructure — files split into encrypted fragments, scattered and
       healed across many machines. A node <b>cannot read what it holds; it was
-      built to be unable to.</b> Standing to publish is <b>earned</b> — work-backed
-      reputation, no token, no coin — and publishing stays cryptographically
-      unlinkable from the identity that earned it. Meaning lives elsewhere, with
-      whoever holds the keys.
+      built to be unable to.</b> Standing to publish is <b>earned</b> — backed by an
+      identity-bound storage bond, coin-free, no speculative token — and by default
+      the published record <b>names no author</b>, with opt-in blind tokens for true
+      cryptographic unlinkability (a transport IP+timing link remains until
+      issuance-mixing ships, Pre-V1). Meaning lives elsewhere, with whoever holds the keys.
     </p>
     <div class="cta-row settle settle-4">
       <a href="#download" class="btn">Download a client</a>
@@ -83,10 +84,12 @@
       <div class="layer">
         <div><div class="k">Governed by earned standing</div><h3>Write-access is earned, not bought</h3></div>
         <p>The registry is a chain the operators keep together. Publishing a new
-        entry needs a quorum of nodes whose reputation — passed storage audits,
-        bytes served — clears a bar. No token, no coin: standing is work-backed,
-        and <b>the published record names no author by default</b> — with opt-in
-        blind tokens, publishing becomes cryptographically unlinkable from the identity that earned standing.</p>
+        entry needs a quorum of nodes whose standing clears a bar — earned by an
+        <b>identity-bound proof-of-space-time bond</b>: challenged, held storage that
+        costs real disk. Passing audits proves you still hold the bond but mints no
+        standing; served bandwidth funds durability, not standing. Coin-free, no
+        speculative token. <b>The published record names no author by default</b> —
+        with opt-in blind tokens, publishing becomes cryptographically unlinkable from the identity that earned standing.</p>
       </div>
       <div class="layer">
         <div><div class="k">Reaches across NATs</div><h3>Two home routers still connect</h3></div>
@@ -122,14 +125,14 @@
       <div class="stratum-label">Bedrock · carry the network</div>
       <h2 style="font-size:clamp(1.9rem,4.5vw,2.8rem);max-width:14ch">Pledge storage. Earn standing. Hold the network up.</h2>
       <p class="dim" style="margin-top:1.2rem;max-width:52ch">A public node contributes a slice of disk and bandwidth and serves
-      encrypted shards to whoever asks. Serve honestly and survive spot-check
-      audits, and your reputation climbs — until the network trusts you to help
-      write its history. There is no sign-up. Generating a keypair is joining.</p>
+      encrypted shards to whoever asks. Pledge an identity-bound storage bond and
+      survive its spot-check audits, and your standing rises — until the network
+      trusts you to help write its history. There is no sign-up. Generating a keypair is joining.</p>
       <div class="cta-row"><a href="node.html" class="btn">Read the operator guide</a></div>
     </div>
     <ul class="rules">
       <li><span><b>Pledge what you mean.</b> <span class="dim">Start a node with a fixed budget — <span class="mono">silt daemon -capacity 2G</span>. The network continuously knows its own total size.</span></span></li>
-      <li><span><b>Serve, don't hoard.</b> <span class="dim">Storing without serving is freeloading. Bandwidth counts toward reputation as much as bytes held.</span></span></li>
+      <li><span><b>Serve, don't hoard.</b> <span class="dim">Storing without serving is freeloading. Bytes served fund the durability economy; consensus standing is backed by the storage bond, not bandwidth.</span></span></li>
       <li><span><b>Prove you hold it.</b> <span class="dim">Auditors challenge you to prove possession with a fresh nonce. Keep the proof but ditch the data and you're slashed into debt.</span></span></li>
       <li><span><b>Never trust, always verify.</b> <span class="dim">Every shard is hash-checked on receipt; every block re-validated by every replica. Lying wastes a round-trip, never corrupts data.</span></span></li>
     </ul>

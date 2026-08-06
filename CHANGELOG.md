@@ -9,6 +9,36 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **External-audit honesty propagation: held-in-tension residuals carried from the spec down
+  to the tenets, risk surface, and public site** (2026-08-06) — Two independent audits of the
+  docs pass (a research *comprehension* audit + a red-team *intention* audit) found
+  comprehension faithful but a **propagation gap**: the honesty that was correct in `m0.md §10`
+  / issue #182 hadn't reached the tenet layer, the risk-tracking surface, or the public pages,
+  so three things read as *achieved* that are deliberately *open*. No code changed. Fixes:
+  - **The S7 "one ledger" fusion** (served-content ⇄ standing) reworded across `TENETS.md` S7 +
+    `m0.md §5` from an achieved fact to the **design goal** — today standing comes **only** from
+    the dedicated identity-keyed bond plot, **separate** from served content, gated on the
+    γ→1/N problem (#182). A builder implementing the old wording would have re-opened the Sybil
+    break the separation prevents.
+  - **`C_honest = D×A×T×B`** marked *target composition vs. shipped subset* (`m0.md §3`, TENETS
+    Part 0): today standing is gated by the **bond (D) axis alone** — B (served demand) is
+    unbuilt (#181), A (address diversity) is at the DHT layer, not in the standing number — so
+    C1 is a *conditional* claim. Added the missing served-demand row to the `m0.md §6` as-built
+    map (NOT SHIPPED → #181).
+  - **γ→1/N** added as an explicit open-risk row in `risk-register.md` + `threat-catalog.md`;
+    the "proof-of-repair now EXISTS" durability headline softened to *construction designed,
+    not yet built (H7/#95)* across `threat-catalog.md`, `TENETS.md`, `decisions.md`.
+  - **D-PRIV propagation:** `TENETS.md` Part VIII table row "Privacy of *access* is absolute"
+    corrected to the refusal-to-surveil form; `decisions.md` "publish-unlinkability is delivered"
+    → *chain-layer only; transport IP+timing OPEN until D3 (H8/#179)*.
+  - **Public site regenerated** (`index.html`/`node.html`/`docs.html`): the Sybil-standing copy
+    ("reputation = audits + bytes served / bandwidth counts toward reputation") corrected to
+    bond-backed standing; the unlinkability hero requalified (opt-in blind tokens + IP+timing
+    caveat); "alive forever" → finite-but-renewable; "no token" → "no *speculative external*
+    token"; "private by architecture" → content-blind.
+  - **C2 "no quiet capture"** promoted to a first-class decision entry (`k*≥k̂/M`, Kwon floor,
+    honest-whale + adversarial-placement residues); added risk rows for `g≤0` and CPR under
+    adversarial NodeID placement; reconciled the `threat-model.md` BFT self-contradiction.
 - **Full non-code file audit + remediation; stray binary removed** (2026-08-06) — Audited
   all 106 tracked non-code files (purpose · last-updated · needed? · safe-to-remove/archive ·
   staleness). Findings actioned; no Go behavior changed except one web-UI default (below).

@@ -113,6 +113,16 @@ become **checked properties of the plot**, not claimed ones. N standings require
 plots — the B1 invariant is restored, and the amplification factor collapses from
 `(N − M + 1)` to `1`.
 
+> **⚠️ Scope: this closes the *synthetic bond* prefix break (H1-on-D), not the
+> real-content sharing hole.** "N standings require N plots" is about the
+> *dedicated, throwaway bond plot* — it does **not** mean served *real* content
+> safely backs standing. Granting standing for holding a *shared* erasure-coded
+> shard would re-open a different axis (H3): one physical copy answers for N pledges
+> (**γ→1/N**), closed only by identity-keyed PoRep sealing that doesn't yet exist.
+> That is why the bond plot is kept **separate** from served content; the fusion is
+> the open problem in [`m0.md`](m0.md) §10 / issue #182. Do not read this rebind as
+> a general Sybil-on-disk closure for real content.
+
 ### What is NOT sufficient (rejected alternatives)
 | Option | Why it fails |
 |---|---|
