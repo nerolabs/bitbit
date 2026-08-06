@@ -97,7 +97,7 @@ limits operator-configurable with sane defaults.
 - C5 **Registry poisoning** ~ — spam dangling entries to bloat/mislead (A11).
 
 ## D. Economic / incentive
-- D1 **Wash-serving / self-dealing** ~ — wash-serving still moves the BALANCE economy (observability), but it no longer buys STANDING: reputation dropped self-reported `servedBytes` and is built on challenged held storage + audits (T1/#82). So sybils can't wash-serve their way to a quorum. (Witnessed/challenged *serving* for the balance side is still future.)
+- D1 **Wash-serving / self-dealing** ~ — wash-serving still moves the BALANCE economy (observability), but it no longer buys STANDING: reputation dropped self-reported `servedBytes` and is built on challenged held storage + audits (T1/#82). So sybils can't wash-serve their way to a quorum. (Witnessed/challenged *serving* for the balance side is still future.) **Decision D-DEMAND:** standing is priced on **cost-to-wash**, never raw receipt count — demand authenticity is a Douceur limit (you cannot cheaply prove *genuine* demand), so the pricing charges for the cost of faking it rather than trusting the count.
 - D2 **Credit-farming → spam funding** ✗ — farmed credits fund publish-spam/disk-fill (feeds A9/A10).
 - D3 **Reputation collusion → quorum capture** ~ — accruing standing across sybils now costs N real storage bonds (T1/#82), not free wash-serving; and on a young network commits also need anchor sign-off that sheds on measured decentralization (T2/#83 training wheels). Not eliminated (a well-resourced adversary can buy disk), but no longer cheap — the economy→consensus bridge is priced.
 - D4 **Audit gaming / "storage theater"** ~ — pass challenges from briefly-borrowed shards, or precompute if predictable → reputation without durable storage → unpredictable, unborrowable challenges.
@@ -111,7 +111,7 @@ limits operator-configurable with sane defaults.
 - E2 **Long-range / history rewrite** ? — latecomers re-check history against what anchor beyond genesis? → signed checkpoints.
 - E3 **Equivocation** ? — conflicting attestations; verify slashing exists and works across partitions.
 - E4 **Quorum liveness griefing** ✗ — a subset refuses to attest → commits stall.
-- E5 **Revocation-as-weapon** ~ — quorum revokes lawful content (auditable, but abuse remains; adoption-bound).
+- E5 **Revocation-as-weapon** ~ — quorum revokes lawful content (auditable, but abuse remains; adoption-bound). **Takedown transparency (D-TAKEDOWN):** the non-globality guard is now a **constructed metric** — a survivor Nakamoto-coefficient over failure domains, published as a certified lower bound ≥ t via a ZK threshold predicate that reveals only the scalar t — so "no takedown is global" is measurable, not just asserted.
 
 ## F. Privacy / deanonymization (beyond the doc'd traffic-analysis)
 - F1 **Publisher identity on-chain** ✓ — CLOSED (T3/#84). A publish is authorized by a quorum-issued **blind publish token** (a serial blind-signed by k distinct validators), so a committed entry carries the token and NO Publisher NodeID — authorship is unlinked from the durable key. Residuals (labeled): a colluding validator set narrows the anonymity *set* to same-epoch requesters of the same subset (use a canonical set). The RSA issuer key now **persists** across restarts (#126, `adapters/diskissuer` — tokens it signed stay verifiable and peers' cached keys don't go stale); on-chain issuer registration remains a follow-up.
@@ -122,6 +122,7 @@ limits operator-configurable with sane defaults.
 - F6 **Confirmation-of-file (convergent)** ✓ — documented; private mode defeats it at the cost of dedup.
 
 ## G. Data-durability, adversarially driven (beyond #60/#64)
+**Durability posture (D-S7):** center-less **proof-of-repair now EXISTS** — a composition of proven parts (no coordinator repairs on anyone's behalf), so verified repair can be paid for without trusting a central caretaker. Durability is therefore **finite-but-renewable**, not "perpetual": redundancy decays without work and is renewed by funded, verified repair — the items below attack the *renewal* loop.
 - G1 **Provider-record poisoning of repair** ✗ — fake providers burn the repair budget so real repair never happens (pairs A14/A15).
 - G2 **Targeted churn below k** ✗ — join/leave near a stripe's columns to drop shards faster than repair (the #64 vector, weaponized).
 - G3 **Manifest-provider targeting** ✗ — the manifest chunk is a small single point; attack its providers to make files unfetchable → higher replication + monitoring for manifest chunks.

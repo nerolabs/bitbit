@@ -86,7 +86,10 @@ This is a quorum chain for a network with an honest validator
 majority — not Byzantine fork-choice consensus. v1 has no
 reorganizations: the first valid block at a height wins, and
 simultaneous proposals race (one gets `ErrWrongParent` and retries on
-the new head). A colluding quorum of high-reputation validators could
+the new head). (This describes the base/legacy chain: the objective
+fork-choice path since H4 now sizes quorums to a Byzantine supermajority
+(n−f) and reconciles competing forks to the heavier-standing chain, so
+the "no reorg" caveat applies to that legacy path, not the hardened one.) A colluding quorum of high-reputation validators could
 write bad entries — the design bets that entities who spent months
 earning bond-backed reputations have more to lose than to gain, the
 same wager proof-of-stake makes with capital. What the chain buys over

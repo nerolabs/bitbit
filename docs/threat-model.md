@@ -57,9 +57,12 @@ publishes the software **runs no part of the network** — see
   publisher pays with its durable identity to *acquire* the token; the issuers
   never see the serial). Residual: a colluding validator set narrows the
   anonymity *set*, and this does not hide *access* patterns.
-- **The majority of reputation-bearing validators are assumed honest.**
-  The chain is a reputation quorum, **not** a Byzantine-fault-tolerant
-  consensus (see below).
+- **A supermajority of *bonded* validator weight is assumed honest.** The
+  default untrusted posture is objective on-chain-bond fork-choice with
+  Byzantine (n−f) quorum sizing — safety holds while an adversary controls
+  ≤ 1/3 of bonded weight (priced by C1's `C_honest`), with concentration
+  bounded by C2. It is not unconditional BFT against an unbounded adversary
+  (see the colluding-quorum case below).
 - **Cryptographic primitives are standard and assumed sound:** SHA-256,
   Ed25519, HKDF, AES/stream encryption. The *composition* is not audited.
 
@@ -67,48 +70,75 @@ publishes the software **runs no part of the network** — see
 
 ### Malicious storage node (the "liar")
 Accepts placements, keeps the Merkle proof, throws away the data, then
-claims to hold it. **Caught** by proof-of-retrieval: a challenge sends a
-fresh nonce and demands `H(nonce ‖ bytes)`, which a liar without the
-bytes cannot compute; liars are slashed. *Weakness:* the proof is a
-**toy** — it proves *possession at challenge time*, not durable or unique
-storage. A node that keeps the bytes trivially passes; a node can pass k
-challenges from k shards it briefly borrows. It is not a rigorous
-proof-of-data-possession / proof-of-space. Hardening this is on the
-roadmap.
+claims to hold it. **Caught** by a real, published **compact
+proof-of-retrieval** (Shacham–Waters homomorphic authenticators): a
+challenge is answered from the stored bytes without re-sending them, and a
+liar without the bytes cannot compute a valid response; liars are slashed.
+Durable, *unique* storage is priced separately by the **proof-of-space-time
+bond** (below), so "keep the bytes to pass" costs real, identity-bound disk
+over time — not a borrowed shard at challenge time. *Residual:* the
+audit's economic weight and re-challenge cadence are held-in-tension
+parameters (§Sybil), and center-less **proof-of-correct-repair** (that a
+regenerated shard is the right one) is a decided build track (D-S7 / H7),
+not yet shipped.
 
 ### Sybil / eclipse attacker
-Creates many node IDs to surround a key in XOR space. **DHT eclipse is still
-unhardened** — an attacker who eclipses a chunk's neighborhood could suppress its
-provider records (censor discovery of a specific file), or bias the network-size
-estimate. Node IDs are `SHA-256(pubkey)`: free to *mint in bulk*, not free to
-*target* a specific key. **What changed (2026-08): consensus STANDING is no
-longer free.** A validator earns write standing only by proving an
-identity-bound **storage bond** that peers challenge over the wire (T1/#82), so
-N sybils cost N real bonds on N disks, and a young network additionally requires
-**anchor sign-off that sheds on measured decentralization** (T2/#83 training
-wheels). So Sybil→*quorum-capture* is now priced, not free — and the bond is now a real
-**proof-of-space-time** (a space-hard identity-bound plot × a VDF, persisted),
-not the earlier space-lite in-RAM seal, with equivocation slashed and forks
-reconciled (Gate 4). Still open: cheap identity minting itself (PoW/stake
-deferred), DHT-level eclipse/lookup hardening, and the bond is not yet a
-formally depth-robust / memory-hard label function. **Eclipse hardening and the
-pending independent review are what we now most want review on.**
+Creates many node IDs to surround a key in XOR space. Node IDs are
+`SHA-256(pubkey)`: free to *mint in bulk*, not free to *target* a specific key.
+**Silt does not claim to *prevent* Sybils** — that is impossible under free
+minting with no permanent center (Douceur). Instead it prices them, as a
+**systemic composition held in tension** (see [`design/m0.md`](design/m0.md)):
+- **C1 — no discount.** Consensus standing is not free. A validator earns write
+  standing only across the non-substitutable axes of `C_honest = disk ×
+  address-diversity × time × served-demand`: an identity-bound **proof-of-space-time
+  bond** (a space-hard, pk-bound plot with a labeling challenge × a Wesolowski VDF,
+  persisted), re-challenged over the wire, plus audit history and witnessed demand.
+  Forging a fraction *q* of standing costs ≈ *q*·`C_honest` — N Sybils cost N real
+  disks, N address domains, N× time. Equivocation is slashed and forks reconciled
+  by objective on-chain-bond fork-choice with Byzantine (n−f) quorum sizing.
+- **C2 — no quiet capture.** A concentration metric (cost-to-corrupt /
+  Nakamoto-coefficient over **bond-distinct operators**, computed from the committed
+  bond ledger) keeps the minimum colluding operator set above a target, and gates
+  the **anchor training-wheels**, which shed on measured decentralization.
+- **DHT eclipse is now hardened** (was open at earlier revisions): provider records
+  are self-certifying signed claims (forgery closed) and both announce and resolve
+  spread across **failure domains** so a single-/24 key-surround can't suppress
+  discovery.
 
-### Free-rider / leech
+**Held in tension, not closed** (by design, and stated as such): C2 cannot bound a
+*real*, infrastructure-independent operator who chooses to collude (the "honest
+whale") — only the HHI/economic guardrails + anchors bound that; the bond's tight
+ε→k parameterization and the demand/wash ratio are monitored economic parameters,
+not proofs. **This composition and its seams are exactly what we most want an
+external red team to attack.**
+
+### Free-rider / leech (and wash-serving)
 Consumes without serving. **Mitigated** by the credit economy: serving
 earns credits, consuming spends them, and a pure consumer goes broke and
-loses access. *Weakness:* the economy is simulation-validated but not
-adversarially hardened; collusion and wash-serving between Sybil
-identities to farm credits/reputation is not addressed.
+loses access. **Wash-serving** — a Sybil serving its *own* content through
+its own fetchers to farm standing — is **re-priced, not ignored** (D-DEMAND):
+standing is priced on **cost-to-wash, never raw receipt count**, via a blind
+demand receipt (unforgeable without a real, paid, correctly-delivered fetch,
+and fetcher-unlinkable) combined with a burned fetch fee + a bonded-fetcher
+credential, so faking demand costs real fees and real bonded identities.
+*Honest limit (stated, not hidden):* demand **authenticity** — proving the
+fetcher was economically *independent* of the server — is a Douceur limit no
+receipt can close; the defense is economic re-pricing, a monitored inequality,
+not a proof.
 
 ### Colluding validator quorum
 The chain commits blocks (publications and revocations) when a quorum of
-*earned-reputation* validators attest. **This is not BFT.** A quorum that
-colludes could, in principle, commit a bad revocation (censor a file) or
-refuse a legitimate one. The defense is that reputation is *earned* over
-time (audits + serving), so a quorum is expensive to fake — but it is a
-social/economic assumption, not a cryptographic guarantee. Genesis is
-declared, not agreed. Reviewing this model is high-value.
+bonded validators attest. The default untrusted posture is **objective
+on-chain-bond fork-choice** with **Byzantine (n−f) quorum sizing**, so an
+adversary must control > 1/3 of *bonded weight* — priced by C1's `C_honest`,
+not by cheap reputation — to break quorum-intersection safety, and standing
+concentration is bounded by C2 (above). A colluding *super*-quorum could still,
+in principle, commit a bad revocation or refuse a legitimate one; the remaining
+defenses are that (a) bonded weight is expensive to amass and concentration is
+metered, (b) takedown is per-operator and transparency-logged (below), never a
+global switch, and (c) genesis is declared, not agreed. This is a
+cost-and-concentration argument, not an unconditional cryptographic guarantee —
+reviewing it is high-value.
 
 ### Network eavesdropper
 Sees encrypted transport. Cannot read content. **Can** perform traffic
@@ -138,9 +168,12 @@ symmetric NAT still relays). It also lowers relay cost/abuse surface (A16).
 Convergent encryption keys a file by its own content, which enables
 cross-user dedup but permits a **confirmation-of-file attack**: an
 adversary who guesses a file's exact bytes can confirm whether it is
-stored. **Private mode** (random keying) defeats this at the cost of
-dedup. Users who need secrecy of *presence* must use private mode; this
-trade-off must be documented at the UI, not buried here.
+stored. **This is why the publish default is now `private`** (random
+keying, H6) — it defeats the confirmation attack at the cost of dedup, so
+the probeable behaviour is opt-in, not the default. **Convergent** is the
+explicit opt-in choice for cross-user dedup, and the CLI prints a
+confirmation-attack warning when it is selected. The trade-off is surfaced
+at the point of choice, not buried here.
 
 ### Abuse: illegal or unwanted content
 Because the network is content-blind, illegal content *can* be published
@@ -219,8 +252,12 @@ valuable contributions right now:
    stake, web-of-trust) would you add, and what would it break?
 2. **The proof-of-retrieval.** How would you cheat it? What would a real
    proof-of-data-possession cost here?
-3. **The reputation-quorum chain.** Attack the earned-reputation
-   assumption. What does a colluding or bootstrapping quorum enable?
+3. **The bonded-quorum chain (C1 + C2).** Attack the composition, not a
+   primitive: find a strategy that earns quorum-controlling standing for
+   less than *q*·`C_honest` (C1), or concentrates bonded weight past capture
+   under adversarially-skewed measurement (C2), or captures the young,
+   anchor-scaffolded regime before it sheds. What does a colluding or
+   bootstrapping quorum enable?
 4. **The crypto composition.** HKDF key hierarchy (link → layout key +
    content key + care links), convergent vs private modes, the manifest
    sealing. Is anything mis-composed?

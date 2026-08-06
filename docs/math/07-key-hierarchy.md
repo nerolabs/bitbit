@@ -64,9 +64,13 @@ self-verification for free — decrypt a manifest, hash it, compare with
 the link key you used.
 
 The cost is the same confirmation-attack tradeoff as note 02: someone
-who can guess your entire file can confirm the guess. For files with a
-secret *existence*, private mode randomizes the chunk keys, which
-randomizes the manifest, which randomizes the link.
+who can guess your entire file can confirm the guess. That is why
+*private* mode is the **default** (H6, 2026-08-05): it randomizes the
+chunk keys, which randomizes the manifest, which randomizes the link, so
+nothing about a file's existence leaks. You **opt in** to convergent
+derivation when you want cross-user dedup and the data is public enough
+to accept the confirmation surface — deterministic keys and a
+deterministic, shareable link are the reward for that choice.
 
 ## The pattern generalizes
 

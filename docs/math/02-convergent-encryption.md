@@ -46,8 +46,11 @@ ID exists in the network. Chunk present ⇒ guess confirmed.
 The damage scales with guessability:
 
 - *Public data* (OS images, media, datasets): nothing to confirm that
-  isn't already public. Convergent is ideal — this is why it's the
-  default for `silt add`.
+  isn't already public. Convergent is ideal here — which is exactly why
+  it's offered as an **opt-in** mode. (As of H6, 2026-08-05, the default
+  for `silt add` is *private* random-key encryption, not convergent — you
+  opt in to convergent to buy cross-user dedup, accepting its
+  confirmation surface.)
 - *Low-entropy private data* (a form letter with your salary in one
   blank): an attacker can enumerate every plausible fill-in and confirm
   which one you stored. A few thousand SHA-256 calls; disastrous.

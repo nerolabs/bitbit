@@ -2,8 +2,8 @@
 
 Ranked by exposure (likelihood × impact). Each risk has an owner theme,
 a mitigation, and a status. This is a working document — update it as
-mitigations ship. See the [fresh-eyes council](fresh-eyes-council.md)
-for the reasoning behind each.
+mitigations ship. See the [fresh-eyes council](../archive/reviews/fresh-eyes-council.md)
+(archived) for the reasoning behind each.
 
 Status key: **built** (mitigation shipped) · **planned** (agreed, not
 yet done) · **open** (needs a decision).
@@ -83,9 +83,14 @@ Shipped and merged to main since this register was last revised:
   hardening now built (H5-A signed provider records + H5-B failure-domain
   diversity) — instantiates that composition (row 12). One ledger: the durability
   budget (S7) *is* the Sybil budget, funded by an internal escrowable credit
-  reserve (no speculative external token); center-less proof-of-repair is the open
-  construction, routed to research (decisions.md D-S7). Status: **internal
-  hardening pass complete; awaiting EXTERNAL re-verification against the systemic
+  reserve (no speculative external token); **center-less proof-of-repair now
+  *exists*** — a composition of proven parts (transparent polynomial-commitment
+  correctness + Shacham–Waters retrievability + DAS quorum), delivered by the
+  research commission (decisions.md D-S7) → build track H7 — and durability ships
+  as an explicit **finite-but-renewable** contract, not "perpetual" (instrument the
+  credit-cost decline `g`). Standing is priced on **cost-to-wash, never receipt
+  count** (D-DEMAND). Status: **internal hardening pass complete + the routed
+  constructions delivered; awaiting EXTERNAL re-verification against the systemic
   C1/C2 claim.** Residual: the bond is not yet a formally depth-robust /
   memory-hard label function; cheap identity *minting* (PoW/stake deferred)
   remains unpriced; and the plot-amortization binding, while closed by

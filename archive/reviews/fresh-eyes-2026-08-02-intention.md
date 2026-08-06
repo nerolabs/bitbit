@@ -1,7 +1,7 @@
 # Fresh-eyes review — INTENTION ONLY (2026-08-02)
 
 > A pre-read for the next fresh-eyes session. This run uses the reusable persona
-> in [`fresh-eyes-brief.md`](fresh-eyes-brief.md) with **one rule change: the
+> in [`fresh-eyes-brief.md`](../../docs/reviews/fresh-eyes-brief.md) with **one rule change: the
 > reviewer read intent, not code.** Scope = the canon as written (immutables,
 > tenets, roadmap, the GitHub `V1` spine). A code-truth pass is separate and
 > still owed. As the reviewer put it: *intent is where a project lies to itself

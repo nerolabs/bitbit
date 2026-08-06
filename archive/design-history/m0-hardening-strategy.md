@@ -1,10 +1,12 @@
 # M0 hardening — the systemic strategy, surface map, and backlog
 
-**Status: LIVING STRATEGY DOC.** This is the source of truth for *why* M0 is not
-yet held and *how* we close it systemically rather than one finding at a time.
-Update it as surfaces are hardened, decisions are made, and the backlog moves.
+**Status: ARCHIVED / SUPERSEDED (was a LIVING STRATEGY DOC).** The current source
+of truth for M0 is [`docs/design/m0.md`](../../docs/design/m0.md); this document is
+kept for finding-by-finding history only. It records *why* M0 was not yet held and
+*how* it was closed systemically rather than one finding at a time — no longer
+updated.
 
-**Provenance.** After the G2 fix ([m0-sybil-rebind.md](m0-sybil-rebind.md), PR #166,
+**Provenance.** After the G2 fix ([m0-sybil-rebind.md](../../docs/design/m0-sybil-rebind.md), PR #166,
 commit `4ea5fd7`), a fresh **blind** research team and adversary (red) team went deep
 on the whole project. Their outputs live under `silt-reviews/` (out of tree):
 `research/research-outcome/` (9 cited memos + a synthesis) and
@@ -305,7 +307,7 @@ security item must also add its **Invariant B default-denies-attack test**.
 
 ## 8. Handoff notes for the next session
 
-- **Read order:** this doc → [m0-sybil-rebind.md](m0-sybil-rebind.md) (G2 as-built) →
+- **Read order:** this doc → [m0-sybil-rebind.md](../../docs/design/m0-sybil-rebind.md) (G2 as-built) →
   the two red-team reports under `silt-reviews/redteam/m0-field-test/` → the research
   synthesis `silt-reviews/research/research-outcome/SILT-RESEARCH-LENS-SYNTHESIS.md`.
 - **The field test also flags a NON-security gap:** the §6 D2 *adversarial* consensus

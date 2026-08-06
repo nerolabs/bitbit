@@ -139,7 +139,7 @@ equivocation/slashing), and carry two constraints into the Gate-4 design doc
 ## Actions taken from this audit (2026-08-02)
 
 - Filed chain-permanence traps and the equivocation gap as `V1`-milestone issues.
-- Created [`docs/design/gate4-m0-mechanism.md`](../design/gate4-m0-mechanism.md)
+- Created [`docs/design/gate4-m0-mechanism.md`](../design-history/gate4-m0-mechanism.md)
   capturing the design constraints Gate-4 code must respect.
 - Updated `docs/risk-register.md` rows 3, 12, 14 and added the chain-permanence row.
 </content>

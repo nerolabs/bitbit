@@ -56,7 +56,7 @@ nonce lands), and it does not prove *unique* storage (three names can
 front one copy). It is a placeholder, useful for catching the outright
 liar in the audit sim, not the real thing.
 
-The V1 target (tenet **M0** and **ROADMAP** Gate 4, issue #90) is a *real*
+The V1 target (tenet **M0**) is a *real*
 proof-of-retrieval/storage: a published, peer-reviewed scheme from the
 compact-PoR / PDP / proof-of-space family, used as-is. M0's Sybil-resistance
 is a **systemic composition** — C1 (no discount: a fraction *q* of standing

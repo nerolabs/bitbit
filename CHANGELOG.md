@@ -9,6 +9,33 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **Full non-code file audit + remediation; stray binary removed** (2026-08-06) — Audited
+  all 106 tracked non-code files (purpose · last-updated · needed? · safe-to-remove/archive ·
+  staleness). Findings actioned; no Go behavior changed except one web-UI default (below).
+  - **Stray removed:** `shardnet` — a 5.1 MB Mach-O binary committed under the project's old
+    name — deleted and gitignored. No other committed strays or dead files found.
+  - **The one factual contradiction fixed:** `docs/risk-register.md` still said center-less
+    proof-of-repair was "routed to research"; it's **delivered** (D-S7) — corrected, plus
+    finite-but-renewable durability and D-DEMAND (cost-to-wash pricing).
+  - **`docs/threat-model.md` reconciled** (public disclosure doc): the Sybil/eclipse, PoR,
+    free-rider/wash, colluding-quorum, and trust-assumption sections rewritten from the old
+    "reputation quorum / storage bond / DHT eclipse unhardened / Gate 4" framing to the
+    current **C1 + C2 composition** (objective bonded fork-choice, H5 eclipse hardening,
+    D-DEMAND wash re-pricing, private-by-default).
+  - **`website/docs.html`** consensus section + meta refreshed from "reputation-quorum" to
+    the objective bonded-quorum / C1·C2 framing; link-format copy corrected for
+    private-by-default.
+  - **H6 behavioral gap closed:** `cmd/silt/ui/publish.html` defaulted the web publish mode
+    to `convergent`; now defaults to **private** (matching the CLI), with the confirmation-
+    attack caveat.
+  - **Staleness sweep:** `docs/math/02` + `docs/math/07` (convergent-as-default → private),
+    `docs/math/05` (retired "Gate 4 #90" citation), `docs/math/08` (H4 Byzantine quorum
+    note), `docs/design/cross-network.md` (relay incentives → D-DEMAND), `docs/threat-catalog.md`
+    + `docs/safety-denylist.md` (backfilled the 08-06 commission facts).
+  - **Archive hygiene:** `docs/fresh-eyes-council.md` archived (a new council brief added at
+    `docs/reviews/fresh-eyes-council-brief.md`); `docs/design/bond-audit.md` archived with a
+    live wire-protocol stub left in place; 6 broken intra-archive relative links and 2 stale
+    "LIVING/current" banners fixed; `archive/README.md` index updated. `.gitignore` deduped.
 - **ROADMAP + BACKLOG reconciled to the current strategy; the retired Gate 0→6 spine
   removed** (2026-08-06) — Both planning docs still narrated the old builder-phase spine
   ("V1 = Gate 0→6, **Gate 4 is the M0 mechanism to build**"), which predates the mechanism

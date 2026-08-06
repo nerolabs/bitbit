@@ -208,9 +208,13 @@ Concretely, to keep the accident from happening:
 ## Open questions (flagged, not solved here)
 
 - **Relay incentives.** Relaying spends bandwidth for someone else's
-  transfer. Long-term this should earn credit like serving does (the
-  bandwidth-gossip pattern extends to it); short-term, `-relay` is
-  altruistic + rate-capped. Don't block the first cut on the economics.
+  transfer. The decided direction: relaying is a **work-backed
+  capability that earns credit like serving does** (the bandwidth-gossip
+  pattern extends to it), and standing that credit feeds is priced on
+  **cost-to-wash**, never raw receipt count (see **D-DEMAND** in
+  [`../decisions.md`](../decisions.md) — demand authenticity is a Douceur
+  limit). Short-term `-relay` remains rate-capped; don't block the first
+  cut on wiring the credit path.
 - **Relay abuse.** An open relay invites bandwidth leeching and amplification
   games. Mitigations: per-peer rate/bandwidth caps, reachability-verified
   peers only, opt-in. Enough for dev; revisit for launch.
