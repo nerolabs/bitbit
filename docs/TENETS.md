@@ -267,11 +267,22 @@ escrow** (a prepaid credit reserve) that **auto-skims** a fixed fraction of each
 object's serving revenue back into that object's reserve, paying repair bounties
 scaled by how under-replicated a stripe is (rarest-shard first). These credits
 fund *durability* and confer *no* consensus standing — standing stays
-work-backed and coin-free. The open construction is **center-less
-proof-of-repair** (a bounty pays only on a succinct proof the shard was correctly
-regenerated, verifiable without reading plaintext; a false claim slashes the
-bond) — a primitive that does not yet exist and is the durability track's
-necessary invention (see [decisions.md](decisions.md) D-S7).
+work-backed and coin-free. **Center-less proof-of-repair now exists** — a bounty
+pays only on a succinct proof the shard was correctly regenerated, verifiable
+without reading plaintext, a false claim slashing the bond — as a *composition of
+proven primitives*, no new invention for the plain-RS case: a transparent
+polynomial commitment (FRI-Binius, no trusted setup) for **correctness** +
+Shacham–Waters PoR for **retrievability** + a DAS quorum for **center-less
+checking** (see [decisions.md](decisions.md) D-S7; build track H7).
+
+**Durability is finite-but-renewable, not "perpetual."** The per-repair game is
+solved, but *perpetual* cold-data solvency is the Arweave endowment identity in
+credits — it holds only while `g > 0`, a strictly positive credit-denominated
+cost-of-storage decline, which 2020s hardware evidence no longer guarantees. So
+silt funds a horizon, auto-skims to extend it, and asks for re-endowment before
+expiry — solvent for *any* sign of `g` — and publishes the funded horizon per
+object. "Perpetual" is a claim silt *earns only if measured `g` stays positive*,
+never an architectural promise; `g` is the one number to instrument.
 
 If we
 cannot state the equilibrium in which repair funds itself, we have not decided
@@ -669,3 +680,20 @@ the network grows — **not closed.**
   guarantee. **D-DISCLOSURE:** added Don't #8 (no decryption backdoor at core).
   D-CRYPTO-AGILITY (post-V1) and D-ANCHORS (launch-config) are recorded in
   decisions.md only.
+- **2026-08-06 (commission answers folded in)** — The follow-up research commission
+  (`research-outcome/commission/`) answered the routed-to-research constructions.
+  **D-S7:** center-less proof-of-repair **now exists** as a composition of proven
+  parts (transparent polynomial-commitment correctness + Shacham–Waters
+  retrievability + DAS quorum, no new primitive for plain-RS); S7 rewritten to say
+  so, and durability restated as **finite-but-renewable, not "perpetual"** —
+  perpetual solvency needs a positive credit-denominated cost decline `g` the 2020s
+  no longer guarantee, so silt funds a renewable horizon and instruments `g`.
+  **D-TAKEDOWN:** the formal non-globality metric now has a construction (survivor
+  Nakamoto-coefficient + ZK threshold predicate revealing only `t`). **D-DEMAND
+  (new):** standing is priced on **cost-to-wash, never receipt count** — the blind
+  demand receipt gives unforgeable-delivery + fetcher-unlinkability but *not* demand
+  authenticity (a Douceur limit); wash is re-priced, not proven away. The **core
+  open problem** is now named precisely: the **shared-content sealing boundary**
+  (plain PoR over shared shards leaks γ→1/N; silt is not exposed today because
+  standing uses a dedicated identity-keyed bond plot, not the shared shards). Full
+  detail in [decisions.md](decisions.md) and [design/m0.md](design/m0.md) §10.
