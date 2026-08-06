@@ -84,22 +84,25 @@
   charter, identical on every node — and starts syncing real history from its
   peers, re-validating every signature itself. It cannot be handed a false chain.</p>
 
-  <h2>How reputation is earned</h2>
-  <p>Reputation is not granted or bought — no token, no coin; it accumulates from
-  what other nodes observe you do, and publishing stays cryptographically
-  unlinkable from the standing you build. (Pre-V1, the bond and proof-of-retrieval
-  behind this are honestly-labeled placeholders, sim and single-host only.) Three
-  inputs feed it:</p>
+  <h2>How standing is earned</h2>
+  <p>Consensus standing is not granted or bought — coin-free, no speculative token.
+  It is backed by an <b>identity-bound proof-of-space-time bond</b>: challenged,
+  held storage that costs real disk. By default the published record names no
+  author; opt-in blind tokens give true cryptographic unlinkability (a transport
+  IP+timing link remains until issuance-mixing ships, Pre-V1). (Pre-V1, the bond and
+  proof-of-retrieval behind this are honestly-labeled placeholders, sim and
+  single-host only.) The bond is what mints standing; two further signals are
+  measured but do not, on their own, buy standing:</p>
   <table>
     <tr><th>Signal</th><th>How it's measured</th></tr>
-    <tr><td><b>Storage honesty</b></td><td>Passing spot-check audits — proving, with a fresh nonce, that you still hold a shard. Failing one is punished heavily.</td></tr>
-    <tr><td><b>Serving</b></td><td>Bytes actually delivered to requesters. A node that hoards but won't serve is a freeloader.</td></tr>
-    <tr><td><b>Persistence</b></td><td>Staying reachable. Liveness is observed continuously, never assumed.</td></tr>
+    <tr><td><b>Storage bond</b></td><td>Challenged, identity-bound held storage that costs real disk. This is the standing itself.</td></tr>
+    <tr><td><b>Storage honesty</b></td><td>Passing spot-check audits — proving, with a fresh nonce, that you still hold the bond. Passing mints no standing; failing is punished heavily.</td></tr>
+    <tr><td><b>Serving</b></td><td>Bytes actually delivered to requesters fund the durability economy, not standing. A node that hoards but won't serve is a freeloader.</td></tr>
   </table>
-  <p>Because your identity <em>is</em> your key, reputation can't be transferred or
-  laundered — and can't be shed without discarding the identity and starting from
-  zero. When your standing clears the network's bar, your signature begins to
-  count toward committing new entries. <a href="docs.html#consensus">The exact formula and quorum rules →</a></p>
+  <p>Because your identity <em>is</em> your key, standing can't be transferred or
+  laundered — and can't be shed without discarding the identity and its bond and
+  starting from zero. When your bonded standing clears the network's bar, your
+  signature begins to count toward committing new entries. <a href="docs.html#consensus">The exact formula and quorum rules →</a></p>
 
   <h2>Watch it work</h2>
   <p>Add <span class="mono">-ui 127.0.0.1:8081</span> for a local dashboard: pledge used,

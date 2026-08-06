@@ -14,6 +14,13 @@
    [launch-plan.md](launch-plan.md): credible from day one, not an experimental
    drop the community is asked to finish hardening.
 
+**Hard M0 gates (both must pass before `1.0.0`):**
+- [ ] **Multi-machine field test — the R1 gate (#52)**, including the adversarial-consensus
+  SAFETY sub-suite over the real wire (equivocation-slash, partition→heavier-fork heal,
+  low-bond reject, forged-block reject), not just liveness.
+- [ ] **External red-team verdict against the C1 + C2 composition (#183)** — self-graded
+  does not count (B8). M0 is *held* only when both of these pass at declared parameters.
+
 Everything below is the mechanics of cutting a tag on the RC line (`0.9.0`)
 and, when the field-proof gate is met, V1 (`1.0.0`). The last step — pushing a
 tag — is deliberately manual and is Andrew's to pull, *after* the relevant gate

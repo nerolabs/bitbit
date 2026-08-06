@@ -144,7 +144,10 @@ It is **held** when, at the network's declared parameters, no strategy earns
 consensus-controlling standing for less than `q · C_honest` (**C1**), and the
 concentration metric keeps the minimum colluding operator set above *k* (**C2**),
 with the §7 seams either closed or *held in tension with a documented, bounded
-residual*. C1 is now a **theorem under stated hypotheses**; C2 is a **measurement
+residual*. C1 is a **theorem *under* the B5 hypotheses H1–H3** (a direct-product
+bound) — *conditional*, not unconditional: the per-identity Alwen–Blocki lift is
+unproven, the shared-content H3 gap (γ→1/N, #182) is open, and in shipped code only
+the bond (D) axis gates standing so far (§ "where we are"). C2 is a **measurement
 bounded by an impossibility result** (Kwon) — held, not closed, by design. The
 verdict is rendered by the external red-team + the field test, together.
 

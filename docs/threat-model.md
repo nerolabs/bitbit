@@ -223,7 +223,7 @@ by default). Design in [`network-protection.md`](network-protection.md).
 - **Not anonymous.** No onion routing, no traffic-analysis resistance.
 - **Not audited.** No independent security or cryptographic review.
 - **Not censorship-proof** against a resourceful Sybil/eclipse adversary.
-- **Not Byzantine-fault-tolerant.** The chain is a reputation quorum.
+- **BFT-style safety conditional on ≤ 1/3 bonded weight** — objective on-chain-bond fork-choice with Byzantine (n−f) quorum sizing gives quorum-intersection safety *while an adversary controls ≤ 1/3 of bonded weight*. This is **not *unconditional* BFT** against an unbounded adversary (a colluding super-quorum can still commit a bad revocation — see above), and it is **not a classic reputation quorum** either (standing is priced by C1's `C_honest`, not self-reported reputation).
 - **Not a proof-of-space/replication system.** Proof-of-retrieval is a
   liar-catcher, not a durability guarantee.
 - **Not production-ready.** This is 0.x, experimental.

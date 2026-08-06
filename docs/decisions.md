@@ -30,12 +30,16 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   cannot pay), and even at the metadata layer it is bounded by anonymity-set size on a
   small network.
 - **Direction (decided):** Amend immutable #4 from an absolute ("who fetches what is *never*
-  observable") to a **stated, layered tradeoff**: publish-unlinkability is delivered;
-  access-unobservability is a metadata-layer goal *held in tension*, bounded by the
-  trilemma and anonymity-set size, not guaranteed at the blob layer. What stays absolute is
-  the **refusal to surveil** — silt builds no mechanism to log or link who-fetched-what.
-  Resolves the standing contradiction with `threat-model.md` (which already concedes access
-  patterns are correlatable).
+  observable") to a **stated, layered tradeoff**: publish-unlinkability is delivered **at the
+  chain layer** (the committed record omits the Publisher field by default; opt-in blind
+  tokens give cryptographic unlinkability of publish→durable-identity) — **but a residual
+  transport IP+timing link stays OPEN until D3 issuance-mixing ships** (H8/#179), so this is
+  *not yet* full-stack unlinkability. Access-unobservability is a metadata-layer goal *held in
+  tension*, bounded by the trilemma and anonymity-set size, not guaranteed at the blob layer.
+  What stays absolute is the **refusal to surveil** — silt builds no mechanism to log or link
+  who-fetched-what. Resolves the standing contradiction with `threat-model.md` (which already
+  concedes access patterns are correlatable); the who-reads comparative framing in
+  `risk-register.md` #14 is requalified to match.
 - **Also ship:** the **D3 issuance-mixing** residual (route token issuance over the
   content-blind relay from an ephemeral identity + epoch batching) to close the publisher
   IP+timing link — a build item, not a further decision.
@@ -44,8 +48,10 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-S7 — durability is funded by an internal, non-speculative credit reserve
 
-- **Status:** ✅ DIRECTION DECIDED + **construction DELIVERED** — 2026-08-06.
-  (Was "construction routed to research," 2026-08-05; the commission answered it.)
+- **Status:** ✅ DIRECTION DECIDED + **construction DESIGNED (proven-parts composition;
+  not yet built → H7/#95)** — 2026-08-06. (Was "construction routed to research,"
+  2026-08-05; the commission delivered a *design*, not code — the field-bridge / transparent-PCS
+  choices and the build are the H7 track.)
 - **Research basis:** Memo 07 (durability economics) named the wall; the follow-up
   commission (`research-outcome/commission/A1-*`) **delivered the construction and the
   equilibrium.** Memo 07's finding stands: cold-data repair that is **token-less AND
@@ -178,6 +184,38 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   cost-per-fake-demand vs honest. **Hard dependency:** property (b) unlinkability is *nominal
   until D3 issuance-mixing is solved* (the IP/timing channel) — shared with D-PRIV and the
   privacy build-track.
+
+## D-C2 — "no quiet capture" is held in tension, never closed (by theorem)
+
+- **Status:** ▶ DIRECTION DECIDED (held-not-closed) — 2026-08-06. Promoted to a first-class
+  entry (was buried in the "not on this ledger" tuning list) because it is one of M0's two
+  Sybil corners and the strongest *held-in-tension* result — it must be tracked, not assumed.
+- **Research basis:** commission memo B1 (C2 / no quiet capture). C1 (no discount) can be a
+  theorem; **C2 can never be** — Kwon et al.'s impossibility makes assigning a Sybil cost to
+  *identity-splitting* impossible without a trusted authority, so operator-clustering (keys →
+  independent operators) is **heuristic at its base, by theorem, not by implementation
+  weakness.**
+- **Direction (decided):** measure concentration as **cost-to-corrupt / Nakamoto-coefficient
+  over bond-distinct *operators*, Byzantine-robustly sampled**, and shed the anchor
+  training-wheels only when the measured count clears the target *with margin*. The achievable
+  bound is **`k* ≥ k̂ / M`**, where `M = M_cluster · M_est · M_sample` is a
+  concentration-underestimate factor (> 1); so **shed only when `k̂ ≥ k · M`.** The single
+  sharpest engineering lever: **compute the weight numerator from the committed on-chain bond
+  ledger, not gossip** (kills the gossip-skew half of the skew+split attack) — this is the
+  measurement filed as the C2-metric-wiring build item, and it is *the same number* consumed
+  by the consensus shed, the private-lookup committee certification (H8), and C2.
+- **Honest residuals (tracked, not closed):**
+  - **The honest whale / real cartel** — an actor who *genuinely* provides φ of the disk
+    across infra-independent nodes and then coordinates — is **outside C2 entirely**; bounded
+    only by the HHI/Gini concentration veto + the cost-to-corrupt-vs-profit co-trigger + the
+    anchor training-wheels, none of which is a Sybil bound. This is the wealth residue C1
+    cannot touch.
+  - **`M_est` under adversarial NodeID placement is unquantified** — the CPR estimator's
+    `O(n^{1−δ})` Byzantine tolerance is proven only for *random* placement; a stake-splitter
+    chooses its NodeIDs, degrading it by an amount **the literature does not characterize**
+    (a flagged research gap, also a risk-register row).
+- **Build items:** the C2-metric-wiring issue (Nakamoto-over-bond-distinct-operators from the
+  committed `BondReg` ledger; the external red-team #183 that attacks C2 is blocked-by it).
 
 ## D-DISCLOSURE — no decryption backdoor at the core layer
 

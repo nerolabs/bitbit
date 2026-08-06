@@ -94,9 +94,16 @@ synthetic bytes standing in for real storage (unique-sealed real content),
 self-dealt demand (witnessed, *unlinkable* demand receipts that reuse the
 blind-token primitive), free keys massed near a target (address/AS-diversity
 buckets), instant standing (VDF elapsed time + audited accrual). Composed so
-every shortcut on one axis trips another axis's check, **forging N standings
-costs N× of *every* non-substitutable resource** — which is honest provision.
-Sybil-resistance is therefore *re-pricing + concentration-bounding*, not
+every shortcut on one axis trips another axis's check, the *target composition*
+makes **forging N standings cost N× of *every* non-substitutable resource** —
+which is honest provision. **⚠️ Shipped subset vs. target (be honest which):**
+today consensus *standing* is gated by the **bond (disk) axis alone**; the
+served-demand axis (B) is an unbuilt track (D-DEMAND / #181), and
+address-diversity (A) lives in the DHT layer (H5), not yet in the standing
+number. So `C_honest ≈ D` in force today, `D×A×T×B` as the target — the interlock
+is designed, not fully wired, and the C1 claim is *conditional* (see
+`design/m0.md` §3, §7, §10). Sybil-resistance is therefore *re-pricing +
+concentration-bounding*, not
 prevention; the residual — an honest whale who genuinely provides that much — is
 *bounded* by C2's shed metric, not eliminated.
 
@@ -253,12 +260,21 @@ storing and repairing is a net cost with no matching reward decays to zero the
 moment altruism runs out — this is the wound that killed Freenet and GNUnet, one
 genre earlier. So durability is not "solved" until the caretaker who repairs a
 stripe they neither own nor can read is **paid by the demand that content
-serves** (ties to caretakers #44 and the economics gates). **This is the same
-demand that prices Sybil standing:** the durability budget and the Sybil budget
-are one ledger — the served, sustained real content a node holds is both what
-earns its repair reward *and* what backs its consensus standing (M0), so stating
-S7's equilibrium and holding M0's Sybil corner are the *same* mechanism, one
-ledger read from two sides, not two claims competing for the same disk.
+serves** (ties to caretakers #44 and the economics gates). **The *design goal* is
+one ledger:** the served, sustained real content a node holds would be both what
+earns its repair reward *and* what backs its consensus standing (M0) — durability
+budget and Sybil budget read from two sides of the same disk. **⚠️ That fusion is
+NOT shipped, and deliberately so.** Today consensus standing comes *only* from a
+**dedicated, identity-keyed bond plot** (throwaway labels), **separate** from the
+useful shared content a node serves; served content and PoR audits mint **no**
+standing. Fusing served content *into* standing is blocked by the **γ→1/N
+shared-content shortcut** — one physical copy of a shared erasure-coded shard
+would answer for N pledges — which stays open until identity-keyed PoRep sealing
+exists (the single core research problem, `design/m0.md` §10 / issue #182). The
+C1 "no discount" claim is **gated on this separation holding**. So S7's
+equilibrium and M0's Sybil corner are *designed* to be one mechanism, but are two
+separate ledgers today; treating them as already-fused would re-open the exact
+Sybil break the separation exists to prevent.
 
 **The funding model (decided, per the durability research):** no *speculative
 external* token — but silt's internal credit unit is made **durable, escrowable,
@@ -267,13 +283,16 @@ escrow** (a prepaid credit reserve) that **auto-skims** a fixed fraction of each
 object's serving revenue back into that object's reserve, paying repair bounties
 scaled by how under-replicated a stripe is (rarest-shard first). These credits
 fund *durability* and confer *no* consensus standing — standing stays
-work-backed and coin-free. **Center-less proof-of-repair now exists** — a bounty
-pays only on a succinct proof the shard was correctly regenerated, verifiable
-without reading plaintext, a false claim slashing the bond — as a *composition of
-proven primitives*, no new invention for the plain-RS case: a transparent
-polynomial commitment (FRI-Binius, no trusted setup) for **correctness** +
-Shacham–Waters PoR for **retrievability** + a DAS quorum for **center-less
-checking** (see [decisions.md](decisions.md) D-S7; build track H7).
+work-backed and coin-free. **Center-less proof-of-repair has a construction**
+(design delivered, **not yet built** → H7 / issue #95): a bounty pays only on a
+succinct proof the shard was correctly regenerated, verifiable without reading
+plaintext, a false claim slashing the bond — a *composition of proven primitives*,
+no new invention for the plain-RS case (a transparent polynomial commitment —
+FRI-Binius, no trusted setup — for **correctness** + Shacham–Waters PoR for
+**retrievability** + a DAS quorum for **center-less checking**; see
+[decisions.md](decisions.md) D-S7). Note this proves a repair is *correct* — a
+different axis from the γ→1/N sharing problem above; it does **not** make one
+shared copy stop answering for N pledges.
 
 **Durability is finite-but-renewable, not "perpetual."** The per-repair game is
 solved, but *perpetual* cold-data solvency is the Arweave endowment identity in
@@ -515,7 +534,7 @@ validators + curators + authorities            →  keep the loop honest and law
 | Tension | Our stance |
 |---|---|
 | Publisher permanence vs. takedown | Permanence by default; takedown only via *chosen, transparent* lists — never silent or global. |
-| Consumer privacy vs. legal accountability | Privacy of *access* is absolute; accountability acts on *content* (jurisdiction-scoped), not on who read it. |
+| Consumer privacy vs. legal accountability | The *refusal to surveil* is absolute (silt builds no who-read-what log); access-*unobservability* is a metadata-layer goal held in tension, bounded by the anonymity trilemma — not a blob-layer absolute (immutable #4, D-PRIV). Accountability acts on *content* (jurisdiction-scoped), never on who read it. |
 | Privacy vs. Sybil-resistance (the M0 edge) | Identity is free and private; *standing* costs sustained challenged work; publishing stays unlinkable from standing. We buy Sybil-resistance with *proven work*, never with a coin, a stake, or deanonymization. |
 | Operator freedom vs. availability | Operators are free to leave; availability is the network's job (repair), not a shackle on any operator. |
 | Decentralization vs. usability | Rendezvous may be centralized *for convenience* but never *load-bearing*; the decentralized path must always exist. |
@@ -697,3 +716,20 @@ the network grows — **not closed.**
   (plain PoR over shared shards leaks γ→1/N; silt is not exposed today because
   standing uses a dedicated identity-keyed bond plot, not the shared shards). Full
   detail in [decisions.md](decisions.md) and [design/m0.md](design/m0.md) §10.
+- **2026-08-06 (external-audit honesty propagation)** — Two independent audits of the docs
+  pass (a research *comprehension* audit + a red-team *intention* audit) found comprehension
+  excellent but a **propagation gap**: the held-in-tension honesty that was correct in
+  `m0.md §10` / issue #182 had not reached the tenet layer, the risk surface, or the public
+  site, so three things read as *achieved* that are deliberately *open*. Fixed at canon: **S7
+  reworded** — the "one ledger" (served-content ⇄ standing fusion) is the *design goal*, **not
+  shipped**; today standing comes only from the dedicated bond plot, separate from served
+  content, and fusing them is gated on the γ→1/N problem (#182). **Part 0 C_honest** marked
+  *target composition (D×A×T×B) vs. shipped subset (≈ D only)* — B (served demand) unbuilt
+  (#181), A (address diversity) at the DHT layer not yet in the standing number — so C1 is a
+  *conditional* claim. **Part VIII value-loop table** row corrected from "Privacy of *access*
+  is absolute" (the exact absolute D-PRIV retired) to the refusal-to-surveil-absolute /
+  access-held-in-tension form. **Proof-of-repair** softened from "now exists" to *construction
+  designed, not yet built (H7)*. Companion risk-register / threat-catalog / public-site fixes
+  landed the same honesty (γ→1/N as an open-risk row; `g≤0`; CPR-adversarial-placement; the
+  public Sybil-standing copy corrected to bond-backed). Comprehension was faithful; this was a
+  propagation fix, not a re-think.
