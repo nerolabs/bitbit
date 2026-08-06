@@ -46,6 +46,11 @@ type account struct {
 	// the gravest offense — an attack on consensus itself — so it does not
 	// merely dent standing, it buries it below any threshold forever.
 	equivocations int
+	// falseRepairs counts PROVEN false repair claims (core/repairproof): a
+	// caretaker claimed a durability bounty for a shard that fails the public
+	// correctness recompute. Deliberate but bounded fraud — a large finite dent,
+	// not the permanent burial equivocation earns.
+	falseRepairs int
 }
 
 // Ledger implements ports.CreditLedger plus the observability the sim's
@@ -196,6 +201,29 @@ func (l *Ledger) SlashEquivocation(id ports.NodeID) {
 	a.bondedBytes = 0
 }
 
+// falseRepairSlash is the reputation penalty per PROVEN false repair claim. A
+// caretaker claimed a durability bounty (core/credit escrow) for a shard that
+// fails the public correctness recompute (core/repairproof), and that
+// non-verifying transcript is the attributable fraud proof. Unlike an
+// equivocation — which buries standing forever because it attacks consensus
+// itself — a false repair is deliberate but bounded fraud, so the penalty is
+// large but FINITE. The magnitude is a tuning parameter (Evolving, per the
+// tenets): it must exceed the standing a typical attester earns and make a false
+// claim strictly -EV against the bounty it targets (bounty-relative calibration
+// is an open item, docs/design/h7-proof-of-repair.md §12).
+const falseRepairSlash = 1_000_000
+
+// SlashFalseRepair records a PROVEN false repair claim against a caretaker
+// (the failing correctness transcript verified by core/repairproof before this is
+// called). It applies a crushing but finite reputation penalty. Like every slash
+// it can only ever LOWER standing — a reduces-class press under Invariant A, never
+// Sybil-amplifiable. It does NOT touch bondedBytes: the storage bond is
+// independent of the repair lie, so only the earned standing is docked, and an
+// honest node that later re-proves its bond is unaffected by the (finite) dent.
+func (l *Ledger) SlashFalseRepair(id ports.NodeID) {
+	l.acct(id).falseRepairs++
+}
+
 // DecayStale zeroes any standing whose last passing bond-challenge is
 // older than maxAge, so a node that stops answering loses standing
 // without anyone having to catch it lying. The validator/caretaker loop
@@ -247,6 +275,7 @@ func (l *Ledger) Reputation(n ports.NodeID) int64 {
 	return a.bondedBytes/bondUnit -
 		int64(a.auditsFailed)*250 -
 		int64(a.bondFails)*250 -
+		int64(a.falseRepairs)*falseRepairSlash -
 		int64(a.equivocations)*equivocationSlash
 }
 

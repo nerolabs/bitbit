@@ -320,6 +320,20 @@ post-M0):
 
 ## 8. The release/slash gate — wrapping slice 1
 
+> **Built (the decision logic):** the pure gate is implemented and unit-tested —
+> `repairproof.Decide(correctnessOK, retrievabilityVotes, τ)` returns the
+> release/slash verdict; `repairproof.VerifyRetrievability` runs the identity-bound
+> SW check (`repairproof.RepairChallengeSeed` closes the relay/double-count);
+> `repairproof.VerifyByRecompute` is the correctness leg (§4.3); and
+> `credit.SlashFalseRepair` is the `reduces`-class slash press. Per the §6
+> refinement, `Decide` treats correctness as single-verifier-sufficient (a failing
+> recompute is self-attributing ⇒ `Slash`) and reserves the τ-of-q quorum for
+> retrievability (a shortfall denies the bounty but does **not** slash — it may be
+> transient). **Remaining:** the node/network wiring — carrying a `RepairClaim` over
+> the wire, running the caretaker quorum, and applying the verdict to the ledger
+> (`PayBounty` / `SlashFalseRepair`). That is the integration step (needs `core/node`
+> + a `MsgRepairClaim`/`MsgRepairVote` pair) and lands with sim + e2e coverage.
+
 Slice 1's `PayBounty(root, repairer, amount)` trusts its caller. Slice 2 *is* that
 caller, and it only calls on a verified transcript:
 
