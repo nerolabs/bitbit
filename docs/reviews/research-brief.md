@@ -1,5 +1,20 @@
 # Research brief — open questions for the research team
 
+> **✅ ANSWERED (2026-08-06).** This brief was commissioned and the research team
+> delivered — eight footnoted memos in
+> `silt-reviews/research/research-outcome/commission/` (synthesis in
+> `00-COMMISSION-SYNTHESIS.md`). Headline: the two named walls are **lower than
+> feared** — **A1 center-less proof-of-repair EXISTS** (composable from proven parts,
+> plain-RS; unblocks D-S7 → build H7) and **A2 non-globality metric is CONSTRUCTED**.
+> The genuinely-open residue narrowed to **one** task — the **shared-content sealing
+> boundary** (B5: plain PoR over shared shards leaks γ→1/N; needs identity-keyed PoRep
+> sealing) — plus the held-in-tension bounds M0 already predicted (C2, wash-vs-real,
+> cold-start). Decisions folded into [`../decisions.md`](../decisions.md) and
+> [`../design/m0.md`](../design/m0.md) §10. This brief is kept as the **question set**
+> the commission answered; the constructions are now build/research tracks, not open
+> questions. The seam stress-tests (B1–B5) remain the **sharpened target for the
+> external red-team** (test C1+C2 at declared parameters, not the primitives).
+
 **Purpose.** The research package (memos 01–09) has been **accepted**, and its
 recommendations are now decided directions (see [`../decisions.md`](../decisions.md)
 and [`../design/m0.md`](../design/m0.md)). This brief asks the research team for the

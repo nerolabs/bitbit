@@ -9,6 +9,39 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **Research commission answers folded into the decision ledger; the two routed-to-research
+  constructions now EXIST** (2026-08-06) — The follow-up research commission
+  (`silt-reviews/research/research-outcome/commission/`, eight footnoted memos) answered the
+  questions `docs/reviews/research-brief.md` had routed out. Recorded across
+  `docs/decisions.md`, `docs/design/m0.md`, and `docs/TENETS.md`; no code behavior changed.
+  - **D-S7 — construction DELIVERED + durability restated finite-but-renewable.** Center-less
+    **proof-of-correct-repair now exists** as a composition of proven parts (a transparent
+    binary-field polynomial commitment [FRI-Binius, no trusted setup] for *correctness* +
+    Shacham–Waters PoR for *retrievability* + a DAS quorum for *center-less checking*) — ~100 B
+    proof, no plaintext seen, no new primitive for the plain-RS case → build track **H7**.
+    Durability ships as an explicit **finite-but-renewable** contract, not "perpetual":
+    perpetual cold-data solvency is the Arweave endowment identity in credits and holds only
+    while a positive credit-denominated cost decline `g > 0` (which 2020s hardware no longer
+    guarantees), so silt funds a renewable horizon and **instruments `g`** as the number that
+    decides perpetual-vs-finite. (MSR/regenerating-code proof-of-repair stays genuinely open,
+    off the critical path.)
+  - **D-TAKEDOWN — non-globality metric CONSTRUCTED.** A *survivor Nakamoto coefficient over
+    failure domains*, published as a certified lower bound `≥ t` via a **ZK threshold
+    predicate** that reveals only the scalar `t` (defeating the discovery-oracle) — as real as
+    the (non-cryptographic) independence oracle. Stays low-urgency → H9.
+  - **D-DEMAND (new decision).** Standing is priced on **cost-to-wash, never receipt count**.
+    The blind demand receipt (Chaumian token + PoR-bound delivery-ack + quorum-as-TTP fair
+    exchange) delivers unforgeable-delivery + fetcher-unlinkability, but **demand *authenticity*
+    is a Douceur limit** — self-dealing is uncloseable by any receipt; wash is re-priced (burned
+    fee + bonded-fetcher credential), not proven away.
+  - **The core open problem, named precisely.** `B5` proves **C1 (no discount) is a theorem
+    under H1–H3**; the single surviving economy of scale is the **shared-content sealing
+    boundary** (plain PoR over shared erasure-coded shards leaks γ→1/N, closed only by
+    identity-keyed PoRep sealing). silt is **not exposed today** — standing uses a dedicated
+    identity-keyed bond plot, not the shared shards — but fusing served content into standing
+    without leaking γ→1/N is the open, academic-collaborator task (`docs/design/m0.md` §10).
+    Cross-cutting engineering find (`B1`): compute the C2 concentration metric's weight from the
+    **committed on-chain bond ledger, not gossip** — one measurement feeds three seams.
 - **M0 reframed as a systemic composition (not a Sybil-proof primitive); tenets amended and
   docs reset** (2026-08-05) — Adopting the research capstone (`09-m0-as-composition.md`), M0's
   Sybil corner is now stated as a **systemic** claim — **C1 (no discount) + C2 (no quiet

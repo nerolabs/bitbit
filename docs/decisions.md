@@ -44,15 +44,17 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-S7 — durability is funded by an internal, non-speculative credit reserve
 
-- **Status:** ▶ DIRECTION DERIVED — 2026-08-05; **construction routed to research.**
-- **Research basis:** Memo 07 (durability economics). Cold-data repair that is **token-less
-  AND center-less has no existence proof** — every deployed survivor uses a crutch silt
-  forbids: a central paymaster (Storj — which filed Chapter 11 in July 2026, trapping
-  operator balances), an online paying client (Sia), a token block-reward subsidy
-  (Filecoin), or a prepaid token endowment betting on falling costs (Arweave). Every
-  center-less, subsidy-less system (Freenet, GNUnet, Swarm-for-cold-data) lets cold data
-  decay — silt's exact wound. The memo's blunt conclusion: *if silt refuses even an
-  internal, non-speculative, time-shiftable credit reserve, S7 is likely unsolvable.*
+- **Status:** ✅ DIRECTION DECIDED + **construction DELIVERED** — 2026-08-06.
+  (Was "construction routed to research," 2026-08-05; the commission answered it.)
+- **Research basis:** Memo 07 (durability economics) named the wall; the follow-up
+  commission (`research-outcome/commission/A1-*`) **delivered the construction and the
+  equilibrium.** Memo 07's finding stands: cold-data repair that is **token-less AND
+  center-less had no existence proof** — every deployed survivor uses a crutch silt forbids
+  (a central paymaster — Storj, which filed Chapter 11 in July 2026, trapping operator
+  balances; an online paying client — Sia; a token block-reward subsidy — Filecoin; or a
+  prepaid token endowment betting on falling costs — Arweave). The relaxation to an
+  internal, non-speculative, time-shiftable credit reserve is what moved S7 from
+  "unsolvable" to "solvable in a checkable region."
 - **Direction (derived):** Relax "no token" to **"no *speculative external* token."** Keep
   the internal credit unit, but make credits **durable, escrowable, and forwardable in
   time**, and adopt the memo's triad as the S7 spine:
@@ -66,17 +68,45 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   Sybil budget are **one ledger**. The internal credit reserve is distinct from *standing* —
   standing stays work-backed and coin-free; credits fund *durability*, confer no consensus
   weight.
-- **Construction routed to research (the wall memo 07 named):** **center-less
-  proof-of-repair** — a succinct proof that a specific coded shard was correctly
-  regenerated, checkable by a quorum that cannot read the plaintext (verifiable against the
-  erasure-code commitment the network already holds), a false claim slashing the caretaker's
-  bond. *This primitive does not exist in deployment.* It is the subject of the incoming
-  dedicated durability memo and then a prototype (backlog H7). Until it exists, S7 has a
-  funding model but not a verified-repair mechanism.
+- **Construction (DELIVERED — `A1-proof-of-repair-construction.md`):** center-less
+  proof-of-correct-repair **exists as a composition of proven primitives, no new primitive
+  for the plain-RS case.** RS repair is a *public linear combination* of surviving symbols
+  and silt's commitments are linearly homomorphic, so the check is "does a public linear
+  relation hold over committed values, without seeing the values" — exactly what
+  linearly-homomorphic authenticators do. The composition: a polynomial-commitment layer
+  (KZG opening, or a BFKW subspace signature) proves **correctness** (the repaired shard is
+  the correct codeword coordinate) against the commitment the network already holds;
+  **Shacham–Waters PoR** (already in silt) proves **retrievability** (the caretaker actually
+  holds the bytes, re-challengeable over time); the **DAS/PeerDAS quorum** pattern supplies
+  the **center-less** checking. ~100 B proof, one–two pairings to verify, no plaintext seen,
+  bounty releases iff *both* correctness and retrievability verify, a false claim is publicly
+  attributable and bond-slashable. → build **H7**.
+  - **B8 / no-trusted-setup:** prefer a **transparent, binary-field polynomial commitment
+    (FRI-Binius)** — matches silt's GF(2⁸) storage natively, no powers-of-tau ceremony —
+    over KZG (48 B proof but needs an SRS). Transparent proofs are ~10–100× larger (KBs),
+    still ≪ a 64 KiB shard.
+  - **Genuinely open (off today's critical path, → research frontier):**
+    proof-of-correct-repair for **MSR / regenerating codes** (Clay, Product-Matrix) has no
+    published construction; silt ships plain-RS reconstruction, so this is a roadmap item,
+    not an M0 blocker.
+- **Durability CONTRACT — finite-but-renewable, not "perpetual"** (decided 2026-08-06,
+  from `A1-cold-repair-equilibrium.md`). The per-repair game is solved unconditionally
+  (bounty auto-clears to cost + bond-forfeiture asymmetry defeat the Freenet/GNUnet
+  free-rider death). But **perpetual cold-data solvency is the Arweave endowment identity in
+  credits** and holds *only if* `g > 0` — a strictly positive **credit-denominated cost
+  decline** (`E_o(0) ≥ λ·S·c/g`). 2020s hardware evidence says `g` may be going to zero
+  (HDD $/TB plateaued). So silt ships durability as an **explicit finite-but-renewable
+  contract** (fund a horizon `T`, auto-skim to extend it, re-endow before expiry, publish
+  the funded horizon per object) — solvent for *any* sign of `g` — and treats "perpetual"
+  as a claim silt *earns only if measured `g` stays positive*, never an architectural
+  promise. **Instrument `g` (credit-cost of one shard-repair, per year) as the single number
+  that decides perpetual-vs-finite.** Correlation to watch: the same cost regime that breaks
+  cold-data solvency (`g ≤ 0`) also cheapens Sybil standing (one ledger) — provision the two
+  as *correlated*, not independent.
 
 ## D-TAKEDOWN — provable non-globality via a transparency log
 
-- **Status:** ▶ DIRECTION DERIVED — 2026-08-05 (low urgency); **metric routed to research.**
+- **Status:** ▶ DIRECTION DECIDED — 2026-08-05 (low urgency); **metric CONSTRUCTED** 2026-08-06.
 - **Research basis:** Memo 04 (pluralistic takedown). A mechanism strong enough to
   *guarantee* content is gone everywhere *is* the global kill switch silt outlawed; every
   deployed system resolves this by *not* guaranteeing global removal except a legally-forced
@@ -89,11 +119,65 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   revocations, and a **narrow, opt-in, hash-based denylist** scoped to the legally-forced
   sliver and itself committed to the transparency log. Avoid perceptual hashing as a primary
   filter and any single default labeler as the only trust root.
-- **Construction routed to research:** a **formal non-globality metric** — a proof/measure
-  that a takedown was *not* global (how much survived, on how many independent hosts). Memo
-  04 flags this as *"silt's most distinctive contribution — no existing system can currently
-  demonstrate it never flipped a global switch."* Unformalized; a research contribution, not
-  urgent.
+- **Construction (DELIVERED — `A2-non-globality-metric.md`):** the **formal non-globality
+  metric** — a proof/measure that a takedown was *not* global — now has a construction.
+  Define **NonGlobality(h, A) := the minimum number of independent failure domains an
+  adversary of class A must simultaneously compromise to drive the surviving decodable
+  replica set below the RS recovery threshold** (a *survivor Nakamoto coefficient*,
+  adversary-relative, correlation-aware, composable with the erasure code). silt publishes a
+  *certified lower bound* `NonGlobality(h, A) ≥ t`. The **discovery-oracle problem** (every
+  measurement of *where* survivors are is a map that helps the censor finish the job) is
+  defeated by a **ZK threshold predicate**: prove "≥ t distinct-domain, PoR-fresh,
+  bonded survivors exist" over committed attestations in the CT-style log, revealing **only
+  the scalar `t`** — never the survivor set, addresses, or shard indices. Layered with
+  anonymous/aggregate attestation, PSI for audit queries, DP for coarse diversity, and
+  PIR-routed probes. → H9.
+- **Honest limit (carry, don't hide):** `t` is *only as real as the independence oracle* —
+  crypto proves *distinct labels*, not *true physical/legal independence* (shared upstream
+  transit, one cloud region under two brands, treaty-linked jurisdictions), and that oracle
+  (RPKI/whois/geolocation) is non-cryptographic and gameable. The residual leak is
+  irreducible: `t`, its trend over time, and ε-noised coarse diversity — the price of a
+  *checkable* claim at all. Stays **low urgency** (per D-TAKEDOWN priority).
+
+## D-DEMAND — standing is priced on cost-to-wash, never on receipt count
+
+- **Status:** ▶ DIRECTION DECIDED — 2026-08-06; prototype-first build (H-demand).
+- **Research basis:** `B2-demand-receipt.md`. The blind demand receipt is the load-bearing
+  interlock between the Sybil corner (standing must track *witnessed* demand, not
+  self-declared popularity) and privacy (who-fetches-what stays unlinkable). It **splits
+  cleanly** into what is achievable and what is not:
+  - **Achievable + composable from primitives silt already ships:** an unlinkable delivery
+    receipt = blind-withdrawn retrieval token (Chaum / Compact E-Cash) + a PoR-bound
+    `delivery-ack` (Shacham–Waters binds it to the *correct object C*) + optimistic fair
+    exchange with the **validator quorum as the threshold-distributed TTP** (Asokan–
+    Shoup–Waidner; fair exchange provably needs *a* TTP — Pagnia–Gärtner). This gives
+    **unforgeability-without-served-bytes** (`#receipts for C ≤ #completed paid correct
+    deliveries`) **and fetcher-unlinkability** simultaneously — both provable.
+  - **NOT achievable by any receipt — a Douceur limit, not an engineering gap:** **demand
+    *authenticity*.** A server can run its own fetchers, pay itself, fetch its own content,
+    and mint perfectly valid receipts; a self-fetch *is* a real paid correct delivery.
+    Unlinkability makes this *strictly worse* (it hides that one entity is on both ends). No
+    cryptographic primitive certifies the counterparty was economically independent (the Tor
+    proof-of-bandwidth line failed at exactly this).
+- **Direction (derived):** price standing on **cost-to-wash, never on raw receipt count**
+  (mirrors the C2 rule "shed on cost-to-corrupt, not head-count"). Since authenticity can't
+  be *proven*, **re-price** wash so it stops being free, via two levers:
+  1. **Burn/escrow the fetch fee** — pay the retrieval token in a scarce unit that does
+     *not* flow back to the server as revenue (burned, or escrowed to the repair pool). Wash
+     N times costs N real fees with no offsetting income; wash is loss-making per loop *iff*
+     the standing-reward per receipt is priced below the burned fee. **The single most
+     important knob** — an economic parameter, not a proof.
+  2. **Bonded-fetcher credential** — count a receipt toward demand only if the (unlinkably
+     shown) fetcher carries a scarce, bond-distinct reputation credential, pushing wash cost
+     onto the *fetcher-identity* supply the G2 bond already prices. Re-prices wash to "one
+     bonded fetcher identity per unit of fake demand" — the best achievable under no-center.
+- **Doc-truth rule:** any claim that the receipt *proves* real, organic, third-party demand
+  is **false and must be struck** — it proves *a paid correct delivery happened*, unlinkably.
+- **Build (prototype-first, P0→P3):** issue → PoR-bound delivery ack → bank → redeem, with
+  fee-burn + bonded-fetcher credential, then a **self-dealing red-team** measuring
+  cost-per-fake-demand vs honest. **Hard dependency:** property (b) unlinkability is *nominal
+  until D3 issuance-mixing is solved* (the IP/timing channel) — shared with D-PRIV and the
+  privacy build-track.
 
 ## D-DISCLOSURE — no decryption backdoor at the core layer
 
@@ -141,5 +225,27 @@ their own tracks (`design/m0.md`, ROADMAP, the "evolving" tenet tier):
 - bind the DHT `Domain` signal to a transport-observed /24 (H5 residual);
 - the D3 issuance-mixing transport (build item under D-PRIV);
 - the real-wire adversarial-consensus (D2) test sub-suite;
-- economic parameters held in tension — `C_honest` weights, concentration threshold *k*,
-  demand-attestation ratio, audit/decay windows, fee pricing.
+- **compute the C2 concentration metric's weight numerator from the committed on-chain bond
+  ledger, not gossip** (`B1-c2-no-quiet-capture.md`'s sharpest engineering find — kills the
+  gossip-skew half of the skew+split attack outright; the objective fork-choice path already
+  recomputes weight from on-chain `BondRegs`, so this is a metric-wiring task);
+- the private-lookup build-track (`C-privacy-buildtrack.md`): server-held-DB PIR (Peer2PIR
+  model) for routing/provider records + epoch-bounded staleness + a rotating sortition
+  committee (VRF + beacon) for the ≥2-non-colluding-parties atom — the committee counts as
+  "no permanent center" *exactly when the shed metric clears* (same measurement as C2);
+- economic parameters held in tension — `C_honest` weights, concentration threshold *k* (and
+  its margin *M* = M_cluster·M_est·M_sample), demand-attestation ratio, audit/decay windows,
+  fee pricing.
+
+**Research frontier (genuinely open — needs a new result, not a decision).** Tracked in
+[`design/m0.md`](design/m0.md) §10:
+- **the shared-content sealing boundary** — the one surviving economy of scale; plain PoR
+  over shared erasure-coded shards leaks γ→1/N, closed only by identity-keyed PoRep sealing
+  of arbitrary useful shared data (not yet publicly-verifiable + timing-free +
+  trusted-setup-free). *silt is not exposed today* — standing comes from a dedicated
+  identity-keyed bond plot, not the shared shards — but fusing served content into standing
+  without leaking γ→1/N is the open problem;
+- **proof-of-correct-repair for MSR/regenerating codes** (A1 G1);
+- **Byzantine size-estimation under *adversarial* NodeID placement** — the CPR `O(n^{1−δ})`
+  fault tolerance is proven for *random* placement; a stake-splitter's chosen NodeIDs
+  degrade it by an amount the literature does not quantify (B1's flagged gap).
