@@ -1,185 +1,157 @@
 # Silt Roadmap
 
-> **One spine.** The single source of truth for *what is done and what is next*
-> is the GitHub **`V1` milestone** and its issues — each issue traces to the
-> tenet or immutable it serves, and each carries a `gate-N` label. The pinned
-> epic **[#94 "V1 — the gate spine"](https://github.com/nerolabs/silt/issues/94)**
-> is the sequenced, forward-looking checklist (Gate 0→6, critical path 1→4→6)
-> that indexes every gate's issues. This file is the *narrative*: why the work is
-> ordered the way it is. It is not a tracker and does not duplicate issue state.
+> **Source of truth.** *What M0 asserts and why* lives in
+> [`docs/design/m0.md`](docs/design/m0.md) (the composition spec). *What the owner
+> has decided* lives in [`docs/decisions.md`](docs/decisions.md). *The destination*
+> is [`docs/TENETS.md`](docs/TENETS.md). This file is the **narrative path**: where
+> we are, what the forward tracks are, and why they're ordered the way they are. It
+> is not a tracker — live state is the GitHub **`V1` milestone** and its issues.
 >
-> Earlier planning used interim markers during the project's **learning
-> phase**; they are retired in favor of this single milestone-and-issues spine
-> (that detail lives in `docs/buildlog/`, not here). The `v0.1.x` / `0.2.x` tags
-> are **experimental / learning releases**, not steps on the march to V1.
+> The earlier **Gate 0→6 spine** (with Gate 4 as "the M0 mechanism to build") is
+> **retired**: that mechanism is built and the mission was reframed (below). The
+> `v0.1.x`/`0.2.x` tags are **experimental / learning releases**, not steps on the
+> march to V1; that history lives in `docs/buildlog/`.
 
 ## Tenets are the destination; this roadmap is the path
 
 **V1 is defined by the tenets, satisfied and field-proven — not by a feature
-list.** [`docs/TENETS.md`](docs/TENETS.md) is the destination. This roadmap is
-the *path*; the open [issues](https://github.com/nerolabs/silt/issues) under the
-`V1` milestone are the gaps we find walking it. The relationship is one-way:
-
-- **Tenets guide the roadmap.** Every gate below advances one or more tenets; if
-  a step serves no tenet, it doesn't belong here.
-- **A tenet gates V1 as a *principle*, never a *mechanism* — with one deliberate
-  exception: M0.** "Reward tracks value" is canon, but *which* mechanism
-  satisfies it is a sequencing call. The lone exception is the mission itself:
-  **M0 — *holding* the trilemma (token-less, work-backed, unlinkable reputation)
-  without trading a corner away — is not a feature that satisfies a principle, it
-  *is* the reason silt exists**, so its *real* mechanism is in V1 by definition
-  (see `docs/TENETS.md` Part 0/IX). M0 is *held* only when an **external**
-  red-team suite (V3) denies all three failure modes — self-graded does not
-  count.
-- **Release is gated by proof (R1).** A tenet is "met" only when field-proven
-  multi-machine, not sim- or single-host-only.
+list.** Every track below advances one or more tenets; if a step serves no tenet,
+it doesn't belong here. The relationship is one-way: **tenets guide the roadmap.**
+A tenet gates V1 as a *principle*, never a *mechanism* — with one deliberate
+exception, **M0** (the mission itself), whose *real* mechanism is in V1 by
+definition. **Release is gated by proof (R1):** a tenet is "met" only when
+field-proven multi-machine, not sim- or single-host-only.
 
 ## The launch stance — harden-first
 
 The first public appearance must be **credible and spectacular from day one**. A
-half-baked drop on a project this ambitious — content-addressed storage + a
-reputation-quorum trust plane, in a space crowded with "AI/web3 storage" noise —
-reads as a poser build and burns the one first impression we get with the exact
-technical audience we need. So the tenet **floors** (integrity, no-silent-loss,
-don't-crash, honest observability) *and* the **mission** (M0, field-proven) are
-done before any launch. Feedback is sought — on something that already stands up,
-not as a substitute for hardening.
+half-baked drop on a project this ambitious burns the one first impression we get
+with the exact technical audience we need. So the tenet **floors** (integrity,
+no-silent-loss, don't-crash, honest observability) *and* the **mission** (M0,
+field-proven) are done before any launch. Feedback is sought — on something that
+already stands up, not as a substitute for hardening.
 
 **The build principle (B8):** best-in-class *components*, a novel *composition*.
 We do not reinvent primitives (crypto, transport, codec); we adopt the strongest
 proven ones and reserve novelty for the composition and incentives — where M0
-lives — proven by spec + red-team suite, never hand-waved.
+lives — proven by spec + an **external** red-team, never self-graded.
 
-## What is already built (context, not a tracker)
+## Where we are now (the honest status)
 
-The storage plane is field-proven at scale: cross-network publish/fetch,
-erasure-coded durability with failure-domain-aware placement and a dispersion
-audit, capacity pledging/spill, mutual-TLS pinned identity, encrypted manifests
-+ care-links, a quorum chain, web UI/observatory, and a desktop client. The
-silent-loss floors (#46/#60/#64) are fixed and field-proven; the reprovide and
-config-drift gaps (#69/#71) are closed. Cross-network hole-punching is proven
-through cone NAT in an automated Docker harness. **The trust plane's real M0
-mechanism (Gate 4) is now built and internally adversarially tested** — a
-verify-without-fetch proof-of-retrieval, a proof-of-**space-time** bond (a
-space-hard identity-bound plot × a Wesolowski VDF, persisted, bound so N Sybils
-cost N real disks), standing as the time-integral of bond + audit, fork-choice
-reconciliation so partitions heal to the heavier-standing chain, and provable
-equivocation that slashes double-signers — replacing the earlier
-honestly-labeled placeholders (the space-lite in-RAM bond seal; the
-fetch-to-grade PoR). It is proven at the unit, in-process simulation, and
-real-daemon end-to-end tiers (including a two-validator consensus commit over
-TCP). What remains before it can be called *proven*: **independent adversarial
-review** (an acceptance pass then a red-team pass — see [`docs/reviews/`](docs/reviews/))
-and the multi-machine field test; some hardening items are honestly recorded in
-the CHANGELOG and design §6. M0 ships proven or it does not ship.
+- **Storage plane — field-proven at scale.** Cross-network publish/fetch,
+  erasure-coded durability with failure-domain-aware placement + dispersion audit,
+  capacity pledging/spill, mutual-TLS pinned identity, encrypted manifests +
+  care-links, a quorum chain, web UI/observatory, desktop client. The silent-loss
+  floors and the reprovide/config-drift gaps are fixed and field-proven;
+  cross-network hole-punching is proven through cone NAT in an automated harness.
+- **Trust plane — the M0 mechanism is BUILT and internally hardened.** The genuine
+  composition shipped (PRs #117–#127): a verify-without-fetch proof-of-retrieval, a
+  proof-of-**space-time** bond (an identity-bound sealed plot × a Wesolowski VDF,
+  persisted, so N Sybils cost N real disks), standing as the time-integral of bond +
+  audit, fork-choice reconciliation so partitions heal, and provable equivocation
+  that slashes double-signers. The **H1–H6 systemic hardening pass is complete** —
+  every standing/consensus/DHT/privacy surface has a shipped mechanism + inverted-PoC
+  regression + the Invariant-A/B guardrails.
+- **The mission was reframed — the composition reset.** M0's Sybil corner is a
+  **systemic claim held in tension**, not a Sybil-proof primitive (impossible by
+  Douceur). It is stated as **C1 (no discount)** — forging a fraction *q* of standing
+  costs ≈ *q*·`C_honest`, where `C_honest = disk × address-diversity × time ×
+  served-demand` (non-substitutable) — **plus C2 (no quiet capture)** — the
+  concentration metric keeps the minimum colluding *operator* set above *k*.
+  Durability (S7) is **fused into the same budget** (one ledger). Full spec:
+  [`docs/design/m0.md`](docs/design/m0.md).
+- **The research commission has been answered.** The two constructions we'd routed
+  to research both **exist**: center-less **proof-of-repair** (a composition of
+  proven parts — unblocks durability) and a **non-globality metric** (ZK threshold
+  predicate). Durability is decided **finite-but-renewable**, not "perpetual." The
+  genuinely-hard residue collapsed to **one** named open problem — the shared-content
+  sealing boundary (see the research frontier below). Decisions:
+  [`docs/decisions.md`](docs/decisions.md).
 
-## The V1 gates (ordered by dependency and exposure)
+## The forward tracks (what replaces the gate spine)
 
-The critical path is **Gate 1 → Gate 4 → Gate 6**; Gates 2 and 3 parallelize.
-Gate 4 is the long pole and is where the schedule risk deliberately sits — it is
-the mission.
+Three kinds of work remain. **Build** makes the decided directions real; **verify**
+is the gate to declaring M0 *held* (not merely built); **research frontier** is the
+handful of items that need a new result, not a decision.
 
-**Gate 0 — Reconcile the spine.** Close shipped issues (#78/#79), create the
-`V1` milestone, re-file every open issue against the tenet/immutable it serves.
-Retire the M/Wave/Tier prose (history → buildlog). *Done-is-done matches
-reality.*
+### Build tracks
 
-**Gate 1 — Floors (cheap; blocks everything).** Panic-recover + fuzz the
-decoders (A5, #87); bound declared manifest chunk count/size (A6, #88); lock the
-local UI/JSON API with Origin/Host allow-listing + a per-daemon token (I1, #89 —
-CORS is `*` today). You cannot field-test a chain on a daemon that crashes on a
-malformed frame, and a crash surface kills the "impressive" claim on contact.
+- **H7 — durability, funded and verifiable (next).** The S7 spine: per-object
+  credit escrow + auto-skim + rarest-shard bounty, and **center-less
+  proof-of-correct-repair** built as the A1 composition (transparent binary-field
+  polynomial commitment [FRI-Binius] for correctness + Shacham–Waters PoR for
+  retrievability + a DAS quorum for center-less checking). Ships as an explicit
+  **finite-but-renewable** contract; **instrument `g`** (credit-denominated cost
+  decline) as the number that decides perpetual-vs-finite. *(#95.)*
+- **H8 — metadata-layer privacy.** The D-PRIV build track: mixnet transport +
+  **private DHT lookup** (server-held-DB PIR, Peer2PIR model — routing/provider
+  records only; blobs ride the mixnet) + **D3 issuance-mixing** (route token
+  issuance over the content-blind relay from an ephemeral identity, epoch-batched)
+  to close the publisher IP+timing link. Bounded by the anonymity trilemma; a stated
+  product tradeoff, not a blob-layer absolute.
+- **H9 — pluralistic takedown, provably non-global.** Signed subscribable label
+  layer + a **CT-style append-only transparency log** (every honored revocation
+  committed, with inclusion/consistency proofs) + a narrow opt-in denylist + the
+  **non-globality metric** (survivor Nakamoto-coefficient published as a certified
+  lower bound `≥ t` via a ZK threshold predicate). Low urgency.
+- **D-DEMAND — the blind demand receipt.** Standing tracks *witnessed* demand
+  priced on **cost-to-wash, never receipt count**. Prototype-first (issue →
+  PoR-bound delivery-ack → bank → redeem) with fee-burn + bonded-fetcher credential,
+  then a self-dealing red-team. Demand *authenticity* is a Douceur limit (re-priced,
+  not proven away); unlinkability depends on H8's D3.
+- **C2 metric wiring.** Compute the concentration metric — Nakamoto-coefficient /
+  cost-to-corrupt over **bond-distinct operators** — from the **committed on-chain
+  bond ledger, not gossip** (kills the skew half). One measurement feeds three seams
+  (consensus shed, private-lookup committee certification, C2).
+- **Registry economics (Gate-5 lineage).** Registry-only mode (#47) and keeping
+  public registries cheap to run (#48) — a costless public good, decoupled from
+  full storage/serving.
 
-**Gate 2 — Durability under load.** Post-cap relay throughput, fetch-side retry,
-register-after-distribute (#65). The silent-loss half is already done.
+### Verify tracks — the gate to "M0 held"
 
-**Gate 3 — Cross-network hole-punching (#27).** Cone-NAT punch is proven;
-wire-sensitive, so it lands before the network grows, demoting the public relay
-from every-byte to rendezvous. Design in `docs/design/cross-network.md`.
+M0 is *held* only when an **external** party attacks the built composition and it
+survives at declared parameters. Self-graded does not count.
 
-**Gate 4 — The car: the mission mechanism, real and multi-machine (the long
-pole).** Replace the labeled placeholders with the genuine M0 **composition**,
-built from best-in-class components (B8), and prove it. M0's Sybil-resistance is
-the systemic claim **C1 (no discount) + C2 (no quiet capture)**, held in tension —
-not a single Sybil-proof primitive (Douceur). **Status: the parts that make each
-axis of `C_honest` (disk × address-diversity × time × served-demand) real are
-BUILT and internally hardened (PRs #117–#126 + the H1–H6 hardening pass); the
-internal pass is complete. The remaining bar is external re-verification against
-the C1/C2 claim + the multi-machine field test (4e/#52) — which together render
-M0's yes/no verdict.** The sub-items:
-- **4a (#90) — Real proof-of-retrieval / proof-of-storage.** Adopt a published,
-  peer-reviewed scheme (the compact-PoR / PDP / proof-of-space family); the
-  novelty is not the primitive but the binding.
-- **4b (#91) — Real work-backed bond (the hardest piece).** Replace the
-  space-lite iterated-SHA seal with a genuine, memory-hard / proof-of-space
-  construction: cheap for a challenger to verify, expensive to fake,
-  identity-bound.
-- **4c (#92) — Identity-bound, time-integrated, *unlinkable* standing.** Bind 4a/4b to
-  identity and time so standing is the integral of sustained proof over the
-  non-substitutable axes (disk × diversity × time × demand), coin- and stake-free,
-  while the blind publish token keeps publishing cryptographically unlinkable from
-  that standing. *This is the core of M0's C1 (no discount). It holds only if the
-  **composition** satisfies C1 + C2 under an **external** red-team (V3/B8) — a
-  primitive passing in isolation is not enough, and a primitive failing in
-  isolation is expected (Douceur), not an M0 failure.*
-- **4d (#93) — Persistence + issuer distribution.** Bond and RSA issuer key
-  persist across restart; on-chain issuer registration.
-- **4f (#100) — Consensus equivocation detection + slashing + fork handling.**
-  Today a validator can double-sign at a height with no penalty, and a fork is
-  unrecoverable; slashing covers only storage-audit failures. Anti-persona #14
-  ("equivocate in consensus") is an outcome we *deny*, so the defense is Gate-4
-  work, not a footnote (surfaced by the build-vs-intention audit, 2026-08-02).
-- **4e — Multi-machine field test of the whole trust plane (#52).** The R1 gate:
-  bonds, tokens, and consensus across real machines and real NAT. Sim + one host
-  is not "done."
+- **Multi-machine field test (R1, #52).** Bonds, tokens, and consensus across real
+  machines and real NAT — the trust plane earning the rigor the storage plane has.
+- **External red-team vs C1/C2.** A fresh, no-memory adversary attacks the
+  *systemic* claim and the seven composition **seams** ([`m0.md`](docs/design/m0.md)
+  §7), not isolated primitives — a primitive failing a standalone "Sybil-proof" test
+  is Douceur, expected, not an M0 failure. A seam *held in tension* (bounded cost,
+  documented residual) is a pass; a seam silently assumed closed is the failure mode.
 
-**Chain-permanence prerequisites — CLOSED.** The chain is append-only with no
-reorg, so a wrong record shape written first is *unrecoverable*. The
-build-vs-intention audit (archived at
-`/archive/reviews/build-vs-intention-2026-08-02.md`) found three, all now fixed and
-merged: private publish is the default so the chain writes no permanent
-`Publisher→root` identity map (#97, reinforced by H6's private-by-default publish);
-`Block` carries a hash-committed version era so a record-shape change can't
-silently hard-fork (#98); and the `Gated` registry no longer hard-requires a
-Publisher (#99). The current M0 design constraints live in
-[`docs/design/m0.md`](docs/design/m0.md) (superseded pre-code notes are in
-`/archive/design-history/gate4-m0-mechanism.md`).
+### Research frontier — needs a new result, not a decision
 
-> **The binding is the hard part, not the primitives.** "Adopt best-in-class,
-> don't invent" (B8) does *not* make Gate 4 easy — it *relocates* the research
-> to the **binding**: identity-bound, time-integrated, cheaply-verifiable
-> standing with unlinkable publishing on top. No drop-in library gives that
-> composition; Chia/Filecoin spent years on the "cheap-to-verify,
-> expensive-to-fake, identity-bound" corner alone, and we want that *and*
-> hobbyist-cheap (S6) *and* unlinkable publishing. Gate 4 therefore owns a design
-> doc + threat model *before* code — it is the mission, not a sprint.
+- **⭐ The shared-content sealing boundary — the one surviving economy of scale.**
+  Plain PoR over *shared* erasure-coded shards lets one physical copy answer for N
+  pledges (γ→1/N); closed only by **identity-keyed PoRep sealing of arbitrary useful
+  shared data**, which is not yet publicly-verifiable + timing-free +
+  trusted-setup-free. **silt is not exposed today** — standing comes from a dedicated
+  identity-keyed bond plot, not the shared shards — but *fusing* served content into
+  standing without leaking γ→1/N is the highest-leverage open question. An
+  academic-collaborator task (`m0.md` §10).
+- **MSR / regenerating-code proof-of-repair.** The A1 composition is airtight for
+  plain-RS reconstruction; no published construction specializes it to MSR/Clay. Off
+  today's critical path (silt ships plain-RS).
+- **Byzantine size-estimation under adversarial NodeID placement.** The C2 sampling
+  tolerance is proven for *random* Byzantine placement; a stake-splitter chooses its
+  NodeIDs, degrading it by an amount the literature does not quantify.
 
-**Gate 5 — Economics & registry cheapness (#47/#48), incl. durability that pays
-for itself (S7).** *Designed alongside Gate 4, not after it* — Gate 4's
-reputation buys *presence*, but S7 (the repair loop funded in equilibrium under
-churn) is what decides whether files still exist in three years. This is the
-wound Freenet/GNUnet died of — reputation without funded durability, one genre
-before us; our closest ancestors are **Tahoe-LAFS** (convergent encryption +
-erasure, no incentive layer) and **Freenet/GNUnet** (reputation, no funded
-repair), and Gate 5 is where we refuse to repeat their hole. Scope:
-registry-only mode, costless public rendezvous, denylist distribution/
-subscription, the pull-cache tier (#47/#48), and the durability economics (S7,
-#95) that make repair a service a publisher buys and a caretaker is paid to sell
-— funded in equilibrium, not charity.
+## What "M0 held" means
 
-**Gate 6 — Cut V1.** Full docs-drift reconcile as the release gate (R2);
-signed/notarized, checksummed binaries; publish `docs/threat-model.md` as honest
-disclosure *and* an invitation to break it; decide legal posture; then narrow,
-technical outreach ("help us break this"). **The independent security review
-here is not a formality — it *is* the external adversary that certifies M0 and
-B8** (top of `docs/risk-register.md`): the party that writes the attacks against
-the Gate 4 composition must be someone other than its author (audit / bounty /
-separate red-team). Until that suite runs and holds, M0 is claimed, not proven.
+M0's Sybil corner is not a primitive to be proven Sybil-proof — that is impossible.
+It is **held** when, at the network's declared parameters, no strategy earns
+consensus-controlling standing for less than `q · C_honest` (**C1**), and the
+concentration metric keeps the minimum colluding operator set above *k* (**C2**),
+with the §7 seams either closed or *held in tension with a documented, bounded
+residual*. C1 is now a **theorem under stated hypotheses**; C2 is a **measurement
+bounded by an impossibility result** (Kwon) — held, not closed, by design. The
+verdict is rendered by the external red-team + the field test, together.
 
 ## The resolver layer ("Aslan" — separate product)
 
-Meaning lives above the infrastructure, in a separate codebase: name/
-description/tags → (root, manifest key). Silt ships zero Aslan code, ever. See
+Meaning lives above the infrastructure, in a separate codebase: name/description/
+tags → (root, manifest key). Silt ships zero Aslan code, ever. See
 `docs/aslan-boundary.md`.
 
 ## Release engineering — the march to V1
@@ -189,12 +161,12 @@ toward V1 — treat them as archaeology. The real cadence has three stages:
 
 - **Learning phase (past).** Everything through the experimental 0.x tags:
   proving the architecture. Detail lives in `docs/buildlog/`.
-- **Feature-complete → `0.9.0`.** When every V1 gate's *mechanism* is built
-  (the floors plus the M0 car), we cut `0.9.0` as the release-candidate line and
-  harden it in the field.
-- **`1.0.0` = V1.** Cut only once the tenets are field-proven multi-machine
-  (R1) — a *true* release candidate, signed/notarized/checksummed. This is the
-  first release we stand behind publicly.
+- **Feature-complete → `0.9.0`.** When every V1 build track's *mechanism* is built
+  (the floors plus the M0 composition, durability, privacy, takedown) we cut
+  `0.9.0` as the release-candidate line and harden it in the field.
+- **`1.0.0` = V1.** Cut only once the tenets are field-proven multi-machine (R1)
+  **and** the external red-team verdict holds — a *true* release candidate,
+  signed/notarized/checksummed. This is the first release we stand behind publicly.
 
 Mechanics when ready: move CHANGELOG "Unreleased" into the version, tag, and the
 release workflow builds + publishes binaries; add code-signing/notarization

@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Changed
+- **ROADMAP + BACKLOG reconciled to the current strategy; the retired Gate 0→6 spine
+  removed** (2026-08-06) — Both planning docs still narrated the old builder-phase spine
+  ("V1 = Gate 0→6, **Gate 4 is the M0 mechanism to build**"), which predates the mechanism
+  being built, the composition reset, and the research commission. `ROADMAP.md` rewritten to
+  the honest current status (storage plane field-proven; M0 mechanism BUILT + H1–H6 hardened;
+  mission reframed as **C1 + C2 held in tension**; commission answered) and the **forward
+  tracks** that replace the gate spine: **build** (H7 durability/proof-of-repair — next; H8
+  metadata privacy/D3; H9 takedown CT-log + non-globality metric; D-DEMAND blind receipt; the
+  C2-metric-from-ledger wiring; registry economics), **verify** (multi-machine field test +
+  external red-team vs C1/C2 — the gate to "M0 held"), and the **research frontier**
+  (shared-content sealing boundary; MSR proof-of-repair; CPR under adversarial placement).
+  `BACKLOG.md` slimmed to genuinely-open captured ideas + repointed at
+  `docs/design/m0.md` / `docs/decisions.md` as the source of truth (shipped placement /
+  networking / observability / fresh-eyes work moved out — it lives in git + buildlog). No
+  code changed. GitHub issues reconciled in the same pass (Gate-4 mechanism issues closed as
+  built; new build/verify/research-frontier tracks filed).
 - **Research commission answers folded into the decision ledger; the two routed-to-research
   constructions now EXIST** (2026-08-06) — The follow-up research commission
   (`silt-reviews/research/research-outcome/commission/`, eight footnoted memos) answered the
