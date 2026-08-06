@@ -370,6 +370,45 @@ must gain `SlashFalseRepair` classified `reduces`, with the behavioral test firi
 against a bonded identity and asserting it can only subtract. Repair credits fund
 durability and confer **zero** standing — the γ→1/N firewall holds through slice 2.
 
+### 8b. Who is the "repairer"? — the paramedic split (decided at wiring time)
+
+The design above spoke of a single "repairer" that both reconstructs the shard and
+holds its bytes. **silt's actual repair loop (`core/node/repair.go`) splits those
+roles**, and the wiring must respect it: the caretaker is a *paramedic, not a
+hoarder* — it fetches k survivors, reconstructs the lost shard, verifies it against
+the Merkle root, and **pushes the rebuilt shard to a fresh storage node, keeping
+nothing itself**. So there is no single actor that both did the CPU work and can
+answer a retrievability challenge.
+
+**Decision (forced by the composition): the bounty pays the NEW HOLDER of the rebuilt
+shard.** The gate releases iff retrievability verifies (§6), so the payee must be the
+node that actually holds the re-challengeable, identity-bound replica — i.e. the
+fresh storage node, not the caretaker. Rationale:
+
+- The durability budget pays for the **scarce, verifiable outcome** — a fresh replica
+  that can be re-challenged over time — not for CPU cycles. That is exactly what keeps
+  cold data alive.
+- The **caretaker orchestrates for free**: it already *chose* to `Care` for the object,
+  so its incentive to reconstruct is its existing motivation, not a bounty. (Paying the
+  caretaker for reconstruction would also break the composition — it keeps nothing, so
+  retrievability cannot bind to it, and it could self-deal by "reconstructing" into the
+  void.)
+- **Self-deal check still holds:** the new holder earns the bounty only by holding a
+  shard that (a) passes the public correctness recompute against the manifest anchor
+  and (b) answers an identity-bound SW challenge — it cannot be a data-less relay or a
+  wrong-but-claimed shard. A caretaker colluding with a chosen holder still has to
+  produce a genuinely correct, genuinely stored replica to extract the object's own
+  prepaid credit — i.e. do the real work.
+
+**Wiring consequence:** the caretaker, after placing a rebuilt shard on a fresh node,
+initiates the repair-claim naming that holder; the object's other caretakers form the
+quorum, each recomputing correctness (they can fetch survivors) and challenging the
+*holder* for retrievability, then applying the verdict to their own local ledgers
+(`PayBounty` the holder, or `SlashFalseRepair` on an attributable correctness lie).
+Ledger updates are **per-node local accounting**, consistent with the existing credit
+economy (each node judges by its own ledger; balances/escrow are observational, not
+consensus state — which is why no on-chain bounty transaction is needed).
+
 ## 9. Package layout & interfaces (sketch)
 
 - **`core/commit`** *(new)* — the adopted homomorphic-commitment adapter (B8). Pure,
