@@ -8,6 +8,29 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Added
+- **H7 durability-escrow primitives — the S7 funding layer, slice 1** (2026-08-06,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — The repair loop that keeps content alive
+  under churn must be paid in equilibrium, not charity (the wound that killed Freenet/GNUnet).
+  New in `core/credit/escrow.go`: a **per-object durability reserve** (`FundEscrow`), keyed by an
+  object's root, that pays repair bounties; an **auto-skim** (`RecordServeToObject`) that routes a
+  protocol-fixed fraction — `SkimNum/SkimDen`, 1/8 — of each object's serving revenue back into
+  *that object's* reserve, so popular data self-funds its durability while cold data draws down
+  what it prepaid; a **rarest-shard bounty multiplier** (`BountyFor`) that scales the payout by how
+  under-replicated a stripe is, so repairing the last spare before data loss pays the most; and a
+  `PayBounty` draw-down that pays what the reserve can cover (a short reserve = the object's funded
+  horizon running out, *finite-but-renewable*, not an overdraft).
+  - **The one load-bearing invariant is enforced structurally.** The durability budget lives in the
+    *balance* economy and confers **zero** consensus standing — a durability credit that bought
+    standing would re-open the shared-content γ→1/N hole (one physical copy of an erasure-coded
+    shard answering for N pledges). The `Invariant-A` reflection guard (`invariant_a_test.go`) now
+    classifies every escrow press `neutral` and fails the build if a new one ships unclassified;
+    the behavioral half fires funding, skimming, and bounty-payout against a bondless identity and
+    asserts `Reputation` never rises above zero. Standing is still minted by the bond press alone.
+  - Prototype-first: these are the ledger primitives. Wiring the auto-skim into the live serve path
+    and gating `PayBounty` on a verified proof-of-repair transcript are later H7 slices (2 and 3).
+    Full unit coverage; whole suite green with `-race`.
+
 ### Changed
 - **External-audit honesty propagation: held-in-tension residuals carried from the spec down
   to the tenets, risk surface, and public site** (2026-08-06) — Two independent audits of the

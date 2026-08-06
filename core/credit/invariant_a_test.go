@@ -68,6 +68,20 @@ var standingClassification = map[string]standingClass{
 	"Fee":           neutral,
 	"Gini":          neutral,
 	"Reputation":    neutral, // the reader itself
+
+	// H7/S7 durability escrow (escrow.go). The durability budget is part of the
+	// BALANCE economy — it moves the credit unit between balances and object
+	// reserves — and confers ZERO consensus standing. That firewall is THE
+	// load-bearing H7 invariant (a durability credit that bought standing would
+	// re-open the shared-content γ→1/N hole), so every escrow press is neutral,
+	// and TestInvariantA_NoNonMintPressRaisesStanding fires each one against a
+	// bondless identity to prove it stays there.
+	"FundEscrow":          neutral, // moves credits balance→reserve; no bond touched
+	"RecordServeToObject": neutral, // object-aware serve + auto-skim; funds balance, never standing
+	"PayBounty":           neutral, // pays repairer's BALANCE from a reserve; not standing
+	"EscrowBalance":       neutral, // observability
+	"EscrowFunded":        neutral, // observability
+	"EscrowPaid":          neutral, // observability
 }
 
 // TestInvariantA_EveryLedgerMethodClassified is the reflection guard: every
@@ -109,11 +123,20 @@ func TestInvariantA_NoNonMintPressRaisesStanding(t *testing.T) {
 	n := id(1)
 	other := id(2)
 
-	// Fire every non-mint press that mutates state, repeatedly and interleaved.
+	obj := id(7) // used as an object root for the escrow presses
+
+	// Fire every non-mint press that mutates state, repeatedly and interleaved —
+	// including the H7 durability-escrow presses. A durability credit that could
+	// buy standing would re-open the shared-content γ→1/N hole, so funding a
+	// reserve, skimming serve revenue into it, and paying a bounty out of it must
+	// all leave a bondless identity at zero standing.
 	for round := 0; round < 5; round++ {
 		l.Register(n)
-		l.RecordServe(n, other, id(9), 1<<40) // terabytes of self-reported serving
-		l.RecordAudit(n, id(9), true)         // passed PoR audits fund balance only
+		l.RecordServe(n, other, id(9), 1<<40)              // terabytes of self-reported serving
+		l.RecordAudit(n, id(9), true)                      // passed PoR audits fund balance only
+		l.RecordServeToObject(n, other, obj, id(9), 1<<40) // object-aware serve + auto-skim
+		_ = l.FundEscrow(obj, n, 1<<20)                    // prepay a durability reserve
+		l.PayBounty(obj, n, 1<<30)                         // drain the reserve to this identity
 		l.DecayStale(uint64(round+1), 1)
 		if got := l.Reputation(n); got > 0 {
 			t.Fatalf("Invariant A violated: a non-mint press lifted a BONDLESS identity to standing %d > 0 "+
