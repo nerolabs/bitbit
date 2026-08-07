@@ -520,6 +520,23 @@ harness + CI):
   quorum into one domain → diversity selection prevents it. Each must be **denied and
   attributable**, and each becomes a permanent regression test.
 
+  > **BUILT.** The pure legs are unit-tested in `core/repairproof`
+  > (`TestVerifyByRecompute_WrongClaimRejected`, `TestVerifyRetrievability_RelayedProofFails`
+  > / `_TamperedDataFails`, `TestDecide_TruthTable`), and the **wired** verdict — the
+  > handler over a live network delivering the crypto's judgement to the ledger — is
+  > `core/node/redteam_repair_claim_test.go`: (a) a garbage-id claim **slashes the
+  > claimant** and pays nothing; (c) a correct-id claim on a data-less liar holder is
+  > **denied, never slashed** (retrievability binds to the *named* holder, so "the
+  > correct bytes exist on the survivors" does not pay — this is also the (b)
+  > double-count property, since the identity-bound seed is what makes the named
+  > holder answer for *itself*); a positive control (honest claim → holder paid, no
+  > standing moved) proves the deny/slash are discriminating. For (d), the availability
+  > side is tested — every caretaker that announces under the `careKey` rendezvous is
+  > discovered, so none is silently excluded from the vote — while the **domain-diverse
+  > quorum SELECTION** that would *refuse* a single-domain quorum is explicitly deferred
+  > hardening (today the quorum is every reachable announcer; enforcing spread is a
+  > fast-follow, tracked with the caretaker-selection work).
+
 ## 12. Open questions to resolve before/while building
 
 - **G3 (library):** *resolved* (§7, §13) — transparent Pedersen vector commitment,

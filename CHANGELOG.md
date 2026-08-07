@@ -9,6 +9,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H7 proof-of-correct-repair — the false-repair red-team (acceptance gate)** (2026-08-08,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — The self-dealing adversary is driven against
+  the **wired** verification handler over a live network (`core/node/redteam_repair_claim_test.go`),
+  proving the crypto's verdict actually reaches the ledger, each case a permanent regression:
+  - **(a) garbage claim → slash.** A claim naming a real position but a bogus shard id: the judge
+    recomputes the position from the manifest-anchored survivors, sees the mismatch (a self-attributing
+    fraud proof), and **slashes the claimant** — no bounty.
+  - **(c) compute-but-don't-store → denied, never slashed.** A correct shard id on a data-less liar
+    holder (keeps the proof + PoR tags, drops the bytes) fails its identity-bound retrievability
+    challenge → **denied** but not punished (a shortfall may be transient). This also pins the
+    **(b) anti-double-count** property: retrievability binds to the *named* holder, so "the correct
+    bytes exist on the survivors" does not pay.
+  - **Positive control** — an honest claim on a real holder clears both legs, the holder is paid, and
+    **no standing moves** — so the deny/slash cases are discriminating, not blanket rejection.
+  - **(d) quorum discovery** — every caretaker announcing under the `careKey` rendezvous is found, so
+    none is silently excluded from the vote. *(Domain-diverse quorum SELECTION — refusing a
+    single-domain quorum — is explicit deferred hardening, tracked with caretaker-selection work.)*
+  Whole suite green with `-race`.
 - **H7 finite-but-renewable durability — instrument `g` + the funded horizon (slice 3)** (2026-08-08,
   [#95](https://github.com/nerolabs/silt/issues/95)) — silt does not *promise* perpetual cold-data
   solvency (that promise is the Arweave endowment identity in credits, and it holds only while the
