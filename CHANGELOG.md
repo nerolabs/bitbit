@@ -9,6 +9,21 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **#184 verify — partition→heal proven over the REAL WIRE (partition control + reorg observability)** (2026-08-07,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The M0 consensus denial "honest replicas cannot
+  permanently diverge under a partition" now runs against real daemons over real TCP, not only the
+  in-process sim (`sim/reorg_test.go`). A new **`-block-peers` daemon flag** (`Node.SetBlockedPeers`)
+  simulates a severed link — the node drops all traffic to/from the listed peers — so a validator can be
+  partitioned, each side can make its own progress, and then the link can HEAL (restart without the
+  flag; the persisted chain reloads and reconciles). The e2e (`TestPartitionHealsToHeavierForkOverTCP`)
+  splits two committing groups into divergent forks (a heavier two-block fork and a lighter one-block
+  fork), then heals the lighter side, which **reorgs onto the heavier fork** — consensus reconverges on
+  one history. Also adds a `Node.OnReorg` callback so the daemon surfaces a reorg on stdout
+  (`chain: reorged onto a heavier fork (dropped N block(s), …)`) — a significant, operator-visible
+  consensus event, and the precise signal the e2e asserts. `-block-peers` models a transport fault, not
+  Byzantine behaviour (the node stays honest); a real deployment never sets it. Second of #184's four
+  consensus-safety cases (after equivocation→slash); low-bond→reject and forged-block→reject follow.
+  Whole suite green with \`-race\`; the e2e passes over real sockets.
 - **#184 verify — equivocation→slash proven over the REAL WIRE (adversarial-daemon harness)** (2026-08-07,
   [#184](https://github.com/nerolabs/silt/issues/184)) — The accountability property "a proven
   double-sign costs standing" (D2) is now exercised against real daemons over real TCP, not only in the
