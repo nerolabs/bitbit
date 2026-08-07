@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H7 self-funding durability — the serve auto-skim goes live** (2026-08-08,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — The escrow that pays repair bounties is now
+  topped up by the object's own traffic. The `MsgFetchChunk` serve path resolves each coded shard's
+  object root from its storage proof and routes the serve through `RecordServeToObject`, which
+  diverts a protocol-fixed slice (`SkimNum/SkimDen`, 1/8) of the serve revenue into *that object's*
+  durability reserve — so **popular data pays for its own repair** while the server keeps the net.
+  Shards with no proof-anchored root (manifest chunks, uncoded files) keep the plain serve.
+  - **Publisher/operator funding API** — `Node.FundDurability(root, amount)` prepays an object's
+    reserve from the node's own balance (a pure balance move, never standing), so cold data can be
+    endowed to outlive churn before it is popular enough to self-fund; `Node.DurabilityReserve(root)`
+    reads the remaining horizon. `ports.CreditLedger` gains `RecordServeToObject`. *(A publisher-side
+    CLI subcommand waits on the client credit-balance model; the node API is the entry point today.)*
+  - **The invariant holds.** Serve income funds the balance economy and the durability reserve —
+    **never** standing. The integration sim retrieves a whole file, watches the reserve fill from the
+    serves (a *slice* of the bytes, not the whole thing), and asserts no node's `Reputation` moves.
+    Full unit + sim coverage; whole suite green with `-race`.
 - **H7 proof-of-correct-repair — the node/network quorum wiring** (2026-08-07,
   [#95](https://github.com/nerolabs/silt/issues/95)) — The `core/repairproof` gate is now wired into
   the live repair loop, so a durability bounty actually flows on a *verified* repair. When a
