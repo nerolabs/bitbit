@@ -647,6 +647,15 @@ func (c *Chain) validateSlashes(b *Block) error {
 // id's attestations in objective mode.
 func (c *Chain) BondedSize(id ports.NodeID) int64 { return c.bonded[id] }
 
+// IsBonded reports whether id is a qualified bond-distinct identity in the COMMITTED
+// on-chain bond ledger: its bonded size clears MinBond and it has not been slashed.
+// This is the admission bar attesterQualified uses in objective mode, exposed so the
+// demand bank's P3b bonded-fetcher credential prices fake demand onto exactly the
+// Sybil-priced identity supply C2 measures. Always false in legacy mode (MinBond 0).
+func (c *Chain) IsBonded(id ports.NodeID) bool {
+	return c.cfg.MinBond > 0 && !c.slashed[id] && c.bonded[id] >= c.cfg.MinBond
+}
+
 // IsSlashed reports whether id has been evicted for a proven equivocation (F2).
 func (c *Chain) IsSlashed(id ports.NodeID) bool { return c.slashed[id] }
 

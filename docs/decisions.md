@@ -221,11 +221,35 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   over the existing token-request wire, then `SubmitDeliveryReceipt` (a `MsgDeliveryReceipt` carrying
   the token + PoR-bound ack) to the server, which banks it into a **neutral witnessed-demand
   observable** (`WitnessedDemand`) — never standing; replays and forged/mis-issued tokens are rejected
-  over the wire. ☐ P2 optimistic dispute; **◑ P3** — the **fee-burn cost-to-wash is demonstrated and
-  regression-locked** (a self-dealing sim: a server running its own fetcher mints N valid receipts —
-  authenticity is *not* provable, Douceur — but each burns a real retrieval fee, so cost-to-wash =
-  N·fee for zero standing, since demand is neutral); ☐ the bonded-fetcher credential (P3b, an
-  additional wash lever pricing wash onto the bonded-identity supply) remains. **Hard dependency:** property (b)
+  over the wire. **◑ P2 optimistic fair exchange — the abort-SAFETY floor is built + regression-locked
+  (`core/demand/fairexchange.go`); the dispute-RESOLUTION half is gated on threshold crypto silt does
+  not ship.** Built: the ASW optimistic phase (`ExchangeCommitment` — a fetcher's pre-release,
+  non-repudiable promise) + both abort-safety properties, which hold structurally today — (1)
+  fetcher-side: an aborted exchange never CONSUMES the token (spent only by a completed Redeem), so a
+  non-delivering server leaves the paid token reusable elsewhere; (2) server-side: a pre-release
+  commitment is domain-separated from the receipt and carries no PoR, so it can NEVER redeem as demand
+  — `#receipts(C) ≤ #completed correct deliveries` survives the abort path. GATED: converting a
+  server-held commitment into a TTP-affidavit on fetcher default needs the quorum-TTP to verify
+  delivery completed without the fetcher — i.e. **verifiable escrow of the content key (Camenisch–
+  Shoup) + threshold decryption t-of-n across the validators**. The threshold-decryption/DKG half IS
+  available in Go (dedis/kyber, drand-grade); the wall is the **verifiable-escrow primitive — no
+  adoptable audited pure-Go impl — plus the large new crypto trust surface of the whole stack**,
+  disproportionate to a NEUTRAL observable. (Same *strategy* as H7 — floor now, heavy crypto as a
+  fast-follow — different *primitive*: H7 was a char-2 field-algebra wall, this is a missing
+  verifiable-escrow lib.) Demand-NEUTRALITY keeps this low-stakes: an unresolved server-side abort only
+  UNDERCOUNTS a neutral observable (never standing), so the missing affidavit path costs no security
+  today. Held in tension; `ExchangeCommitment` is the exact seam the future threshold-crypto resolver
+  consumes. **✅ P3** — BOTH cost-to-wash levers now built +
+  regression-locked. **P3a fee-burn** (a self-dealing sim: a server running its own fetcher mints N
+  valid receipts — authenticity is *not* provable, Douceur — but each burns a real retrieval fee, so
+  cost-to-wash = N·fee for zero standing, since demand is neutral). **P3b bonded-fetcher credential**
+  (`demand.Bank.RequireBondedFetcher` / node `RequireBondedFetchers`): a receipt counts toward demand
+  only if the fetcher's key is bond-distinct in the COMMITTED on-chain bond ledger (`chain.IsBonded`,
+  the same Sybil-priced supply C2 measures), and demand counts DISTINCT bonded fetchers per object —
+  so one bonded identity washing N receipts moves demand by 1, re-pricing wash to *one real storage
+  bond per faked unit* (the best achievable under no-center). Self-dealing red-team at both the pure
+  layer (`core/demand`) and the real node wire (`sim`: one bonded identity washes N → demand 1;
+  unbonded delivery → 0; a distinct bonded identity → +1). **Hard dependency:** property (b)
   fetcher-unlinkability stays *nominal until D3 issuance-mixing is solved* — the blind signature hides
   the serial, not the withdrawer's IP/timing (shared with D-PRIV and the H8 privacy build-track).
 

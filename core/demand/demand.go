@@ -29,8 +29,11 @@
 // is cryptographically unlinkable to its withdrawal. But FETCHER-UNLINKABILITY is
 // only NOMINAL until D3 issuance-mixing closes the IP/timing channel (shared with
 // H8/#179): the blind signature hides the serial, not the network identity of the
-// withdrawer. LATER PHASES: optimistic fair-exchange dispute (P2), and the
-// cost-to-wash economics + self-dealing red-team (P3).
+// withdrawer. COST-TO-WASH (P3) is priced by two levers: the fee-burn (P3a, a sim
+// property — each wash burns a real retrieval fee) and the BONDED-FETCHER CREDENTIAL
+// (P3b, built here — Bank.RequireBondedFetcher: demand counts distinct bonded
+// fetchers, so wash costs one storage bond per faked unit). LATER PHASE: optimistic
+// fair-exchange dispute (P2).
 package demand
 
 import (
@@ -200,18 +203,53 @@ func Ack(fetcher ed25519.PrivateKey, token Token, object ports.Hash, server port
 	return r, nil
 }
 
+// BondCheck is the P3b bonded-fetcher credential: given a fetcher's receipt-signing
+// key, it reports whether that key belongs to a scarce, bond-distinct identity and
+// returns an opaque distinctness key (the "slot") for it. The bank counts demand
+// PER DISTINCT SLOT, so N receipts from ONE bonded fetcher raise demand by 1 — this
+// re-prices wash to "one bonded fetcher identity per unit of fake demand" (the
+// D-DEMAND decision's second cost-to-wash lever, alongside the fee-burn). Backed in
+// production by the COMMITTED on-chain bond ledger (chain.BondedSize via the node's
+// RequireBondedFetchers) — the same Sybil-priced, deduped supply C2 measures — so
+// faking U units of demand costs U real storage bonds. Nil ⇒ the gate is off and the
+// bank keeps its raw witnessed-delivery count (unchanged behavior).
+//
+// UNLINKABILITY (M0 residual, not a gap): the fetcher shows its bonded key in the
+// clear, so the credential currently LINKS a fetch to the bonded identity — fetcher-
+// unlinkability stays NOMINAL (the same D3/H8 channel that leaves the rest of demand
+// nominal). This signature is the exact seam where a BLIND bond-distinctness proof
+// ("I hold some bonded identity, distinct from my other shows, without revealing
+// which") restores unlinkability; it composes with D3 issuance-mixing and is not
+// built in M0.
+type BondCheck func(fetcherPubKey []byte) (slot string, ok bool)
+
 // Bank is a server's neutral demand ledger: the set of already-redeemed token
 // serials (double-spend guard) and the per-object count of witnessed deliveries.
 // Demand is an OBSERVABLE — it is never read by consensus standing.
 type Bank struct {
 	spent  map[string]bool
 	demand map[ports.Hash]int64
+	// bonded, when set (RequireBondedFetcher / P3b), gates a receipt on the fetcher
+	// showing a bond-distinct credential and makes demand count DISTINCT bonded
+	// fetchers per object via credited[object][slot].
+	bonded   BondCheck
+	credited map[ports.Hash]map[string]bool
 }
 
 // NewBank returns an empty demand ledger.
 func NewBank() *Bank {
-	return &Bank{spent: map[string]bool{}, demand: map[ports.Hash]int64{}}
+	return &Bank{
+		spent:    map[string]bool{},
+		demand:   map[ports.Hash]int64{},
+		credited: map[ports.Hash]map[string]bool{},
+	}
 }
+
+// RequireBondedFetcher turns on the P3b bonded-fetcher credential: from now on a
+// receipt counts toward demand only if check reports the fetcher's key bond-distinct,
+// and demand counts distinct bonded fetchers per object (one bonded identity per unit
+// of fake demand). Off by default (raw witnessed count). See BondCheck.
+func (b *Bank) RequireBondedFetcher(check BondCheck) { b.bonded = check }
 
 // Redeem verifies a banked receipt against the token that authorized it and, if it
 // is a first-seen, validly-issued, correctly-delivered receipt for the named
@@ -241,7 +279,31 @@ func (b *Bank) Redeem(issuerPub *rsa.PublicKey, token Token, r DeliveryReceipt) 
 	if !ObjectKey(r.Object).Verify(r.Object[:], c, r.Proof) {
 		return false, "delivery proof invalid (no correct delivery of this object to this server)"
 	}
+	// The token is now consumed — crypto, issuance, and delivery all verified — so
+	// mark the serial spent BEFORE the bonded-fetcher gate. A receipt rejected only
+	// for lacking the credential still burns its one-time token, so an unbonded
+	// self-dealer cannot retry the same token to amplify anything.
 	b.spent[string(r.Serial)] = true
+	// P3b bonded-fetcher credential: count toward demand only if the fetcher shows a
+	// bond-distinct credential, and count DISTINCT bonded fetchers per object — so a
+	// self-dealer running one bonded identity mints N valid receipts but moves demand
+	// by 1, not N (Douceur is unbeaten, but wash is re-priced onto the bonded-identity
+	// supply). Off (bonded==nil) keeps the raw witnessed count.
+	if b.bonded != nil {
+		slot, ok := b.bonded(r.Fetcher)
+		if !ok {
+			return false, "fetcher not bond-distinct (bonded-fetcher credential required)"
+		}
+		seen := b.credited[r.Object]
+		if seen == nil {
+			seen = map[string]bool{}
+			b.credited[r.Object] = seen
+		}
+		if seen[slot] {
+			return false, "demand already counted for this bonded fetcher on this object"
+		}
+		seen[slot] = true
+	}
 	b.demand[r.Object]++
 	return true, ""
 }

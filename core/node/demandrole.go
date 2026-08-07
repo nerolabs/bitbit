@@ -69,6 +69,32 @@ func (n *Node) EnableDemandBank(issuerPub *rsa.PublicKey) {
 	n.demandIssuer = issuerPub
 }
 
+// RequireBondedFetchers turns on the P3b bonded-fetcher credential for this node's
+// demand bank: a delivery receipt counts toward witnessed demand only if the
+// fetcher's signing key hashes to a bond-distinct identity in this node's COMMITTED
+// on-chain bond ledger (chain.IsBonded), and demand then counts distinct bonded
+// fetchers per object. This prices fake demand onto the same Sybil-priced storage-
+// bond supply C2 measures — so washing U units costs U real bonds, not U free tokens.
+// No-op unless both demand banking (EnableDemandBank) and the chain (EnableChain) are
+// on. Demand stays a neutral observable throughout — the gate changes what COUNTS as
+// witnessed demand, never whether demand touches standing (it never does).
+//
+// Unlinkability residual: the fetcher's bonded key rides the receipt in the clear, so
+// this LINKS a fetch to its bonded identity (fetcher-unlinkability stays nominal until
+// D3/H8 — the demand.BondCheck doc marks where a blind bond-distinctness proof lands).
+func (n *Node) RequireBondedFetchers() {
+	if n.demandBank == nil || n.chain == nil {
+		return
+	}
+	n.demandBank.RequireBondedFetcher(func(fetcherPub []byte) (string, bool) {
+		id := ports.HashBytes(fetcherPub) // NodeID = sha256(pubkey)
+		if !n.chain.IsBonded(id) {
+			return "", false
+		}
+		return string(id[:]), true
+	})
+}
+
 // WitnessedDemand is the neutral count of correctly-delivered, token-backed
 // retrievals banked for object. 0 when demand banking is off. Observability only.
 func (n *Node) WitnessedDemand(object ports.Hash) int64 {

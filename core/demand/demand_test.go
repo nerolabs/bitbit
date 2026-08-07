@@ -202,6 +202,135 @@ func TestWrongObjectRejected(t *testing.T) {
 	}
 }
 
+// bondedSet models a committed bond ledger for the P3b gate: the fetcher keys in it
+// are bond-distinct (each maps to its own slot = hash(key)); everything else is
+// unbonded. In production this closure is backed by chain.BondedSize (the node's
+// RequireBondedFetchers); here it lets the demand red-team isolate the counting rule
+// from the consensus scaffolding.
+func bondedSet(keys ...ed25519.PublicKey) BondCheck {
+	set := map[string]bool{}
+	for _, k := range keys {
+		set[string(k)] = true
+	}
+	return func(pub []byte) (string, bool) {
+		if !set[string(pub)] {
+			return "", false
+		}
+		id := ports.HashBytes(pub)
+		return string(id[:]), true
+	}
+}
+
+// deliver runs one full honest cycle for scene s's fetcher: withdraw a fresh token,
+// ack a real PoR-bound delivery of the object, and redeem it at bank. Returns the
+// (credited, reason) the bank reported. Each call spends a DISTINCT token (serial),
+// so N calls model N genuine, individually-valid deliveries by the same fetcher.
+func (s scene) deliver(t *testing.T, bank *Bank) (bool, string) {
+	t.Helper()
+	tok := s.token(t)
+	r, err := Ack(s.fetcher, tok, s.object, s.server, s.data, s.tags)
+	if err != nil {
+		t.Fatalf("ack: %v", err)
+	}
+	return bank.Redeem(s.issuerPub, tok, r)
+}
+
+// TestBondedGateRejectsUnbonded (P3b): with the credential required, a perfectly
+// valid delivery from a fetcher that is NOT bond-distinct credits ZERO demand — yet
+// its one-time token is still consumed (marked spent), so it cannot be retried.
+func TestBondedGateRejectsUnbonded(t *testing.T) {
+	s := newScene(t, "obj-C")
+	bank := NewBank()
+	bank.RequireBondedFetcher(bondedSet( /* nobody bonded */ ))
+
+	tok := s.token(t)
+	r, _ := Ack(s.fetcher, tok, s.object, s.server, s.data, s.tags)
+	if ok, reason := bank.Redeem(s.issuerPub, tok, r); ok {
+		t.Fatal("an unbonded fetcher's receipt must not credit demand")
+	} else if reason == "" {
+		t.Fatal("rejection must carry a reason")
+	}
+	if bank.Demand(s.object) != 0 {
+		t.Fatalf("unbonded delivery credited demand = %d, want 0", bank.Demand(s.object))
+	}
+	// The token is burned: re-submitting the same receipt is a double-spend, not a
+	// second free attempt.
+	if ok, reason := bank.Redeem(s.issuerPub, tok, r); ok || reason != "double-spend: serial already redeemed" {
+		t.Fatalf("consumed token must be spent; got ok=%v reason=%q", ok, reason)
+	}
+}
+
+// TestSelfDealOneBondedIdentityCapsDemand is the P3b self-dealing red-team: a washer
+// runs ONE bonded fetcher identity and mints N genuine, individually-valid delivery
+// receipts (distinct tokens, real PoR proofs — indistinguishable from honest demand,
+// because a self-fetch IS a real paid delivery; Douceur is unbeaten). With the
+// bonded-fetcher credential on, witnessed demand rises by exactly 1, not N: faking U
+// units of demand would take U distinct bonded identities, i.e. U real storage bonds.
+func TestSelfDealOneBondedIdentityCapsDemand(t *testing.T) {
+	s := newScene(t, "obj-C")
+	fetcherPub := s.fetcher.Public().(ed25519.PublicKey)
+	bank := NewBank()
+	bank.RequireBondedFetcher(bondedSet(fetcherPub)) // the washer's single bonded identity
+
+	const N = 6
+	for i := 0; i < N; i++ {
+		ok, reason := s.deliver(t, bank)
+		if i == 0 && !ok {
+			t.Fatalf("first bonded delivery must credit: %s", reason)
+		}
+		if i > 0 && ok {
+			t.Fatalf("wash #%d from the same bonded identity must not raise demand again", i)
+		}
+	}
+	if got := bank.Demand(s.object); got != 1 {
+		t.Fatalf("one bonded identity washed %d receipts to demand %d, want 1 (cost-to-wash = one bond per unit)", N, got)
+	}
+}
+
+// TestDistinctBondedFetchersEachCountOnce is the honest control for the cap: M
+// genuinely distinct bonded identities each delivering the object move demand to M.
+// The gate re-prices fake demand without penalizing real, plural demand.
+func TestDistinctBondedFetchersEachCountOnce(t *testing.T) {
+	s := newScene(t, "obj-C")
+	const M = 4
+	fetchers := make([]ed25519.PrivateKey, M)
+	pubs := make([]ed25519.PublicKey, M)
+	for i := range fetchers {
+		pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+		fetchers[i], pubs[i] = priv, pub
+	}
+	bank := NewBank()
+	bank.RequireBondedFetcher(bondedSet(pubs...))
+
+	for i, f := range fetchers {
+		fs := s
+		fs.fetcher = f // same object/server/issuer, a distinct bonded fetcher identity
+		if ok, reason := fs.deliver(t, bank); !ok {
+			t.Fatalf("distinct bonded fetcher %d rejected: %s", i, reason)
+		}
+	}
+	if got := bank.Demand(s.object); got != int64(M) {
+		t.Fatalf("%d distinct bonded fetchers gave demand %d, want %d", M, got, M)
+	}
+}
+
+// TestBondedGateOffKeepsRawCount pins the default: with no credential required, the
+// bank keeps its raw witnessed-delivery count — N deliveries from one fetcher are N.
+// (Guards that P3b is strictly opt-in and did not change existing behavior.)
+func TestBondedGateOffKeepsRawCount(t *testing.T) {
+	s := newScene(t, "obj-C")
+	bank := NewBank() // gate off
+	const N = 3
+	for i := 0; i < N; i++ {
+		if ok, reason := s.deliver(t, bank); !ok {
+			t.Fatalf("delivery %d rejected with gate off: %s", i, reason)
+		}
+	}
+	if got := bank.Demand(s.object); got != int64(N) {
+		t.Fatalf("gate-off demand = %d, want %d (raw count)", got, N)
+	}
+}
+
 // TestDataLessRedeemerRejected: no correct delivery, no receipt. A fetcher (or a
 // self-dealing server) that did not hold the correct bytes cannot produce a proof
 // that verifies — modelled by proving over the right tags but the wrong bytes (the
