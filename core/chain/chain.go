@@ -85,6 +85,15 @@ type Config struct {
 	// is that stake concentration is invisible — but it pays the full cost-to-corrupt
 	// and ByzantineQuorum still bounds it to ≤ ⅓ of weight for safety.)
 	MatureValidators int
+	// OperatorMargin is M, the conservative keys-per-operator inflation factor the
+	// C2 concentration metric (C2Metric / Mature) discounts the bond-distinct
+	// Nakamoto coefficient by: since on-chain data carries no operator label, one
+	// operator may split its stake across up to ~M keys, so the true operator count
+	// is bounded k* ≥ k̂/M and the maturity shed demands k̂ ≥ MatureValidators × M
+	// distinct bonds. HEURISTIC by theorem (Kwon, D-C2): only as tight as M is
+	// honest. 0/unset = 1 (no discount — legacy/sim/single-operator default,
+	// behavior unchanged); a real untrusted deployment sets it > 1 in genesis.
+	OperatorMargin int
 	// AllowPublisher permits an entry to carry a durable Publisher NodeID.
 	// It is FALSE by default because a Publisher→root record is permanent
 	// on an append-only chain — the M0 privacy corner silently surrendered
@@ -704,27 +713,56 @@ func (c *Chain) Mature() bool {
 		}
 		return n >= c.cfg.MatureValidators
 	}
-	return c.nakamotoCoefficient() >= c.cfg.MatureValidators
+	// Objective maturity gates on the OPERATOR-discounted coefficient, so a stake
+	// split across many keys must clear MatureValidators × M distinct bonds — the
+	// split half of the skew+split attack (D-C2). At M=1 this is the plain
+	// bond-distinct coefficient (unchanged behavior).
+	return c.C2Metric().NakamotoOperators >= c.cfg.MatureValidators
 }
 
-// nakamotoCoefficient is the minimum number of the largest DISTINCT non-anchor
-// operators — among validators that have actually ATTESTED a committed block
-// (validatorsSeen) AND still hold a live bond ≥ MinBond — whose combined bonded
-// weight EXCEEDS the Byzantine fraction (⌊total/3⌋) of that participating weight.
-// It is the fewest bond-distinct operators one would have to corrupt to reach the
-// fault threshold: higher = more decentralized.
-//
-// Two properties make it the right maturity gate (H4 / Memo 05):
-//   - participation-gated: only validators that produced a committed attestation
-//     count, so a malicious genesis cannot DECLARE a fake-decentralized set to shed
-//     the wheels — an unproven bond that never attests contributes nothing;
-//   - weight-aware: a set whose weight is dominated by one bond yields 1 no matter
-//     how many satellite keys an operator adds, so one operator cannot cheaply trip
-//     the wheels off (the head-count hole).
-//
-// It reads CURRENT bonds, so a participant whose bond lapses (TTL) drops out and the
-// coefficient can fall — re-engaging the wheels (the post-shed escape hatch).
-func (c *Chain) nakamotoCoefficient() int {
+// C2 is the concentration measurement behind the "no quiet capture" axis (D-C2):
+// cost-to-corrupt over bond-distinct participants, computed from the COMMITTED
+// on-chain bond ledger (c.bonded) — never gossip, which kills the "lie about your
+// size" skew half outright — plus the conservative operator-margin discount that
+// stands in for the (impossible-on-chain) key→operator clustering, bounding the
+// split half. It is ONE measurement, consumed by the maturity shed (Mature) and
+// published for observability (chain-status); the private-lookup committee
+// certification (H8/#179) is the third intended consumer.
+type C2 struct {
+	// NakamotoBonds is the fewest bond-distinct participants whose combined
+	// committed weight EXCEEDS the Byzantine fraction (⌊total/3⌋) of the
+	// participating weight — the raw cost-to-corrupt coefficient over distinct
+	// BONDS (k̂). Weight-aware: a set dominated by one bond yields 1 no matter how
+	// many satellite keys are added, so one operator can't cheaply inflate it by size.
+	NakamotoBonds int
+	// NakamotoOperators is the CONSERVATIVE lower bound on distinct OPERATORS,
+	// ⌊NakamotoBonds / M⌋ for operator margin M: since one operator may split a
+	// stake across up to ~M keys and on-chain data carries no operator label, the
+	// true operator count k* ≥ k̂/M. This is the number the shed actually gates on,
+	// so a splitter must clear k·M distinct bonds — the split-half defense. At M=1
+	// (default) it equals NakamotoBonds. HEURISTIC by theorem (Kwon): only as tight
+	// as M is honest; M_est under adversarial NodeID placement is unquantified
+	// (carry margin, D-C2 / #182).
+	NakamotoOperators int
+	// CostToCorruptBytes is the bonded weight an attacker must control to reach the
+	// fault threshold: ⌊total/3⌋ + 1 (one byte past the Byzantine fraction).
+	CostToCorruptBytes int64
+	// TotalBondedBytes is the participating committed bonded weight the metric is over.
+	TotalBondedBytes int64
+	// Participants is the number of distinct qualified bonds counted.
+	Participants int
+	// Margin is the operator margin M the coefficient was discounted by (≥1).
+	Margin int
+}
+
+// C2Metric computes the concentration measurement over the participating,
+// qualified, committed bonds — validators that have ATTESTED a committed block
+// (validatorsSeen, so a malicious genesis cannot DECLARE a fake-decentralized set)
+// AND still hold a live bond ≥ MinBond, minus anchors and slashed keys. It reads
+// CURRENT bonds, so a lapsed (TTL) bond drops out and the coefficient can fall —
+// re-engaging the wheels (the post-shed escape hatch). Pure function of the
+// committed chain state.
+func (c *Chain) C2Metric() C2 {
 	sizes := make([]int64, 0, len(c.validatorsSeen))
 	var total int64
 	for id := range c.validatorsSeen {
@@ -736,19 +774,35 @@ func (c *Chain) nakamotoCoefficient() int {
 			total += sz
 		}
 	}
+	m := C2{TotalBondedBytes: total, Participants: len(sizes), Margin: c.operatorMargin()}
 	if total == 0 {
-		return 0
+		return m
 	}
 	sort.Slice(sizes, func(i, j int) bool { return sizes[i] > sizes[j] }) // largest first
 	threshold := total / 3
+	m.CostToCorruptBytes = threshold + 1
 	var cum int64
+	m.NakamotoBonds = len(sizes) // all needed unless the loop finds fewer
 	for i, sz := range sizes {
 		cum += sz
 		if cum > threshold {
-			return i + 1
+			m.NakamotoBonds = i + 1
+			break
 		}
 	}
-	return len(sizes)
+	m.NakamotoOperators = m.NakamotoBonds / m.Margin // ⌊k̂/M⌋, conservative
+	return m
+}
+
+// operatorMargin is M, the conservative keys-per-operator inflation factor the C2
+// coefficient is discounted by. 0/unset resolves to 1 (no discount — the legacy /
+// sim / single-operator default), so existing deployments are unaffected; a real
+// untrusted deployment sets it > 1 in genesis to demand a splitter clear k·M bonds.
+func (c *Chain) operatorMargin() int {
+	if c.cfg.OperatorMargin < 1 {
+		return 1
+	}
+	return c.cfg.OperatorMargin
 }
 
 // Revoked reports whether root has been taken down by a committed
