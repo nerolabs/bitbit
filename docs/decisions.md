@@ -133,8 +133,11 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   Merkle log with inclusion + consistency proofs (adopted, not invented), exhaustively tested. It
   is the M0-honest core of the transparency layer (prove a takedown was recorded; prove history was
   never silently rewritten). The ZK non-globality PREDICATE + PIR-routed probes on top of it are
-  post-M0. **Remaining M0 wiring:** accumulate the chain's honored revocations into the log and
-  expose the root + proofs.
+  post-M0. **Wired into the chain (#180):** every honored revocation and un-revocation is appended
+  to the log in `Chain.apply` (a deterministic function of the committed blocks, rebuilt identically
+  on replay), and the chain exposes `RevocationLogRoot` + inclusion/consistency proofs +
+  `RevocationLeaf` so an auditor can reconstruct a leaf from public block data. So silt can now
+  *prove* a takedown was recorded and that its takedown history was never silently rewritten.
 - **Research basis:** Memo 04 (pluralistic takedown). A mechanism strong enough to
   *guarantee* content is gone everywhere *is* the global kill switch silt outlawed; every
   deployed system resolves this by *not* guaranteeing global removal except a legally-forced

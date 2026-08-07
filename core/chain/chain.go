@@ -37,6 +37,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	"github.com/nerolabs/silt/core/publishtoken"
+	"github.com/nerolabs/silt/core/translog"
 	"github.com/nerolabs/silt/ports"
 )
 
@@ -361,6 +362,12 @@ type Chain struct {
 	blocks  []Block
 	byRoot  map[ports.Hash]ports.Entry
 	revoked map[ports.Hash]bool
+	// revLog is the CT-style transparency log (core/translog): every honored
+	// revocation and un-revocation is appended as an event, in commit order, so a
+	// takedown can be PROVEN recorded (inclusion) and history can't be silently
+	// rewritten (consistency). A pure, deterministic function of the committed
+	// blocks — rebuilt identically on replay — so it needs no separate persistence.
+	revLog *translog.Log
 	// validatorsSeen is the set of distinct qualified attesters that have
 	// ever committed a block — the monotonic decentralization signal the
 	// training wheels shed on (see Mature).
@@ -415,6 +422,7 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 	return &Chain{cfg: cfg, rep: rep,
 		byRoot:         make(map[ports.Hash]ports.Entry),
 		revoked:        make(map[ports.Hash]bool),
+		revLog:         translog.New(),
 		validatorsSeen: make(map[ports.NodeID]bool),
 		spent:          make(map[string]bool),
 		bonded:         make(map[ports.NodeID]int64),
@@ -809,6 +817,48 @@ func (c *Chain) operatorMargin() int {
 // revocation record.
 func (c *Chain) Revoked(root ports.Hash) bool { return c.revoked[root] }
 
+// The takedown-transparency operations logged as CT events (D-TAKEDOWN / #180).
+const (
+	RevOp   byte = 'R' // a root was revoked (taken down)
+	UnrevOp byte = 'U' // a prior revocation was reversed
+)
+
+// RevocationLeaf is the canonical transparency-log entry for one takedown event:
+// H("silt/revlog/v1" ‖ op ‖ root ‖ height). Exported so an independent auditor can
+// reconstruct the leaf from public block data and check an inclusion proof.
+func RevocationLeaf(op byte, root ports.Hash, height uint64) ports.Hash {
+	b := make([]byte, 0, 16+1+len(root)+8)
+	b = append(b, []byte("silt/revlog/v1")...)
+	b = append(b, op)
+	b = append(b, root[:]...)
+	for i := 0; i < 8; i++ {
+		b = append(b, byte(height>>(8*(7-i))))
+	}
+	return ports.HashBytes(b)
+}
+
+// RevocationLogRoot is the current Merkle Tree Head over every honored
+// revocation/un-revocation, in commit order — the log's tamper-evident commitment.
+func (c *Chain) RevocationLogRoot() ports.Hash { return c.revLog.Root() }
+
+// RevocationLogSize is the number of takedown events logged so far.
+func (c *Chain) RevocationLogSize() int { return c.revLog.Size() }
+
+// RevocationLogRootAt is the historical log root at a given event count — what a
+// consistency proof is checked against.
+func (c *Chain) RevocationLogRootAt(size int) (ports.Hash, error) { return c.revLog.RootAt(size) }
+
+// RevocationInclusionProof proves takedown event `index` is in the log at `size`.
+func (c *Chain) RevocationInclusionProof(index, size int) ([]ports.Hash, error) {
+	return c.revLog.InclusionProof(index, size)
+}
+
+// RevocationConsistencyProof proves the log at size m is a prefix of size n — that
+// no logged takedown was ever silently removed or reordered.
+func (c *Chain) RevocationConsistencyProof(m, n int) ([]ports.Hash, error) {
+	return c.revLog.ConsistencyProof(m, n)
+}
+
 // Head returns the current tip hash and the height the NEXT block must
 // carry. An empty chain expects height 0 with a zero Prev.
 func (c *Chain) Head() (ports.Hash, uint64) {
@@ -1124,12 +1174,14 @@ func (c *Chain) apply(b Block) {
 	}
 	for _, r := range b.Revocations {
 		c.revoked[r] = true
+		c.revLog.Append(RevocationLeaf(RevOp, r, b.Height)) // append-only transparency record
 	}
 	// Un-revocations clear a prior takedown (validated as currently-revoked).
 	// delete rather than set-false so the map stays a clean set and adopt()'s
 	// pure-replay rebuild yields identical state.
 	for _, r := range b.Unrevocations {
 		delete(c.revoked, r)
+		c.revLog.Append(RevocationLeaf(UnrevOp, r, b.Height)) // the reversal is logged too
 	}
 	// Record on-chain bond registrations (objective validator set, F6). A
 	// height>0 registration was already VERIFIED by validateBondRegs (real
@@ -1319,6 +1371,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.blocks = t.blocks
 	c.byRoot = t.byRoot
 	c.revoked = t.revoked
+	c.revLog = t.revLog
 	c.validatorsSeen = t.validatorsSeen
 	c.spent = t.spent
 	c.bonded = t.bonded
