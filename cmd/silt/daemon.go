@@ -65,6 +65,7 @@ func cmdDaemon(args []string) error {
 	anchorList := fs.String("anchors", "", "launch-window training wheels: comma-separated anchor validator IDs whose sign-off an immature-network commit also requires (empty = no training wheels)")
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
 	matureValidators := fs.Int("mature-validators", 0, "required NAKAMOTO COEFFICIENT (M0 H4): the anchor requirement sheds only once this many bond-DISTINCT operators are needed to reach ⅓ of the bonded weight — cost-to-corrupt, not a head-count, so one operator with many keys can't trip the wheels off (0 = never require anchors)")
+	operatorMargin := fs.Int("operator-margin", 1, "operator margin M (M0 C2 / D-C2): the maturity shed discounts the bond-distinct Nakamoto coefficient by M (⌊k̂/M⌋) — since on-chain data carries no operator label, one operator may split a stake across ~M keys, so a splitter must clear mature-validators×M distinct bonds to shed the wheels. 1 = no discount (single-operator/trusted); an untrusted swarm sets it higher for margin against key-splitting")
 	quorum := fs.Int("quorum", 3, "MINIMUM attestations (excluding the proposer) to commit a block — a floor; with -byzantine-quorum the effective requirement rises to the Byzantine threshold over the qualified set. Lower only for a trusted/one-box swarm")
 	byzantineQuorum := fs.Bool("byzantine-quorum", false, "size the commit quorum at the Byzantine threshold (M0 H4): the support set becomes a supermajority n−f of the qualified bonded set, so two quorums always share an honest validator (safety as the set grows). LEFT UNSET it defaults ON for an untrusted objective validator; an explicit =false opts out (trusted swarm). Only ever RAISES the bar")
 	objective := fs.Bool("objective", true, "DEFAULT-ON for an untrusted validator: consensus fork-choice by OBJECTIVE on-chain bond (F6), so eligibility, quorum, and fork-choice weight are a function of verifiable on-chain bond registrations — identical on every replica — and honest replicas can't diverge under a partition (the M0 consensus denial). Bootstrap a multi-validator quorum with -anchors (the launch set); validators register their real bonds live as they propose. Auto-off for a trusted swarm (-min-rep 0). Pass -objective=false to run the legacy subjective path, which does NOT hold the M0 denial under an adversarial partition")
@@ -359,6 +360,7 @@ func cmdDaemon(args []string) error {
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			ByzantineQuorum: effByz,
 			Anchors:         anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
+			OperatorMargin: *operatorMargin,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
 		}, ledger.Reputation)
@@ -435,6 +437,19 @@ func cmdDaemon(args []string) error {
 		nd.OnCommit(func(b chain.Block) {
 			fmt.Printf("chain: committed block %d (%d entries, %d attestations)\n",
 				b.Height, len(b.Entries), len(b.Atts))
+			// C2 — no-quiet-capture concentration, from the COMMITTED bond ledger
+			// (not gossip). Operators is the coefficient discounted by the operator
+			// margin M; the training wheels are shed only once it clears the maturity bar.
+			if ch.Objective() {
+				m := ch.C2Metric()
+				wheels := "engaged (young network — anchor quorum still required)"
+				if ch.Mature() {
+					wheels = "shed (decentralized enough)"
+				}
+				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
+					m.NakamotoBonds, m.NakamotoOperators, m.Margin,
+					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants, wheels)
+			}
 			if err := chainstore.Save(chainPath, ch.Blocks(0)); err != nil {
 				fmt.Fprintln(os.Stderr, "chain save:", err)
 			}

@@ -9,6 +9,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **C2 metric wiring — cost-to-corrupt from the committed bond ledger, split-resistant shed** (2026-08-08,
+  [#185](https://github.com/nerolabs/silt/issues/185)) — The "no quiet capture" axis (C2 / D-C2) gets a
+  first-class, published concentration measurement. `chain.C2Metric()` computes
+  `{NakamotoBonds, NakamotoOperators, CostToCorruptBytes, TotalBondedBytes, Margin}` over the
+  **committed on-chain `BondReg` ledger** — never gossip, which kills the "lie about your size" *skew*
+  half of the skew+split attack outright. It was previously a private helper that only gated the
+  training-wheels shed; now it is a single measurement consumed by the shed and surfaced for operators.
+  - **Split-half defense via an operator margin.** A `BondReg` carries no operator label, so real
+    key→operator clustering is impossible on-chain; instead a config **`OperatorMargin M`** discounts the
+    bond-distinct coefficient to `NakamotoOperators = ⌊k̂/M⌋`, and `Mature()` sheds the anchor
+    training-wheels only when `k̂ ≥ MatureValidators × M` — so a stake split across many keys must clear
+    `k·M` distinct bonds. `M=1` (default) is the legacy/single-operator behavior, unchanged; the daemon
+    exposes `-operator-margin` and narrates the metric on every commit (`nakamoto N bonds → M operators |
+    cost-to-corrupt … | wheels shed/engaged`).
+  - **Honest residuals (D-C2, unchanged):** operator clustering is heuristic *by theorem* (Kwon) — `M`
+    only bounds it; `M_est` under adversarial NodeID placement is unquantified; the honest-whale / real
+    cartel is outside C2. Byzantine-robust *sampling* and the private-lookup committee-certification
+    consumer (H8/#179) are future. Unblocks the external C2 red-team (#183). Full unit coverage of the
+    metric arithmetic + the split-resistant shed; whole suite green with \`-race\`.
 - **H7 proof-of-correct-repair — the false-repair red-team (acceptance gate)** (2026-08-08,
   [#95](https://github.com/nerolabs/silt/issues/95)) — The self-dealing adversary is driven against
   the **wired** verification handler over a live network (`core/node/redteam_repair_claim_test.go`),

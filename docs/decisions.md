@@ -203,9 +203,12 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-C2 — "no quiet capture" is held in tension, never closed (by theorem)
 
-- **Status:** ▶ DIRECTION DECIDED (held-not-closed) — 2026-08-06. Promoted to a first-class
-  entry (was buried in the "not on this ledger" tuning list) because it is one of M0's two
-  Sybil corners and the strongest *held-in-tension* result — it must be tracked, not assumed.
+- **Status:** ▶ DIRECTION DECIDED (held-not-closed) — 2026-08-06; **METRIC WIRED (#185,
+  2026-08-08).** Promoted to a first-class entry (was buried in the "not on this ledger" tuning
+  list) because it is one of M0's two Sybil corners and the strongest *held-in-tension* result —
+  it must be tracked, not assumed. The concentration measurement is now first-class
+  (`chain.C2Metric()`), computed from the committed bond ledger and consumed by the shed
+  (details in the Direction bullet); it stays *held-in-tension*, not closed.
 - **Research basis:** commission memo B1 (C2 / no quiet capture). C1 (no discount) can be a
   theorem; **C2 can never be** — Kwon et al.'s impossibility makes assigning a Sybil cost to
   *identity-splitting* impossible without a trusted authority, so operator-clustering (keys →
@@ -220,6 +223,17 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   ledger, not gossip** (kills the gossip-skew half of the skew+split attack) — this is the
   measurement filed as the C2-metric-wiring build item, and it is *the same number* consumed
   by the consensus shed, the private-lookup committee certification (H8), and C2.
+  - **Built (#185):** `chain.C2Metric()` computes `{NakamotoBonds, NakamotoOperators,
+    CostToCorruptBytes, TotalBondedBytes, Margin}` over the participating **committed** bonds
+    (weight numerator was already on-chain — this makes it a first-class, published measurement,
+    not a private shed-helper). Since a `BondReg` carries **no operator label**, real key→operator
+    clustering is impossible on-chain, so the M0 stand-in for `M_cluster` is a **config operator
+    margin `M`** (`OperatorMargin`, default 1): the shed gates on the discounted
+    `NakamotoOperators = ⌊k̂/M⌋`, i.e. it sheds only when `k̂ ≥ k·M` — exactly the decided rule.
+    `Mature()` consumes the same measurement; `chain-status`/daemon publish it. **Still future:**
+    the private-lookup committee-certification consumer (lands with H8/#179), and any
+    Byzantine-robust *sampling* (`M_sample`) — today the metric is over the whole committed set,
+    not a sample.
 - **Honest residuals (tracked, not closed):**
   - **The honest whale / real cartel** — an actor who *genuinely* provides φ of the disk
     across infra-independent nodes and then coordinates — is **outside C2 entirely**; bounded
