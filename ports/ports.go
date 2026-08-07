@@ -200,6 +200,23 @@ type CreditLedger interface {
 	// signed two different blocks at the same height; see chain.Equivocation),
 	// burying the culprit's standing so it can no longer influence consensus.
 	SlashEquivocation(id NodeID)
+	// SlashFalseRepair records a PROVEN false repair claim against a caretaker
+	// (H7 slice-2): the claimed rebuilt shard failed the public correctness
+	// recompute, which is self-attributing (anyone can rerun it), so the
+	// claimant's standing is docked. Like every slash it can only ever LOWER
+	// standing, never mint it — see the Invariant-A guard.
+	SlashFalseRepair(id NodeID)
+	// FundEscrow moves amount credits from funder's balance into object root's
+	// durability reserve — a publisher prepaying a repair budget (H7). It is a
+	// BALANCE-economy move only; it never touches standing.
+	FundEscrow(root Hash, funder NodeID, amount int64) error
+	// PayBounty releases up to amount credits from object root's durability
+	// reserve to a repairer's balance, returning the credits actually paid. The
+	// caller must invoke it only on a verified proof-of-repair transcript.
+	PayBounty(root Hash, repairer NodeID, amount int64) int64
+	// EscrowBalance is the credit currently available to pay repair bounties for
+	// object root — its remaining funded horizon. Reading it moves nothing.
+	EscrowBalance(root Hash) int64
 	// Reputation is a node's current consensus standing — the same number the
 	// chain gates proposals and attestations on. Read so a validator can
 	// narrate standing accrual/decay in the field (acceptance F7).

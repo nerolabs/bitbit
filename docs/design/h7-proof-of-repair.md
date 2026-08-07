@@ -329,10 +329,26 @@ post-M0):
 > refinement, `Decide` treats correctness as single-verifier-sufficient (a failing
 > recompute is self-attributing ⇒ `Slash`) and reserves the τ-of-q quorum for
 > retrievability (a shortfall denies the bounty but does **not** slash — it may be
-> transient). **Remaining:** the node/network wiring — carrying a `RepairClaim` over
-> the wire, running the caretaker quorum, and applying the verdict to the ledger
-> (`PayBounty` / `SlashFalseRepair`). That is the integration step (needs `core/node`
-> + a `MsgRepairClaim`/`MsgRepairVote` pair) and lands with sim + e2e coverage.
+> transient).
+>
+> **Built (the node/network wiring):** `core/node/repairclaim.go` carries a
+> `RepairClaim` over the wire (`MsgRepairClaim`/`MsgRepairVote`), runs the caretaker
+> quorum, and applies the verdict to the local ledger. `repairStripe` emits the claim
+> after placing a rebuilt shard on a fresh holder; the quorum is reached through a
+> **`careKey` rendezvous** (`hash(root ‖ "silt/care/v1")`, announced on `Care`) —
+> necessary because only a care-link holder has the layout key needed to judge, and
+> caretakers cluster near the manifest-chunk keys, not the root, so a repairer can't
+> find them by walking to the root. Each judge fetches k survivors by column,
+> `VerifyByRecompute`s, challenges the holder's retrievability under the
+> identity-bound seed, `Decide`s, and settles on **its own** ledger (`PayBounty` the
+> holder / `SlashFalseRepair` the claimant) — credit is per-node-local accounting, so
+> τ-of-q is the emergent property that τ honest judges independently reach release,
+> and no on-chain bounty transaction is needed. Covered by a settlement-truth-table
+> unit test and a happy-path integration sim asserting `EscrowPaid` rises while **no**
+> `Reputation` moves. **Remaining:** the full self-dealing red-team (§11) — garbage
+> claim → slash, relay double-count → denied, compute-but-don't-store → denied,
+> quorum domain-packing — as permanent regressions, and hardening `careKey`
+> discovery/selection (domain-diverse quorum, behaviour when no quorum forms).
 
 Slice 1's `PayBounty(root, repairer, amount)` trusts its caller. Slice 2 *is* that
 caller, and it only calls on a verified transcript:
