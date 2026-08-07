@@ -223,6 +223,11 @@ type CreditLedger interface {
 	// EscrowBalance is the credit currently available to pay repair bounties for
 	// object root — its remaining funded horizon. Reading it moves nothing.
 	EscrowBalance(root Hash) int64
+	// DurabilitySnapshot reports object root's durability accounting at this
+	// instant (reserve, lifetime funded/paid, and repair count) — the raw
+	// material the finite-but-renewable instruments (cost-per-repair, funded
+	// horizon, instrument g) are computed from. Reading it moves nothing.
+	DurabilitySnapshot(root Hash) DurabilitySnapshot
 	// Reputation is a node's current consensus standing — the same number the
 	// chain gates proposals and attestations on. Read so a validator can
 	// narrate standing accrual/decay in the field (acceptance F7).
@@ -232,4 +237,16 @@ type CreditLedger interface {
 	// ChargePublish deducts the publish fee, or returns
 	// ErrInsufficientCredit without side effects.
 	ChargePublish(n NodeID) error
+}
+
+// DurabilitySnapshot is object root's durability accounting at one instant — the
+// observable state the finite-but-renewable contract is measured against (D-S7).
+// It is pure data; the economic instruments that read it (cost-per-repair, funded
+// horizon, and instrument g — the credit-cost trend that decides whether "perpetual"
+// is earned) live in core/credit and take snapshots taken over time.
+type DurabilitySnapshot struct {
+	Balance int64 // credits available now to pay repair bounties (the reserve)
+	Funded  int64 // lifetime credits deposited: prepay + serve auto-skim
+	Paid    int64 // lifetime bounties paid out of the reserve
+	Repairs int64 // count of bounty payments (shard-repairs the reserve funded)
 }

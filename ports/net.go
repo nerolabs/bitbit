@@ -85,6 +85,10 @@ type Duration int64
 const (
 	Millisecond Duration = 1_000_000
 	Second      Duration = 1000 * Millisecond
+	// Year is the reference window the durability instrument g is expressed per
+	// (credit-cost-of-a-shard-repair, per year). 365 days; a tuning reference,
+	// not a calendar.
+	Year Duration = 365 * 24 * 3600 * Second
 )
 
 func (t Time) Add(d Duration) Time { return t + Time(d) }

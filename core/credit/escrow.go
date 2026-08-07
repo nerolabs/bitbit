@@ -35,6 +35,7 @@ type objectEscrow struct {
 	balance int64 // credits available now to pay repair bounties
 	funded  int64 // lifetime credits deposited (prepay + auto-skim)
 	paid    int64 // lifetime bounties paid out to repairers
+	repairs int64 // count of bounty payments — the denominator of cost-per-repair (instrument g)
 }
 
 // Skim is the protocol-fixed fraction of an object's serving revenue that routes
@@ -127,6 +128,7 @@ func (l *Ledger) PayBounty(root ports.Hash, repairer ports.NodeID, amount int64)
 	}
 	e.balance -= amount
 	e.paid += amount
+	e.repairs++ // one shard-repair funded (a short final payment still counts as one)
 	l.acct(repairer).balance += amount
 	return amount
 }
@@ -182,4 +184,29 @@ func (l *Ledger) EscrowPaid(root ports.Hash) int64 {
 		return e.paid
 	}
 	return 0
+}
+
+// EscrowRepairs is the count of bounty payments object root's reserve has funded —
+// the denominator of cost-per-repair.
+func (l *Ledger) EscrowRepairs(root ports.Hash) int64 {
+	if e, ok := l.escrow[root]; ok {
+		return e.repairs
+	}
+	return 0
+}
+
+// DurabilitySnapshot captures object root's whole durability accounting in one
+// value, for the finite-but-renewable instruments (see instruments.go). Reading
+// it moves nothing; an object with no reserve reports the zero snapshot.
+func (l *Ledger) DurabilitySnapshot(root ports.Hash) ports.DurabilitySnapshot {
+	e, ok := l.escrow[root]
+	if !ok {
+		return ports.DurabilitySnapshot{}
+	}
+	return ports.DurabilitySnapshot{
+		Balance: e.balance,
+		Funded:  e.funded,
+		Paid:    e.paid,
+		Repairs: e.repairs,
+	}
 }

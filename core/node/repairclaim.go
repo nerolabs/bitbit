@@ -147,7 +147,13 @@ func (n *Node) settleRepairVerdict(claimant ports.NodeID, claim repairproof.Repa
 		bounty := credit.BountyFor(n.cfg.RepairBountyBase, p.K, p.N, reachable)
 		if paid := n.ledger.PayBounty(claim.Root, claim.Holder, bounty); paid > 0 {
 			n.Stats.BountiesReleased++
-			n.logf(ports.LogInfo, "repair bounty released", "root", claim.Root, "holder", claim.Holder, "paid", paid)
+			// Narrate the funded horizon and the realised cost-per-repair (the g
+			// input) so an operator watches the finite-but-renewable reserve draw
+			// down, not just an opaque payment (D-S7; acceptance F7-style).
+			snap := n.ledger.DurabilitySnapshot(claim.Root)
+			n.logf(ports.LogInfo, "repair bounty released",
+				"root", claim.Root, "holder", claim.Holder, "paid", paid,
+				"reserve", snap.Balance, "cost/repair", credit.CostPerRepair(snap))
 		}
 	}
 }

@@ -9,6 +9,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H7 finite-but-renewable durability — instrument `g` + the funded horizon (slice 3)** (2026-08-08,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — silt does not *promise* perpetual cold-data
+  solvency (that promise is the Arweave endowment identity in credits, and it holds only while the
+  credit-denominated cost of storage keeps falling — which 2020s hardware evidence questions). So
+  durability ships as an explicit **finite-but-renewable** contract, and this slice makes where an
+  object sits on it **measurable** (decision D-S7):
+  - The escrow now tracks a **repair count** (`PayBounty` increments it), and a per-object
+    `ports.DurabilitySnapshot` (reserve, lifetime funded/paid, repairs) crosses the `CreditLedger`
+    interface — read-only, classified `neutral` under the Invariant-A guard.
+  - New pure instruments in `core/credit` read a snapshot: **`CostPerRepair`** (realised credits per
+    shard-repair), **`Horizon`** (how long the reserve lasts at the *observed* burn — returning a
+    `finite` flag so "no burn yet" reads as *unproven*, never *perpetual achieved*), and **`G`** —
+    instrument *g*, the annualized trend of cost-per-repair, signed so `g > 0` means cost is
+    **declining** (the condition under which "perpetual" becomes earnable). `g` stays **measured**,
+    never assumed.
+  - A bounty payment now narrates the drawn-down reserve and cost-per-repair (`Node.DurabilitySnapshot`
+    exposes the accounting for the observatory). Full unit coverage of the instruments + a repair-loop
+    sim asserting the snapshot's repair count matches bounties released and the funded horizon is a
+    positive finite runway; whole suite green with `-race`.
 - **H7 self-funding durability — the serve auto-skim goes live** (2026-08-08,
   [#95](https://github.com/nerolabs/silt/issues/95)) — The escrow that pays repair bounties is now
   topped up by the object's own traffic. The `MsgFetchChunk` serve path resolves each coded shard's

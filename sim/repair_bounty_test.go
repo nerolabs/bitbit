@@ -118,6 +118,21 @@ func TestRepairBountyPaysHolderWithoutMovingStanding(t *testing.T) {
 		t.Fatalf("escrow balance %d != funded %d - paid %d", bal, ledger.EscrowFunded(root), ledger.EscrowPaid(root))
 	}
 
+	// Slice-3 instrument: the real repair loop feeds the finite-but-renewable
+	// accounting. The snapshot's repair count matches the bounties released, the
+	// realised cost-per-repair is positive, and the funded horizon over the elapsed
+	// sim window is finite (a real, re-endowable runway — never a silent "perpetual").
+	snap := cl.Nodes[1].DurabilitySnapshot(root)
+	if snap.Repairs != int64(released) {
+		t.Fatalf("snapshot repairs %d != bounties released %d", snap.Repairs, released)
+	}
+	if cpr := credit.CostPerRepair(snap); cpr <= 0 {
+		t.Fatalf("cost-per-repair = %d, want > 0 once repairs are funded", cpr)
+	}
+	if rem, finite := credit.Horizon(snap, ports.Duration(cl.Sched.Now())); !finite || rem <= 0 {
+		t.Fatalf("funded horizon = (%d, %v), want a positive finite runway", rem, finite)
+	}
+
 	// THE INVARIANT: not one node's standing moved through the whole bounty path.
 	for _, nd := range cl.Nodes {
 		if got := ledger.Reputation(nd.ID()); got != baseline[nd.ID()] {
