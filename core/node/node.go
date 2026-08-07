@@ -393,6 +393,17 @@ func (n *Node) DurabilityReserve(root ports.Hash) int64 {
 	return n.ledger.EscrowBalance(root)
 }
 
+// DurabilitySnapshot reports object root's durability accounting (reserve, lifetime
+// funded/paid, repair count) — the raw material for the finite-but-renewable
+// instruments (credit.CostPerRepair / Horizon / G). The zero snapshot when no
+// ledger is wired. Observability; reading moves nothing.
+func (n *Node) DurabilitySnapshot(root ports.Hash) ports.DurabilitySnapshot {
+	if n.ledger == nil {
+		return ports.DurabilitySnapshot{}
+	}
+	return n.ledger.DurabilitySnapshot(root)
+}
+
 // SetLogger wires the observability port; nil disables it.
 func (n *Node) SetLogger(lg ports.Logger) { n.lg = lg }
 

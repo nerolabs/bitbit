@@ -488,8 +488,15 @@ consensus state — which is why no on-chain bounty transaction is needed).
    quorum verifier challenges under the identity-bound seed. Reuses `core/por`.
 5. **Quorum + gate** — assemble `RepairClaim`, wire the `τ`-of-`q` vote, gate
    `PayBounty`, add `SlashFalseRepair` + Invariant-A extension.
-6. **Instrument `g`** (bleeds into slice 3) — record realised repair cost per object
-   via `EscrowPaid`; publish the funded horizon.
+6. **Instrument `g`** (slice 3) — **BUILT.** The escrow tracks a repair count and a
+   per-object `DurabilitySnapshot` (reserve, funded, paid, repairs); pure instruments
+   in `core/credit` (`CostPerRepair`, `Horizon`, `G`) turn snapshots-over-time into
+   the funded horizon and instrument `g` — the annualized cost-per-repair trend,
+   signed so `g > 0` = declining = solvency-favourable. `g` stays *measured*, never
+   assumed, so "perpetual" is earned only while measured `g` holds positive
+   (finite-but-renewable contract, D-S7). The serve auto-skim (the reserve's income)
+   is also live: a coded shard's serve routes `SkimNum/SkimDen` of its revenue into
+   that object's reserve, and `Node.FundDurability` prepays a cold-data horizon.
 
 ## 11. Test plan (build-immutable discipline)
 

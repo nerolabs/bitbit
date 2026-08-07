@@ -83,6 +83,8 @@ var standingClassification = map[string]standingClass{
 	"EscrowBalance":       neutral, // observability
 	"EscrowFunded":        neutral, // observability
 	"EscrowPaid":          neutral, // observability
+	"EscrowRepairs":       neutral, // observability (cost-per-repair denominator)
+	"DurabilitySnapshot":  neutral, // observability (finite-but-renewable instrument input)
 }
 
 // TestInvariantA_EveryLedgerMethodClassified is the reflection guard: every
