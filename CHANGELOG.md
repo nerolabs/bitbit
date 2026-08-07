@@ -9,6 +9,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H9 takedown transparency — the CT-style append-only log** (2026-08-09,
+  [#180](https://github.com/nerolabs/silt/issues/180)) — New `core/translog`: an RFC 6962
+  (Certificate Transparency) append-only Merkle log — adopted, not invented (B8) — for honored
+  revocations. It offers the two proofs that make a takedown **auditable and non-silent**:
+  **inclusion** ("revocation R is entry i of the log at size N") so a specific takedown is provably
+  recorded, and **consistency** ("the log at size M is a prefix of size N") so an operator can't
+  quietly rewrite history — a dropped or back-dated revocation breaks the consistency proof.
+  Exhaustively tested: prover-generated inclusion paths (every leaf × every size) and consistency
+  proofs (every prefix pair) cross-check against the recomputed roots, and a tampered history fails.
+  This is the M0-honest core of pluralistic takedown; the ZK non-globality predicate + PIR-routed
+  probes on top are post-M0. *(Next: accumulate the chain's committed revocations into the log.)*
+  Whole suite green with \`-race\`.
 - **D-DEMAND — the delivery receipt goes live on the wire** (2026-08-09,
   [#181](https://github.com/nerolabs/silt/issues/181)) — The `core/demand` primitive is now a real
   node capability. A fetcher `AcquireDemandToken` blind-withdraws a retrieval token from an issuer over

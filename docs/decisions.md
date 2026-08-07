@@ -128,7 +128,13 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-TAKEDOWN — provable non-globality via a transparency log
 
-- **Status:** ▶ DIRECTION DECIDED — 2026-08-05 (low urgency); **metric CONSTRUCTED** 2026-08-06.
+- **Status:** ▶ DIRECTION DECIDED — 2026-08-05 (low urgency); **metric CONSTRUCTED** 2026-08-06;
+  **CT-log accumulator BUILT (#180, 2026-08-09)** — `core/translog`, an RFC-6962 append-only
+  Merkle log with inclusion + consistency proofs (adopted, not invented), exhaustively tested. It
+  is the M0-honest core of the transparency layer (prove a takedown was recorded; prove history was
+  never silently rewritten). The ZK non-globality PREDICATE + PIR-routed probes on top of it are
+  post-M0. **Remaining M0 wiring:** accumulate the chain's honored revocations into the log and
+  expose the root + proofs.
 - **Research basis:** Memo 04 (pluralistic takedown). A mechanism strong enough to
   *guarantee* content is gone everywhere *is* the global kill switch silt outlawed; every
   deployed system resolves this by *not* guaranteeing global removal except a legally-forced
