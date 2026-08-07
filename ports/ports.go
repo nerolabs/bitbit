@@ -181,6 +181,12 @@ type CreditLedger interface {
 	// RecordServe credits server for delivering bytes of chunk id to
 	// requester.
 	RecordServe(server, requester NodeID, id ChunkID, bytes int64)
+	// RecordServeToObject is the object-aware serve (H7): like RecordServe, it
+	// credits the server for delivering bytes of chunk id, but it diverts a
+	// protocol-fixed auto-skim of that revenue into object root's durability
+	// escrow, so popular data self-funds its own repair. Returns the credits
+	// skimmed. Standing is untouched — serving funds the balance economy only.
+	RecordServeToObject(server, requester NodeID, root Hash, id ChunkID, bytes int64) int64
 	// RecordAudit settles a storage challenge: a passed audit earns the
 	// prover a reward, a failed one costs a slash.
 	RecordAudit(prover NodeID, id ChunkID, passed bool)

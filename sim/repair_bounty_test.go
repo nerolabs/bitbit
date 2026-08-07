@@ -109,8 +109,13 @@ func TestRepairBountyPaysHolderWithoutMovingStanding(t *testing.T) {
 	if paid := ledger.EscrowPaid(root); paid <= 0 {
 		t.Fatalf("EscrowPaid = %d, want > 0 (bounties should have drawn the reserve)", paid)
 	}
-	if bal := ledger.EscrowBalance(root); bal != reserve-ledger.EscrowPaid(root) {
-		t.Fatalf("escrow balance %d != funded %d - paid %d", bal, reserve, ledger.EscrowPaid(root))
+	// The reserve is funded = prepay + serve auto-skim (serving shards during the
+	// repair windows tops it up), drawn down by what bounties paid.
+	if funded := ledger.EscrowFunded(root); funded < reserve {
+		t.Fatalf("EscrowFunded %d < prepay %d — the prepay should be the floor", funded, reserve)
+	}
+	if bal := ledger.EscrowBalance(root); bal != ledger.EscrowFunded(root)-ledger.EscrowPaid(root) {
+		t.Fatalf("escrow balance %d != funded %d - paid %d", bal, ledger.EscrowFunded(root), ledger.EscrowPaid(root))
 	}
 
 	// THE INVARIANT: not one node's standing moved through the whole bounty path.

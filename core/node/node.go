@@ -366,6 +366,33 @@ type capInfo struct{ used, total int64 }
 // SetLedger wires credit accounting; nil disables it.
 func (n *Node) SetLedger(l ports.CreditLedger) { n.ledger = l }
 
+// ErrNoLedger is returned by the durability-funding API when the node has no
+// credit ledger wired (SetLedger was never called).
+var ErrNoLedger = errors.New("node: no credit ledger configured")
+
+// FundDurability prepays object root's durability reserve from THIS node's own
+// balance — a publisher or operator endowing a repair budget so the object
+// outlives churn before it is popular enough to self-fund via the serve auto-skim.
+// It is a pure balance move and never touches standing; it returns
+// ErrInsufficientCredit if the node can't cover the amount, and ignores a
+// non-positive amount (H7).
+func (n *Node) FundDurability(root ports.Hash, amount int64) error {
+	if n.ledger == nil {
+		return ErrNoLedger
+	}
+	return n.ledger.FundEscrow(root, n.id, amount)
+}
+
+// DurabilityReserve is the credit currently available to pay repair bounties for
+// object root — its remaining funded horizon. Observability; reading moves
+// nothing. 0 when no ledger is wired or the object has no reserve.
+func (n *Node) DurabilityReserve(root ports.Hash) int64 {
+	if n.ledger == nil {
+		return 0
+	}
+	return n.ledger.EscrowBalance(root)
+}
+
 // SetLogger wires the observability port; nil disables it.
 func (n *Node) SetLogger(lg ports.Logger) { n.lg = lg }
 
@@ -667,7 +694,18 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.Stats.ChunksServed++
 		n.Stats.BytesServed += int64(len(c.Data))
 		if n.ledger != nil {
-			n.ledger.RecordServe(n.id, from, msg.ChunkID, int64(len(c.Data)))
+			bytes := int64(len(c.Data))
+			// Object-aware serve: a coded shard carries its object root in the
+			// storage proof, so route a durability auto-skim of the serve revenue
+			// into THAT object's escrow (H7 slice 3 — popular data self-funds its
+			// repair). Chunks with no proof-anchored root (manifest chunks, uncoded
+			// files) keep the plain serve; the server's net credit is the same either
+			// way, only a slice is diverted to durability.
+			if p, ok := n.proofs[msg.ChunkID]; ok && p.Root != (ports.Hash{}) {
+				n.ledger.RecordServeToObject(n.id, from, p.Root, msg.ChunkID, bytes)
+			} else {
+				n.ledger.RecordServe(n.id, from, msg.ChunkID, bytes)
+			}
 		}
 		n.bumpDemand(msg.ChunkID)
 		n.reply(from, msg, ports.Message{Kind: ports.MsgFetchChunkReply, Found: true, Data: c.Data})
