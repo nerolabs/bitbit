@@ -9,6 +9,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **D-DEMAND P0 — the blind demand receipt primitive (witnessed delivery, unforgeable-at-the-token-level)** (2026-08-08,
+  [#181](https://github.com/nerolabs/silt/issues/181)) — First phase of the B axis (served-demand) of the
+  systemic claim. New pure `core/demand`: an issuer-signed retrieval **token**, a **PoR-bound
+  delivery-ack** (the fetcher signs a Shacham–Waters proof over the delivered bytes, with the challenge
+  bound to `serial‖object‖server`), and a **bank/redeem** that credits a per-object *witnessed-demand*
+  counter once per token. It proves exactly one thing — **`#receipts(C) ≤ #issued-tokens-spent-on-a-signed-C-delivery`** —
+  and, per the decision's doc-truth rule, deliberately does **not** prove demand *authenticity* (a
+  self-fetch is a real paid delivery; a Douceur limit, re-priced by cost-to-wash in P3, never proven).
+  - **NEUTRAL by construction.** A redeemed receipt is an *observable* (`Bank.Demand`) that is never
+    wired to consensus standing — so even a forged or self-dealt receipt buys **zero** standing, keeping
+    the γ→1/N shared-content firewall intact (fusing demand into standing stays gated on #182). Standing
+    is bond-only today.
+  - **Unforgeability red-team** (each a permanent regression): a token not issuer-signed, a
+    tampered/lifted receipt (server/object/fetcher/sig), a receipt claiming object C' while holding C's
+    bytes (the PoR binding, not just the signature), a data-less "delivery", and a double-spent serial —
+    all rejected; only an honest signed delivery credits demand. The public-per-object-key tag-forgery
+    residual is documented (H7 precedent; inert because demand is neutral).
+  - P1 blind withdrawal, fetcher-unlinkability (needs D3/H8), P2 fair-exchange dispute, and P3
+    cost-to-wash economics remain. Whole suite green with \`-race\`.
 - **C2 metric wiring — cost-to-corrupt from the committed bond ledger, split-resistant shed** (2026-08-08,
   [#185](https://github.com/nerolabs/silt/issues/185)) — The "no quiet capture" axis (C2 / D-C2) gets a
   first-class, published concentration measurement. `chain.C2Metric()` computes
