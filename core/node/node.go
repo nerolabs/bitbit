@@ -39,6 +39,20 @@ type Config struct {
 	// before repair kicks in (repair when missing > slack).
 	RepairInterval ports.Duration
 	RepairSlack    int
+	// RepairBountyBase is the base durability bounty (credits) a caretaker's
+	// repair-claim proposes for one rebuilt shard, before BountyFor's rarest-
+	// shard multiplier (credit.BountyFor). It funds the NEW HOLDER of the
+	// rebuilt shard out of the object's own escrow (H7 §8b). 0 disables the
+	// bounty economy (sims/e2e that don't fund escrow) — repair still runs, it
+	// just emits no claim.
+	RepairBountyBase int64
+	// RepairQuorumTau is τ, the retrievability-confirmation threshold a single
+	// caretaker-judge requires before releasing the bounty from its own ledger
+	// (credit is per-node-local accounting: each judge settles independently, so
+	// τ is that judge's own confirmation count, ≥1). Correctness is always
+	// single-verifier-sufficient (a failed recompute self-attributes → slash),
+	// so τ gates only the retrievability leg. Defaults to 1.
+	RepairQuorumTau int
 	// Domain is the operator's failure-domain label (AS / rack / geo /
 	// operator). Placement spreads a file's columns across distinct
 	// domains, so a whole domain failing costs a stripe as little as
@@ -136,14 +150,15 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		K: 8, Alpha: 3,
-		RequestTimeout: 500 * ports.Millisecond,
-		Replication:    3,
-		RepairInterval: 60 * ports.Second,
-		RepairSlack:    2,
-		HotThreshold:   8,
-		DemandInterval: 60 * ports.Second,
-		LeaseTTL:       180 * ports.Second,
-		FanoutReplicas: 2,
+		RequestTimeout:  500 * ports.Millisecond,
+		Replication:     3,
+		RepairInterval:  60 * ports.Second,
+		RepairSlack:     2,
+		RepairQuorumTau: 1, // per-node-local ledgers: each caretaker-judge confirms retrievability itself
+		HotThreshold:    8,
+		DemandInterval:  60 * ports.Second,
+		LeaseTTL:        180 * ports.Second,
+		FanoutReplicas:  2,
 
 		ReachabilityTimeout: 3 * ports.Second,
 		FetchAttempts:       3,
@@ -172,6 +187,13 @@ type Stats struct {
 	RepairFailures  int // repair attempts that couldn't reconstruct (retried next sweep)
 	Dispersals      int // stripes re-spread by the dispersion audit (over-concentrated in a domain)
 	BlocksCommitted int // chain blocks appended to the local replica
+	// H7 durability-bounty accounting (this node's own view; ledgers are
+	// per-node-local). RepairClaims: claims this node emitted after placing a
+	// rebuilt shard. BountiesReleased / FalseRepairSlashes: verdicts this node
+	// settled as a caretaker-judge (paid the holder / slashed a false claimant).
+	RepairClaims       int
+	BountiesReleased   int
+	FalseRepairSlashes int
 }
 
 type pending struct {
@@ -664,6 +686,8 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 			return
 		}
 		n.reply(from, msg, n.answerChallenge(msg))
+	case ports.MsgRepairClaim:
+		n.handleRepairClaim(from, msg) // async: replies MsgRepairVote when the two legs settle (H7)
 	case ports.MsgBondChallenge:
 		n.reply(from, msg, n.answerBondChallenge(msg))
 	case ports.MsgTokenRequest:

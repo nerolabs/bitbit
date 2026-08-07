@@ -9,6 +9,30 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H7 proof-of-correct-repair — the node/network quorum wiring** (2026-08-07,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — The `core/repairproof` gate is now wired into
+  the live repair loop, so a durability bounty actually flows on a *verified* repair. When a
+  caretaker rebuilds a lost shard and places it on a fresh holder (`repairStripe`), it emits a
+  `MsgRepairClaim` naming that holder; the object's other caretakers — reached through a new
+  **`careKey` rendezvous** (`hash(root ‖ "silt/care/v1")`, announced on `Care`), since only a
+  care-link holder has the layout key needed to judge — each independently run both legs:
+  - **Verify** (`handleRepairClaim`, `core/node/repairclaim.go`) — reload the layout, fetch k
+    survivors *by column* (verifying each against its committed id, dropping what it didn't already
+    host — a paramedic, not a hoarder), `VerifyByRecompute` the claimed position, then challenge the
+    holder's retrievability under the identity-bound `RepairChallengeSeed`, and `Decide`.
+  - **Settle on the LOCAL ledger** — release pays the *new holder* from the object's escrow
+    (`PayBounty`, capped by the rarest-shard `BountyFor` multiplier); a self-attributing correctness
+    lie slashes the *claimant* (`SlashFalseRepair`). Credit is per-node-local accounting, so each
+    caretaker-judge settles independently and the τ-of-q quorum is the emergent property that τ
+    honest judges reach release — no on-chain bounty transaction.
+  - **The invariant holds through the wire.** A bounty is a pure *balance* motion — the integration
+    sim churns a stripe, watches a peer caretaker verify and release the reserve, and asserts **no
+    node's consensus standing moves at all**, so the γ→1/N shared-content hole stays shut.
+    `ports.CreditLedger` gains `PayBounty`/`SlashFalseRepair`/`FundEscrow`/`EscrowBalance`; new
+    `RepairBountyBase`/`RepairQuorumTau` config (bounty economy off by default). Full unit coverage
+    (settlement truth table) + happy-path sim; whole suite green with `-race`. *(The full
+    self-dealing red-team — garbage claim → slash, relay double-count → denied, compute-but-don't-store
+    → denied, quorum domain-packing — and the caretaker-discovery hardening land next.)*
 - **H7 proof-of-correct-repair — the verification layer, slice 2 (logic + wire)** (2026-08-07,
   [#95](https://github.com/nerolabs/silt/issues/95)) — A repair bounty must pay only for a *real,
   correct* repair, never a bare claim. New `core/repairproof` composes the gate, unit-tested end to

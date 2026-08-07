@@ -35,6 +35,7 @@ func (n *Node) Care(reg ports.Registry, ch link.CareHandle) {
 		n.repairRunning = true
 		n.clock.AfterFunc(n.cfg.RepairInterval, n.repairTick)
 	}
+	n.announceRepairQuorum(ch.Root) // become discoverable as a caretaker-judge (H7)
 	entry, ok, err := reg.Lookup(bg(), ch.Root)
 	if err != nil || !ok {
 		return
@@ -514,16 +515,24 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 			}
 			r := toPlace[i]
 			var proof *ports.StorageProof
+			hasTags := false
 			if pr, perr := manifest.Prove(leaves, r.leafIdx); perr == nil {
 				proof = &ports.StorageProof{Root: root, Index: pr.Index, Total: pr.Total, Path: pr.Path, Column: r.pos}
 				if porKey != nil {
 					proof.PorTags = porKey.Tags(r.id[:], shards[r.pos])
+					hasTags = true
 				}
 			}
+			// The bounty pays the NEW HOLDER, so name the FIRST node that accepts
+			// the rebuilt shard as the claim's payee (design §8b).
+			var holder ports.NodeID
 			n.IterativeFindNode(colKey(root, r.pos), func(closest []ports.NodeID) {
 				candidates := n.preferFreshDomain(closest, usedDomains)
 				n.placeAt(r.id, shards[r.pos], proof, candidates, n.cfg.Replication,
 					func(target ports.NodeID) {
+						if holder == (ports.NodeID{}) {
+							holder = target
+						}
 						if d := n.domainOf(target); d != 0 {
 							usedDomains[d]++
 						}
@@ -531,6 +540,9 @@ func (n *Node) repairStripe(m *manifest.Layout, p erasure.Params, stripeRefs []s
 					func(placed int) {
 						if placed > 0 {
 							n.Stats.ShardsRebuilt++
+							// A genuine repair happened: claim the durability bounty
+							// for the holder, to be independently verified by the quorum.
+							n.emitRepairClaim(root, r, holder, hasTags)
 						}
 						place(i + 1)
 					})
