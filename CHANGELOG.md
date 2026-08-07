@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **#184 verify — equivocation→slash proven over the REAL WIRE (adversarial-daemon harness)** (2026-08-07,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The accountability property "a proven
+  double-sign costs standing" (D2) is now exercised against real daemons over real TCP, not only in the
+  in-process sim. A new **`-equivocate` red-team daemon flag** (quarantined in `core/node/adversary.go`,
+  loudly announced, reached by no honest path) makes a validator DELIBERATELY double-sign: it places
+  block X at height 1 on one honest peer and a heavier conflicting fork (Y, Z) on another. The honest
+  detector syncs the heavier fork, reconciles across the two histories, and `chain.FindEquivocations`
+  catches the adversary signing two different blocks at the same height — slashing it. Because
+  fork-choice is summed qualified-attester weight, the heavier fork is deterministic, so the e2e
+  (`TestEquivocatorSlashedOverTCP`) is not a timing race. Also adds a `Node.OnSlash` callback so the
+  daemon surfaces slashing on stdout (`chain: slashed equivocator …`) — a real operator-visible
+  accountability event, not only a debug-log line. Keeping the adversary in the shipped binary (behind
+  the flag) means it runs in CI *and* lets an external red-team drive the same attack against a
+  deployment to confirm the defence holds. First of #184's four consensus-safety cases; partition→heal,
+  low-bond→reject, and forged-block→reject follow. Whole suite green with \`-race\`; the e2e passes over
+  real sockets.
 - **D-DEMAND P2 — the optimistic fair-exchange abort-safety floor** (2026-08-07,
   [#181](https://github.com/nerolabs/silt/issues/181)) — The demand exchange is content C (server →
   fetcher) ⟷ a delivery receipt (fetcher → server). Fair exchange provably needs a TTP (Pagnia–

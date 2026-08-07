@@ -120,6 +120,12 @@ func replyKind(k ports.MsgKind) ports.MsgKind {
 // replica (daemon logging/persistence).
 func (n *Node) OnCommit(fn func(chain.Block)) { n.onCommit = fn }
 
+// OnSlash registers a callback fired when this node slashes a validator for a
+// proven equivocation (double-sign) detected while reconciling a fork — so the
+// daemon can surface this significant accountability event on stdout, not only in
+// the debug log. Fired once per distinct culprit per detection.
+func (n *Node) OnSlash(fn func(culprit ports.NodeID, height uint64)) { n.onSlash = fn }
+
 var ErrNoChain = errors.New("node: validator role not enabled")
 
 // ProposeEntry runs one round of consensus: build a block at the local
@@ -284,6 +290,9 @@ func (n *Node) slashEquivocators(a, b []chain.Block) {
 			n.pendingSlashes = append(n.pendingSlashes, e)
 		}
 		n.logf(ports.LogWarn, "validator slashed for equivocation", "culprit", e.CulpritID(), "height", e.A.Height)
+		if n.onSlash != nil {
+			n.onSlash(e.CulpritID(), e.A.Height)
+		}
 	}
 }
 

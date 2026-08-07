@@ -82,6 +82,7 @@ func cmdDaemon(args []string) error {
 	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4 / RT-2): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. LEFT UNSET it defaults ON for an untrusted objective validator (derived cadence); an explicit 0 disables it (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
+	equivocate := fs.String("equivocate", "", "RED-TEAM / TEST-HARNESS ONLY: run this validator as a Byzantine EQUIVOCATOR. Given two peer validator IDs \"idX,idYZ\", it double-signs at height 1 — placing block X on idX and a heavier conflicting fork (Y,Z) on idYZ — so honest replicas that reconcile the fork catch the double-sign and slash this node (#184, proving the accountability property over the real wire). NEVER use on a real network; a correct node refuses to equivocate")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -439,6 +440,9 @@ func cmdDaemon(args []string) error {
 		} else {
 			return fmt.Errorf("token issuer key: %w", kerr)
 		}
+		nd.OnSlash(func(culprit ports.NodeID, height uint64) {
+			fmt.Printf("chain: slashed equivocator %s (double-signed at height %d)\n", culprit, height)
+		})
 		nd.OnCommit(func(b chain.Block) {
 			fmt.Printf("chain: committed block %d (%d entries, %d attestations)\n",
 				b.Height, len(b.Entries), len(b.Atts))
@@ -756,6 +760,37 @@ func cmdDaemon(args []string) error {
 						fmt.Fprintln(os.Stderr, "chain save:", err)
 					}
 				})
+				// -equivocate: RED-TEAM / TEST HARNESS — drive a deliberate double-sign so
+				// honest replicas catch and slash it over the real wire (#184). Retry on the
+				// loop-safe clock until this node has earned standing with both peers (early
+				// attempts are refused). NEVER honest; a correct node refuses to equivocate.
+				if *equivocate != "" {
+					parts := strings.Split(*equivocate, ",")
+					idX, e1 := ports.ParseHash(strings.TrimSpace(parts[0]))
+					var idYZ ports.NodeID
+					var e2 error
+					if len(parts) == 2 {
+						idYZ, e2 = ports.ParseHash(strings.TrimSpace(parts[1]))
+					} else {
+						e2 = fmt.Errorf("need exactly two peer IDs \"idX,idYZ\"")
+					}
+					if e1 != nil || e2 != nil {
+						fmt.Fprintln(os.Stderr, "-equivocate: bad peer ids:", e1, e2)
+					} else {
+						fmt.Println("⚠ ADVERSARY: -equivocate set — this validator will DELIBERATELY double-sign (red-team harness, never honest)")
+						var tryEquiv func()
+						tryEquiv = func() {
+							nd.Equivocate(idX, idYZ, func(err error) {
+								if err != nil {
+									clk.AfterFunc(1*ports.Second, tryEquiv) // not qualified with peers yet; retry
+									return
+								}
+								fmt.Println("adversary: equivocation complete (double-signed height 1)")
+							})
+						}
+						clk.AfterFunc(2*ports.Second, tryEquiv)
+					}
+				}
 				// -revoke: propose an on-chain takedown of the named root once it is
 				// committed and we have earned standing to gather a quorum (F5). Poll
 				// on the loop-safe clock; existence + quorum are enforced by the chain.

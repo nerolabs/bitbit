@@ -333,6 +333,7 @@ type Node struct {
 	chain    *chain.Chain
 	signer   ed25519.PrivateKey
 	onCommit func(chain.Block)
+	onSlash  func(culprit ports.NodeID, height uint64)
 	// pendingSlashes are equivocation proofs this node detected (during Reconcile)
 	// and has not yet recorded on-chain; proposeBlock drains them into Block.Slashes
 	// so every replica evicts the culprit from the objective set in lockstep (F2).
