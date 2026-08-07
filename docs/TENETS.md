@@ -283,14 +283,17 @@ escrow** (a prepaid credit reserve) that **auto-skims** a fixed fraction of each
 object's serving revenue back into that object's reserve, paying repair bounties
 scaled by how under-replicated a stripe is (rarest-shard first). These credits
 fund *durability* and confer *no* consensus standing — standing stays
-work-backed and coin-free. **Center-less proof-of-repair has a construction**
-(design delivered, **not yet built** → H7 / issue #95): a bounty pays only on a
-succinct proof the shard was correctly regenerated, verifiable without reading
-plaintext, a false claim slashing the bond — a *composition of proven primitives*,
-no new invention for the plain-RS case (a transparent polynomial commitment —
-FRI-Binius, no trusted setup — for **correctness** + Shacham–Waters PoR for
-**retrievability** + a DAS quorum for **center-less checking**; see
-[decisions.md](decisions.md) D-S7). Note this proves a repair is *correct* — a
+work-backed and coin-free. **Center-less proof-of-correct-repair is BUILT**
+(H7 / issue #95): a bounty pays the new holder of a rebuilt shard only when
+**correctness** (reconstruct from the manifest-anchored survivors and check the
+content address — a Merkle recompute) *and* an identity-bound **Shacham–Waters**
+retrievability proof both verify, checked by a **care-link quorum** with no
+coordinator, and an attributable false claim slashes the bond — a *composition of
+proven primitives*, no new invention for the plain-RS case (see
+[decisions.md](decisions.md) D-S7). *(The plaintext-blind commitment the design
+preferred — a transparent binary-field PCS — is a GF(2⁸) dead end in pure Go, so
+M0 ships the recompute floor and the bandwidth-blind upgrade is a fast-follow.)*
+Note this proves a repair is *correct* — a
 different axis from the γ→1/N sharing problem above; it does **not** make one
 shared copy stop answering for N pledges.
 
@@ -731,5 +734,7 @@ the network grows — **not closed.**
   access-held-in-tension form. **Proof-of-repair** softened from "now exists" to *construction
   designed, not yet built (H7)*. Companion risk-register / threat-catalog / public-site fixes
   landed the same honesty (γ→1/N as an open-risk row; `g≤0`; CPR-adversarial-placement; the
-  public Sybil-standing copy corrected to bond-backed). Comprehension was faithful; this was a
+  public Sybil-standing copy corrected to bond-backed). *(Update 2026-08-08: H7 is now BUILT and
+  adversarially verified — see the tenet text above; the blind-commitment leg deferred as a
+  fast-follow.)* Comprehension was faithful; this was a
   propagation fix, not a re-think.
