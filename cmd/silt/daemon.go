@@ -82,6 +82,10 @@ func cmdDaemon(args []string) error {
 	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4 / RT-2): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. LEFT UNSET it defaults ON for an untrusted objective validator (derived cadence); an explicit 0 disables it (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
+	blockPeers := fs.String("block-peers", "", "TEST-HARNESS / FIELD-DRILL: comma-separated peer IDs to PARTITION away from — this node drops all messages to/from them, simulating a severed link (#184 partition→heal). HEAL by restarting without the flag (the persisted chain reloads and reconciles). Empty = no partition; a real deployment never sets it")
+	forgeBlock := fs.String("forge-block", "", "RED-TEAM / TEST-HARNESS ONLY: propose a block with a FORGED (corrupted) proposer signature to this peer ID, to prove an honest validator rejects it before attesting (#184 forged-block→reject). Never honest")
+	lowbondPropose := fs.String("lowbond-propose", "", "RED-TEAM / TEST-HARNESS ONLY: as an under-bonded validator, propose a well-formed block to this peer ID, to prove an honest validator refuses a proposer without a qualifying bond (#184 low-bond→reject). Never honest")
+	equivocate := fs.String("equivocate", "", "RED-TEAM / TEST-HARNESS ONLY: run this validator as a Byzantine EQUIVOCATOR. Given two peer validator IDs \"idX,idYZ\", it double-signs at height 1 — placing block X on idX and a heavier conflicting fork (Y,Z) on idYZ — so honest replicas that reconcile the fork catch the double-sign and slash this node (#184, proving the accountability property over the real wire). NEVER use on a real network; a correct node refuses to equivocate")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -232,6 +236,20 @@ func cmdDaemon(args []string) error {
 	clk := walltime.New(loop)
 	nd := node.New(id, cfg, clk, tr, store)
 	nd.SetSigner(ident.Signer()) // sign self-certifying provider records (H5), not just chain blocks
+	if *blockPeers != "" {
+		var blocked []ports.NodeID
+		for _, s := range strings.Split(*blockPeers, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				bid, berr := ports.ParseHash(s)
+				if berr != nil {
+					return fmt.Errorf("-block-peers %q: %w", s, berr)
+				}
+				blocked = append(blocked, bid)
+			}
+		}
+		nd.SetBlockedPeers(blocked)
+		fmt.Printf("⚠ PARTITION: -block-peers set — dropping all traffic to/from %d peer(s) (test-harness / field-drill, never a real deployment)\n", len(blocked))
+	}
 	if *freeload {
 		nd.SetFreeload(true)
 		fmt.Println("freeload: ON — this node refuses to store or serve content (registry/relay/routing only, #47)")
@@ -439,6 +457,12 @@ func cmdDaemon(args []string) error {
 		} else {
 			return fmt.Errorf("token issuer key: %w", kerr)
 		}
+		nd.OnSlash(func(culprit ports.NodeID, height uint64) {
+			fmt.Printf("chain: slashed equivocator %s (double-signed at height %d)\n", culprit, height)
+		})
+		nd.OnReorg(func(dropped int, newHeight uint64) {
+			fmt.Printf("chain: reorged onto a heavier fork (dropped %d block(s), new head height %d)\n", dropped, newHeight)
+		})
 		nd.OnCommit(func(b chain.Block) {
 			fmt.Printf("chain: committed block %d (%d entries, %d attestations)\n",
 				b.Height, len(b.Entries), len(b.Atts))
@@ -756,6 +780,69 @@ func cmdDaemon(args []string) error {
 						fmt.Fprintln(os.Stderr, "chain save:", err)
 					}
 				})
+				// -forge-block / -lowbond-propose: RED-TEAM / TEST HARNESS — send ONE crafted
+				// proposal to a peer and report whether the honest validator refused it, proving
+				// the two ValidateProposal defences (#184 forged-block→reject, low-bond→reject)
+				// over the real wire. Retry only until the target is reachable. NEVER honest.
+				badPropose := func(targetStr string, forge bool, label string) {
+					if targetStr == "" {
+						return
+					}
+					tid, terr := ports.ParseHash(strings.TrimSpace(targetStr))
+					if terr != nil {
+						fmt.Fprintf(os.Stderr, "-%s: %v\n", label, terr)
+						return
+					}
+					fmt.Printf("⚠ ADVERSARY: -%s set — sending a bad proposal to prove honest rejection (red-team harness, never honest)\n", label)
+					var try func()
+					try = func() {
+						nd.ProposeBadBlock(tid, forge, func(refused bool, err error) {
+							if err != nil {
+								clk.AfterFunc(1*ports.Second, try) // target not reachable yet; retry
+								return
+							}
+							if refused {
+								fmt.Printf("adversary: %s proposal correctly REJECTED by %s\n", label, tid)
+							} else {
+								fmt.Printf("adversary: %s proposal UNEXPECTEDLY ACCEPTED by %s (DEFECT)\n", label, tid)
+							}
+						})
+					}
+					clk.AfterFunc(2*ports.Second, try)
+				}
+				badPropose(*forgeBlock, true, "forge-block")
+				badPropose(*lowbondPropose, false, "lowbond-propose")
+				// -equivocate: RED-TEAM / TEST HARNESS — drive a deliberate double-sign so
+				// honest replicas catch and slash it over the real wire (#184). Retry on the
+				// loop-safe clock until this node has earned standing with both peers (early
+				// attempts are refused). NEVER honest; a correct node refuses to equivocate.
+				if *equivocate != "" {
+					parts := strings.Split(*equivocate, ",")
+					idX, e1 := ports.ParseHash(strings.TrimSpace(parts[0]))
+					var idYZ ports.NodeID
+					var e2 error
+					if len(parts) == 2 {
+						idYZ, e2 = ports.ParseHash(strings.TrimSpace(parts[1]))
+					} else {
+						e2 = fmt.Errorf("need exactly two peer IDs \"idX,idYZ\"")
+					}
+					if e1 != nil || e2 != nil {
+						fmt.Fprintln(os.Stderr, "-equivocate: bad peer ids:", e1, e2)
+					} else {
+						fmt.Println("⚠ ADVERSARY: -equivocate set — this validator will DELIBERATELY double-sign (red-team harness, never honest)")
+						var tryEquiv func()
+						tryEquiv = func() {
+							nd.Equivocate(idX, idYZ, func(err error) {
+								if err != nil {
+									clk.AfterFunc(1*ports.Second, tryEquiv) // not qualified with peers yet; retry
+									return
+								}
+								fmt.Println("adversary: equivocation complete (double-signed height 1)")
+							})
+						}
+						clk.AfterFunc(2*ports.Second, tryEquiv)
+					}
+				}
 				// -revoke: propose an on-chain takedown of the named root once it is
 				// committed and we have earned standing to gather a quorum (F5). Poll
 				// on the loop-safe clock; existence + quorum are enforced by the chain.

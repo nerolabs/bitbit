@@ -120,6 +120,33 @@ func replyKind(k ports.MsgKind) ports.MsgKind {
 // replica (daemon logging/persistence).
 func (n *Node) OnCommit(fn func(chain.Block)) { n.onCommit = fn }
 
+// OnSlash registers a callback fired when this node slashes a validator for a
+// proven equivocation (double-sign) detected while reconciling a fork — so the
+// daemon can surface this significant accountability event on stdout, not only in
+// the debug log. Fired once per distinct culprit per detection.
+func (n *Node) OnSlash(fn func(culprit ports.NodeID, height uint64)) { n.onSlash = fn }
+
+// OnReorg registers a callback fired when reconciling a peer's chain REORGS the
+// local replica — adopts a heavier competing fork that DROPS previously-committed
+// blocks (not a plain catch-up extension). `dropped` is how many committed blocks
+// the reorg replaced; newHeight is the height of the new head. A significant,
+// operator-visible consensus event (and how #184's partition→heal is observed): a
+// partitioned validator, on heal, reorgs its lighter fork onto the heavier one.
+func (n *Node) OnReorg(fn func(dropped int, newHeight uint64)) { n.onReorg = fn }
+
+// reorgDropped counts blocks in the pre-reconcile chain (above genesis) that the
+// reconciled chain no longer holds at the same height — i.e. blocks a reorg replaced.
+// Zero for a pure catch-up extension (the old chain is a prefix of the new one).
+func reorgDropped(old, now []chain.Block) int {
+	dropped := 0
+	for i := 1; i < len(old); i++ { // genesis (i=0) is shared by construction
+		if i >= len(now) || old[i].Hash() != now[i].Hash() {
+			dropped++
+		}
+	}
+	return dropped
+}
+
 var ErrNoChain = errors.New("node: validator role not enabled")
 
 // ProposeEntry runs one round of consensus: build a block at the local
@@ -284,6 +311,9 @@ func (n *Node) slashEquivocators(a, b []chain.Block) {
 			n.pendingSlashes = append(n.pendingSlashes, e)
 		}
 		n.logf(ports.LogWarn, "validator slashed for equivocation", "culprit", e.CulpritID(), "height", e.A.Height)
+		if n.onSlash != nil {
+			n.onSlash(e.CulpritID(), e.A.Height)
+		}
 	}
 }
 
@@ -321,10 +351,14 @@ func (n *Node) SyncChain(peers []ports.NodeID, done func(added int, err error)) 
 						before := n.chain.Len()
 						old := n.chain.Blocks(0) // snapshot to catch cross-fork double-signs
 						if ok, rerr := n.chain.Reconcile(full); ok {
+							now := n.chain.Blocks(0)
 							if d := n.chain.Len() - before; d > 0 {
 								added += d
 							}
-							n.slashEquivocators(old, n.chain.Blocks(0))
+							n.slashEquivocators(old, now)
+							if dropped := reorgDropped(old, now); dropped > 0 && n.onReorg != nil {
+								n.onReorg(dropped, uint64(len(now)-1))
+							}
 							n.logf(ports.LogInfo, "chain reconciled from peer", "peer", peers[i], "len", n.chain.Len())
 						} else if rerr != nil {
 							n.logf(ports.LogDebug, "peer chain not adopted", "peer", peers[i], "err", rerr)

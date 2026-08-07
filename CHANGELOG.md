@@ -9,6 +9,48 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **#184 verify — forged-block→reject and low-bond→reject over the REAL WIRE** (2026-08-08,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The two `ValidateProposal` defences, proven
+  against real daemons over TCP: an honest validator refuses to attest a proposal whose **proposer
+  signature is forged** (corrupted after signing) or whose **proposer lacks a qualifying bond**. A
+  single red-team primitive (`Node.ProposeBadBlock`, behind the daemon's `-forge-block` /
+  `-lowbond-propose` flags) sends one crafted proposal to a peer and reports whether it was refused;
+  the block is otherwise valid and built at the target's head, so the only reason for refusal is the
+  fault under test (a bad signature → `ErrBadSignature`, or an under-bonded proposer →
+  `ErrLowReputation`). `TestForgedBlockRejectedOverTCP` and `TestLowBondProposerRejectedOverTCP`.
+  These complete #184's four consensus-safety cases over the real wire (with equivocation→slash and
+  partition→heal). Whole suite green with \`-race\`; full e2e suite green over real TCP.
+- **#184 verify — partition→heal proven over the REAL WIRE (partition control + reorg observability)** (2026-08-07,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The M0 consensus denial "honest replicas cannot
+  permanently diverge under a partition" now runs against real daemons over real TCP, not only the
+  in-process sim (`sim/reorg_test.go`). A new **`-block-peers` daemon flag** (`Node.SetBlockedPeers`)
+  simulates a severed link — the node drops all traffic to/from the listed peers — so a validator can be
+  partitioned, each side can make its own progress, and then the link can HEAL (restart without the
+  flag; the persisted chain reloads and reconciles). The e2e (`TestPartitionHealsToHeavierForkOverTCP`)
+  splits two committing groups into divergent forks (a heavier two-block fork and a lighter one-block
+  fork), then heals the lighter side, which **reorgs onto the heavier fork** — consensus reconverges on
+  one history. Also adds a `Node.OnReorg` callback so the daemon surfaces a reorg on stdout
+  (`chain: reorged onto a heavier fork (dropped N block(s), …)`) — a significant, operator-visible
+  consensus event, and the precise signal the e2e asserts. `-block-peers` models a transport fault, not
+  Byzantine behaviour (the node stays honest); a real deployment never sets it. Second of #184's four
+  consensus-safety cases (after equivocation→slash); low-bond→reject and forged-block→reject follow.
+  Whole suite green with \`-race\`; the e2e passes over real sockets.
+- **#184 verify — equivocation→slash proven over the REAL WIRE (adversarial-daemon harness)** (2026-08-07,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The accountability property "a proven
+  double-sign costs standing" (D2) is now exercised against real daemons over real TCP, not only in the
+  in-process sim. A new **`-equivocate` red-team daemon flag** (quarantined in `core/node/adversary.go`,
+  loudly announced, reached by no honest path) makes a validator DELIBERATELY double-sign: it places
+  block X at height 1 on one honest peer and a heavier conflicting fork (Y, Z) on another. The honest
+  detector syncs the heavier fork, reconciles across the two histories, and `chain.FindEquivocations`
+  catches the adversary signing two different blocks at the same height — slashing it. Because
+  fork-choice is summed qualified-attester weight, the heavier fork is deterministic, so the e2e
+  (`TestEquivocatorSlashedOverTCP`) is not a timing race. Also adds a `Node.OnSlash` callback so the
+  daemon surfaces slashing on stdout (`chain: slashed equivocator …`) — a real operator-visible
+  accountability event, not only a debug-log line. Keeping the adversary in the shipped binary (behind
+  the flag) means it runs in CI *and* lets an external red-team drive the same attack against a
+  deployment to confirm the defence holds. First of #184's four consensus-safety cases; partition→heal,
+  low-bond→reject, and forged-block→reject follow. Whole suite green with \`-race\`; the e2e passes over
+  real sockets.
 - **D-DEMAND P2 — the optimistic fair-exchange abort-safety floor** (2026-08-07,
   [#181](https://github.com/nerolabs/silt/issues/181)) — The demand exchange is content C (server →
   fetcher) ⟷ a delivery receipt (fetcher → server). Fair exchange provably needs a TTP (Pagnia–

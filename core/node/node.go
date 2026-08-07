@@ -333,6 +333,13 @@ type Node struct {
 	chain    *chain.Chain
 	signer   ed25519.PrivateKey
 	onCommit func(chain.Block)
+	onSlash  func(culprit ports.NodeID, height uint64)
+	onReorg  func(dropped int, newHeight uint64)
+	// blockedPeers simulates a NETWORK PARTITION: messages to/from these peers are
+	// dropped, as if the link were down. Test-harness / field-drill control (the
+	// daemon's -block-peers), used to exercise partition→heal over the real wire
+	// (#184); nil/empty in normal operation.
+	blockedPeers map[ports.NodeID]bool
 	// pendingSlashes are equivocation proofs this node detected (during Reconcile)
 	// and has not yet recorded on-chain; proposeBlock drains them into Block.Slashes
 	// so every replica evicts the culprit from the objective set in lockstep (F2).
@@ -532,6 +539,9 @@ func New(id ports.NodeID, cfg Config, clock ports.Clock, tr ports.Transport, sto
 // send stamps outgoing messages with our current capacity pledge — the
 // gossip that lets every node estimate the network's total storage.
 func (n *Node) send(to ports.NodeID, msg ports.Message) error {
+	if n.blockedPeers[to] {
+		return errPartitioned // simulated partition: the link to this peer is down
+	}
 	if n.capRep != nil {
 		msg.CapUsed, msg.CapTotal = n.capRep.Capacity()
 	}
@@ -590,6 +600,9 @@ func (n *Node) request(to ports.NodeID, msg ports.Message, cb func(ports.Message
 
 // handle is the single entry point for every incoming message.
 func (n *Node) handle(from ports.NodeID, msg ports.Message) {
+	if n.blockedPeers[from] {
+		return // simulated partition: drop everything from a peer on the far side
+	}
 	// Learn the sender's failure domain BEFORE observing it, so the routing
 	// table's per-domain diversity cap (H5-B) sees the domain on first contact
 	// and a single-domain Sybil cluster can't crowd out honest peers.
