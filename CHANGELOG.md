@@ -19,7 +19,11 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   Exhaustively tested: prover-generated inclusion paths (every leaf × every size) and consistency
   proofs (every prefix pair) cross-check against the recomputed roots, and a tampered history fails.
   This is the M0-honest core of pluralistic takedown; the ZK non-globality predicate + PIR-routed
-  probes on top are post-M0. *(Next: accumulate the chain's committed revocations into the log.)*
+  probes on top are post-M0. **Wired into the chain:** every honored revocation/un-revocation is
+  appended to the log in `Chain.apply` (a deterministic function of the committed blocks, rebuilt
+  identically on replay), and the chain exposes `RevocationLogRoot` + inclusion/consistency proofs +
+  the exported `RevocationLeaf` so an auditor can reconstruct a leaf from public block data — so silt
+  can now *prove* a takedown was recorded and that its takedown history was never silently rewritten.
   Whole suite green with \`-race\`.
 - **D-DEMAND — the delivery receipt goes live on the wire** (2026-08-09,
   [#181](https://github.com/nerolabs/silt/issues/181)) — The `core/demand` primitive is now a real
