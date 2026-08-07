@@ -9,6 +9,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **D-DEMAND — the delivery receipt goes live on the wire** (2026-08-09,
+  [#181](https://github.com/nerolabs/silt/issues/181)) — The `core/demand` primitive is now a real
+  node capability. A fetcher `AcquireDemandToken` blind-withdraws a retrieval token from an issuer over
+  the existing token-request wire (no new issuance path — the blind signature is domain-agnostic), then
+  `SubmitDeliveryReceipt` sends the server a `MsgDeliveryReceipt` (the token + a PoR-bound, signed ack
+  over the received bytes). The server verifies it against the issuer key it trusts and banks it into a
+  **neutral witnessed-demand observable** (`Node.WitnessedDemand`) — **never wired to consensus
+  standing**, so a forged or self-dealt receipt buys zero standing (the γ→1/N firewall). Only receipts
+  naming this server are banked; replays (double-spent serial) and forged/mis-issued tokens are rejected
+  over the wire. Integration sim covers the honest flow + both rejections. Whole suite green with
+  \`-race\`. *(Fee-burn cost-to-wash is P3; fetcher-unlinkability needs D3.)*
 - **D-DEMAND P1 — blind-withdrawn retrieval token** (2026-08-08,
   [#181](https://github.com/nerolabs/silt/issues/181)) — The demand token is now **blind-withdrawn**:
   `core/blindtoken` gains a domain-separated demand variant (`BlindDemand`/`VerifyDemand` — a demand

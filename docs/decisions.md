@@ -208,7 +208,11 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   and authenticity residuals documented). P1: the retrieval token is **blind-withdrawn** under an
   issuer blind signature (`blindtoken` demand domain — `Withdraw → SignWithdrawal → Unblind`), so the
   issuer signs it without learning the serial → the redeemed token is cryptographically unlinkable to
-  its withdrawal. ☐ P2 optimistic dispute; ☐ P3 fee-burn + bonded-fetcher credential + a self-dealing
+  its withdrawal. **Wired into the node** (`core/node/demandrole.go`): a fetcher `AcquireDemandToken`
+  over the existing token-request wire, then `SubmitDeliveryReceipt` (a `MsgDeliveryReceipt` carrying
+  the token + PoR-bound ack) to the server, which banks it into a **neutral witnessed-demand
+  observable** (`WitnessedDemand`) — never standing; replays and forged/mis-issued tokens are rejected
+  over the wire. ☐ P2 optimistic dispute; ☐ P3 fee-burn + bonded-fetcher credential + a self-dealing
   red-team measuring cost-per-fake-demand vs honest. **Hard dependency:** property (b)
   fetcher-unlinkability stays *nominal until D3 issuance-mixing is solved* — the blind signature hides
   the serial, not the withdrawer's IP/timing (shared with D-PRIV and the H8 privacy build-track).
