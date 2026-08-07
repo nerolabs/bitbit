@@ -133,6 +133,8 @@ const (
 	MsgIssuerKeyReply    // Data: the issuer public key (blindtoken.MarshalPub); OK=false if none
 	MsgSubmitBondReg     // Data: a fresh CBOR BondReg a validator submits for a proposer to include (H2 non-proposer renewal)
 	MsgSubmitBondRegAck  // OK: the renewal was received (queued if valid for the current head)
+	MsgRepairClaim       // Data: a CBOR repairproof.RepairClaim — "I placed a correct rebuilt shard on Holder; verify and pay the bounty" (H7)
+	MsgRepairVote        // OK: the caretaker independently verified correctness+retrievability and settled the verdict on its own ledger (H7)
 )
 
 // StorageProof is a Merkle inclusion proof shipped alongside a chunk:

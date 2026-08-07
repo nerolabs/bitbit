@@ -52,6 +52,7 @@ var standingClassification = map[string]standingClass{
 	// Sybil-amplified (piling them on hurts you, it cannot lift a bondless id).
 	"RecordAudit":       reduces, // a FAILED PoR audit subtracts (a passed one funds balance only — RT-1/H1)
 	"SlashEquivocation": reduces, // proven double-sign buries standing
+	"SlashFalseRepair":  reduces, // proven false repair claim docks standing (H7 slice-2 slash gate)
 	"DecayStale":        reduces, // un-refreshed bond standing retires to zero
 
 	// Standing-neutral: balance economy, publishing, and observability. None
@@ -145,6 +146,7 @@ func TestInvariantA_NoNonMintPressRaisesStanding(t *testing.T) {
 	}
 	// reduces-class presses can only push further down.
 	l.RecordAudit(n, id(9), false)
+	l.SlashFalseRepair(n)
 	l.SlashEquivocation(n)
 	if got := l.Reputation(n); got > 0 {
 		t.Fatalf("Invariant A violated: reduce-class presses produced positive standing %d", got)

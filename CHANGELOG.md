@@ -9,6 +9,27 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **H7 proof-of-correct-repair — the verification layer, slice 2 (logic + wire)** (2026-08-07,
+  [#95](https://github.com/nerolabs/silt/issues/95)) — A repair bounty must pay only for a *real,
+  correct* repair, never a bare claim. New `core/repairproof` composes the gate, unit-tested end to
+  end short of the network wiring:
+  - **Correctness leg** (`VerifyByRecompute`) — reconstruct the lost shard from k survivors and check
+    it is byte-identical to the manifest-committed shard ID. Sound, pure-Go, publicly checkable,
+    content-blind. *(A soundness pressure-test proved the plaintext-blind homomorphic-commitment path
+    impossible in pure Go over silt's GF(2⁸) storage — there is no ring homomorphism GF(2⁸)→F_r — so
+    M0 ships this recompute floor; the blind upgrade is a documented fast-follow. See
+    [`docs/design/h7-proof-of-repair.md`](docs/design/h7-proof-of-repair.md) §3, §13.)*
+  - **Retrievability leg** (`VerifyRetrievability` + `RepairChallengeSeed`) — a Shacham–Waters PoR
+    challenge bound to the holder's own node identity, closing the relay/double-count attack (reuses
+    `core/por`).
+  - **Release/slash gate** (`Decide`) — release iff correctness holds *and* a τ-of-q retrievability
+    quorum confirms; a failing correctness recompute is self-attributing fraud → slash. Backed by a
+    new `credit.SlashFalseRepair` press (classified `reduces` under the Invariant-A guard: it can
+    only ever *lower* standing).
+  - **Repair-role model** decided from the real code: silt's repair is a *paramedic split* (the
+    caretaker reconstructs but keeps nothing), so the bounty pays the **new holder** of the rebuilt
+    shard (§8b). Wire types (`MsgRepairClaim`/`MsgRepairVote`, `RepairClaim`) landed; the node quorum
+    handler + hot-path hook + sim/e2e are the next slice.
 - **H7 durability-escrow primitives — the S7 funding layer, slice 1** (2026-08-06,
   [#95](https://github.com/nerolabs/silt/issues/95)) — The repair loop that keeps content alive
   under churn must be paid in equilibrium, not charity (the wound that killed Freenet/GNUnet).
