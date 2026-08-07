@@ -9,6 +9,17 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **#184 verify — forged-block→reject and low-bond→reject over the REAL WIRE** (2026-08-08,
+  [#184](https://github.com/nerolabs/silt/issues/184)) — The two `ValidateProposal` defences, proven
+  against real daemons over TCP: an honest validator refuses to attest a proposal whose **proposer
+  signature is forged** (corrupted after signing) or whose **proposer lacks a qualifying bond**. A
+  single red-team primitive (`Node.ProposeBadBlock`, behind the daemon's `-forge-block` /
+  `-lowbond-propose` flags) sends one crafted proposal to a peer and reports whether it was refused;
+  the block is otherwise valid and built at the target's head, so the only reason for refusal is the
+  fault under test (a bad signature → `ErrBadSignature`, or an under-bonded proposer →
+  `ErrLowReputation`). `TestForgedBlockRejectedOverTCP` and `TestLowBondProposerRejectedOverTCP`.
+  These complete #184's four consensus-safety cases over the real wire (with equivocation→slash and
+  partition→heal). Whole suite green with \`-race\`; full e2e suite green over real TCP.
 - **#184 verify — partition→heal proven over the REAL WIRE (partition control + reorg observability)** (2026-08-07,
   [#184](https://github.com/nerolabs/silt/issues/184)) — The M0 consensus denial "honest replicas cannot
   permanently diverge under a partition" now runs against real daemons over real TCP, not only the

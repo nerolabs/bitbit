@@ -61,6 +61,41 @@ func (n *Node) proposeAndCommitTo(b *chain.Block, target ports.NodeID, done func
 	})
 }
 
+// ProposeBadBlock sends ONE crafted proposal to an honest target and reports whether
+// the target REFUSED it — how #184 proves over the wire that honest validators reject a
+// proposal that fails ValidateProposal before attesting. The block is built at the
+// target's head with a valid entry, so the ONLY thing wrong is the fault under test:
+//
+//   - forge=true (forged-block→reject): the proposer signature is corrupted AFTER
+//     signing, so ValidateProposal's ed25519.Verify fails — refused for a bad signature,
+//     regardless of this node's standing.
+//   - forge=false (low-bond→reject): the block is correctly signed and well-formed, so
+//     the only reason to refuse is that this node is not a qualified (sufficiently
+//     bonded) proposer — refused with ErrLowReputation.
+//
+// A correct node never proposes a forged block, and an honest under-bonded node's own
+// pre-check stops it from proposing at all; this bypasses both so honest PEERS are the
+// ones proving the defence. RED-TEAM / TEST-HARNESS ONLY — see the file header.
+func (n *Node) ProposeBadBlock(target ports.NodeID, forge bool, done func(refused bool, err error)) {
+	if n.chain == nil || n.signer == nil {
+		done(false, ErrNoChain)
+		return
+	}
+	prev, height := n.chain.Head()
+	b := &chain.Block{Version: chain.BlockVersion, Height: height, Prev: prev, Entries: []ports.Entry{advEntry("badproposal")}}
+	chain.Sign(b, n.signer)
+	if forge && len(b.ProposerSig) > 0 {
+		b.ProposerSig[0] ^= 0xFF // corrupt the signature so ValidateProposal's verify fails
+	}
+	n.request(target, ports.Message{Kind: ports.MsgProposeBlock, Data: chain.Encode(b)}, func(resp ports.Message, err error) {
+		if err != nil {
+			done(false, err)
+			return
+		}
+		done(!resp.OK, nil) // OK:false = refused to attest = the defence held
+	})
+}
+
 // Equivocate makes this node DOUBLE-SIGN at height 1 — the Byzantine act honest nodes
 // refuse. It builds two DIFFERENT blocks at height 1 on the shared genesis, both
 // signed by this node as proposer, and places them on two different honest peers:
