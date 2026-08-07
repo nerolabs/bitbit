@@ -221,8 +221,11 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   over the existing token-request wire, then `SubmitDeliveryReceipt` (a `MsgDeliveryReceipt` carrying
   the token + PoR-bound ack) to the server, which banks it into a **neutral witnessed-demand
   observable** (`WitnessedDemand`) — never standing; replays and forged/mis-issued tokens are rejected
-  over the wire. ☐ P2 optimistic dispute; ☐ P3 fee-burn + bonded-fetcher credential + a self-dealing
-  red-team measuring cost-per-fake-demand vs honest. **Hard dependency:** property (b)
+  over the wire. ☐ P2 optimistic dispute; **◑ P3** — the **fee-burn cost-to-wash is demonstrated and
+  regression-locked** (a self-dealing sim: a server running its own fetcher mints N valid receipts —
+  authenticity is *not* provable, Douceur — but each burns a real retrieval fee, so cost-to-wash =
+  N·fee for zero standing, since demand is neutral); ☐ the bonded-fetcher credential (P3b, an
+  additional wash lever pricing wash onto the bonded-identity supply) remains. **Hard dependency:** property (b)
   fetcher-unlinkability stays *nominal until D3 issuance-mixing is solved* — the blind signature hides
   the serial, not the withdrawer's IP/timing (shared with D-PRIV and the H8 privacy build-track).
 
