@@ -42,6 +42,15 @@ const fdhDomain = "silt/blindtoken/fdh/v1"
 // blind-signed serial, double-spend is caught by the issuer's spent-set.
 const creditDomain = "silt/blindcredit/fdh/v1"
 
+// demandDomain is the FDH domain for BLIND-WITHDRAWN RETRIEVAL TOKENS (D-DEMAND
+// P1, issue #181). A retrieval token is a blind signature under an issuer key,
+// domain-separated from a publish token and a publish credit — so a demand token
+// can never be presented as either (or vice versa) even under one key. The blind
+// withdrawal is what makes the token unlinkable to the fetch at issuance time (the
+// issuer signs the blinded value, never seeing the serial); the residual IP/timing
+// channel is closed only by D3 issuance-mixing (shared with H8).
+const demandDomain = "silt/blinddemand/fdh/v1"
+
 // SerialSize is the length of a token's random serial.
 const SerialSize = 32
 
@@ -112,6 +121,13 @@ func BlindCredit(rng io.Reader, pub *rsa.PublicKey, serial []byte) (blinded, sec
 	return blindD(rng, pub, serial, creditDomain)
 }
 
+// BlindDemand blinds serial as a RETRIEVAL TOKEN (D-DEMAND, domain-separated from
+// a publish token and a credit, same key). The fetcher withdraws it blindly so the
+// issuer cannot link the token to a later fetch; it spends at delivery-ack time.
+func BlindDemand(rng io.Reader, pub *rsa.PublicKey, serial []byte) (blinded, secret []byte, err error) {
+	return blindD(rng, pub, serial, demandDomain)
+}
+
 func blindD(rng io.Reader, pub *rsa.PublicKey, serial []byte, domain string) (blinded, secret []byte, err error) {
 	m := fullDomainHashD(pub, serial, domain)
 	if m.Sign() == 0 {
@@ -172,6 +188,13 @@ func Verify(pub *rsa.PublicKey, serial, sig []byte) bool {
 // versa, so the two are not interchangeable even under one key.
 func VerifyCredit(pub *rsa.PublicKey, serial, sig []byte) bool {
 	return verifyD(pub, serial, sig, creditDomain)
+}
+
+// VerifyDemand checks that sig is a valid issuer signature on a RETRIEVAL TOKEN
+// serial (demand domain). A publish-token or credit signature fails this check and
+// vice versa, so the three token kinds are not interchangeable under one key.
+func VerifyDemand(pub *rsa.PublicKey, serial, sig []byte) bool {
+	return verifyD(pub, serial, sig, demandDomain)
 }
 
 func verifyD(pub *rsa.PublicKey, serial, sig []byte, domain string) bool {
