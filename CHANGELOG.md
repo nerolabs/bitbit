@@ -9,6 +9,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **D-DEMAND P3b — the bonded-fetcher credential (second cost-to-wash lever)** (2026-08-07,
+  [#181](https://github.com/nerolabs/silt/issues/181)) — Witnessed demand can now be gated on a
+  **bond-distinct fetcher credential**: with `demand.Bank.RequireBondedFetcher` (wired on the daemon
+  as `Node.RequireBondedFetchers`), a delivery receipt counts toward an object's demand only if the
+  fetcher's signing key is a bond-distinct identity in the **committed on-chain bond ledger**
+  (`chain.IsBonded` — the same Sybil-priced, deduped supply the C2 metric measures), and demand then
+  counts **distinct bonded fetchers per object**. So a self-dealer running one bonded identity can
+  still mint N perfectly valid receipts (a self-fetch *is* a real paid delivery — Douceur is
+  unbeaten), but witnessed demand rises by **1, not N** — re-pricing wash to *one real storage bond
+  per faked unit of demand*, the best achievable under no-center. This is the second lever alongside
+  the already-shipped **P3a fee-burn** (each wash burns a real retrieval fee). Demand stays a
+  **neutral observable** throughout — the gate changes what *counts* as demand, never whether demand
+  touches consensus standing (it never does; the γ→1/N firewall is intact). Off by default (raw
+  count, unchanged). Self-dealing red-team locked at both the pure layer (`core/demand`: unbonded →
+  0, one bonded identity washing 6 → demand 1, 4 distinct bonded → demand 4) and the real node wire
+  (`sim`: one bonded identity washes 5 → demand 1, unbonded delivery → 0, a distinct bonded identity
+  → +1). *Residual: the credential shows the bonded key in the clear, so fetcher-unlinkability stays
+  nominal until D3/H8 — the `demand.BondCheck` doc marks the exact seam for a blind bond-distinctness
+  proof.* Whole suite green with \`-race\`.
 - **Registry economics — `-freeload` role separation for the daemon** (2026-08-09,
   [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon can now be started with `-freeload`
   to serve the **registry / relay / routing** role while **refusing to store or serve content** — so
