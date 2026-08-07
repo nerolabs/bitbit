@@ -1,8 +1,8 @@
 // Package demand is P0 of the blind demand receipt (D-DEMAND, issue #181): the
 // interlock between the Sybil corner (standing should track WITNESSED demand, not
 // self-declared popularity) and privacy (who-fetches-what stays unlinkable). This
-// is the first phase — issue → PoR-bound delivery-ack → bank → redeem, for a SINGLE
-// object, with NO privacy — and it delivers exactly one provable property:
+// covers phases P0–P1 — blind-withdraw → PoR-bound delivery-ack → bank → redeem,
+// for a SINGLE object — and it delivers exactly one provable property:
 //
 //	UNFORGEABILITY AT THE TOKEN LEVEL: a server cannot bank more receipts for an
 //	object C than there were issued tokens spent on a fetcher-signed proof of having
@@ -23,15 +23,23 @@
 // the open sealing problem, m0.md §10 / #182). Whether/how witnessed demand ever
 // feeds standing is a separate, gated decision this package does not make.
 //
-// LATER PHASES: blind token withdrawal (P1), fetcher-unlinkability (needs D3
-// issuance-mixing, shared with H8/#179), optimistic fair-exchange dispute (P2), and
-// the cost-to-wash economics + self-dealing red-team (P3).
+// BLIND WITHDRAWAL IS BUILT (P1): the retrieval token is withdrawn under an issuer
+// blind signature (Withdraw → SignWithdrawal → Unblind, core/blindtoken demand
+// domain), so the issuer signs it without learning the serial — the redeemed token
+// is cryptographically unlinkable to its withdrawal. But FETCHER-UNLINKABILITY is
+// only NOMINAL until D3 issuance-mixing closes the IP/timing channel (shared with
+// H8/#179): the blind signature hides the serial, not the network identity of the
+// withdrawer. LATER PHASES: optimistic fair-exchange dispute (P2), and the
+// cost-to-wash economics + self-dealing red-team (P3).
 package demand
 
 import (
 	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/sha256"
+	"io"
 
+	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/por"
 	"github.com/nerolabs/silt/ports"
 )
@@ -42,36 +50,51 @@ import (
 const SampleCount = 128
 
 const (
-	tokenDomain = "silt/demand/token/v1" // issuer signs H(this ‖ serial)
-	ackDomain   = "silt/demand/ack/v1"   // the PoR challenge seed binds serial‖object‖server
-	porDomain   = "silt/demand/por/v1"   // per-object PoR key seed
+	ackDomain = "silt/demand/ack/v1" // the PoR challenge seed binds serial‖object‖server
+	porDomain = "silt/demand/por/v1" // per-object PoR key seed
 )
 
-// Token is an issuer-authorized retrieval credit. In P0 it is NON-BLIND: a serial
-// signed by the issuer (the validator quorum, modelled as one issuer key here). A
-// fetcher spends it by producing a DeliveryReceipt that references its serial;
-// blind withdrawal (so the issuer can't link the token to the fetch) is P1.
+// Token is an issuer-authorized retrieval credit, BLIND-WITHDRAWN (P1): a serial
+// carrying an issuer blind signature in the demand domain. Because it was withdrawn
+// blindly (Withdraw → SignWithdrawal → Unblind), the issuer signed the token
+// WITHOUT learning its serial, so the redeemed token is cryptographically unlinkable
+// to the withdrawal at issuance time. (Residual: the IP/timing channel is closed
+// only by D3 issuance-mixing, shared with H8 — property (b) unlinkability is nominal
+// until then.) A fetcher spends the token by producing a DeliveryReceipt that
+// references its serial.
 type Token struct {
 	Serial []byte // unique; the double-spend key
-	Sig    []byte // issuer's ed25519 signature over H(tokenDomain ‖ serial)
+	Sig    []byte // issuer blind signature over the serial (blindtoken demand domain)
 }
 
-// tokenMsg is the bytes the issuer signs / a verifier checks for a token.
-func tokenMsg(serial []byte) []byte {
-	h := sha256.Sum256(append([]byte(tokenDomain), serial...))
-	return h[:]
+// Withdraw is the fetcher side of a blind retrieval-token withdrawal: it blinds a
+// fresh serial (see blindtoken.NewSerial) so the issuer signs it without learning
+// the serial. It returns the blinded value to send the issuer and the secret to
+// unblind the reply.
+func Withdraw(rng io.Reader, issuerPub *rsa.PublicKey, serial []byte) (blinded, secret []byte, err error) {
+	return blindtoken.BlindDemand(rng, issuerPub, serial)
 }
 
-// Issue mints a token for serial, signed by the issuer. serial must be fresh and
-// unpredictable (see blindtoken.NewSerial); reusing one collapses to a double-spend
-// at redeem.
-func Issue(issuer ed25519.PrivateKey, serial []byte) Token {
-	return Token{Serial: append([]byte(nil), serial...), Sig: ed25519.Sign(issuer, tokenMsg(serial))}
+// SignWithdrawal is the issuer side: it blind-signs the withdrawal, learning nothing
+// about the serial. Charging or burning the fetch fee against the withdrawal is the
+// caller's job (the cost-to-wash knob is P3).
+func SignWithdrawal(issuerPriv *rsa.PrivateKey, blinded []byte) []byte {
+	return blindtoken.SignBlinded(issuerPriv, blinded)
 }
 
-// VerifyToken reports whether t was issued by issuerPub.
-func VerifyToken(issuerPub ed25519.PublicKey, t Token) bool {
-	return len(t.Serial) > 0 && ed25519.Verify(issuerPub, tokenMsg(t.Serial), t.Sig)
+// Unblind turns the issuer's blind signature into the unlinkable Token on the plain
+// serial, using the secret from Withdraw.
+func Unblind(issuerPub *rsa.PublicKey, serial, blindSig, secret []byte) Token {
+	return Token{
+		Serial: append([]byte(nil), serial...),
+		Sig:    blindtoken.Unblind(issuerPub, blindSig, secret),
+	}
+}
+
+// VerifyToken reports whether t carries a valid issuer signature in the demand
+// domain (so a publish token or credit under the same key does not pass).
+func VerifyToken(issuerPub *rsa.PublicKey, t Token) bool {
+	return len(t.Serial) > 0 && blindtoken.VerifyDemand(issuerPub, t.Serial, t.Sig)
 }
 
 // ObjectKey derives object C's PoR verification key. In P0 the seed is PUBLIC
@@ -200,7 +223,7 @@ func NewBank() *Bank {
 // a fetcher signature that doesn't verify; a PoR proof that doesn't verify against
 // the object's key under the identity-bound challenge (no delivery, wrong object,
 // wrong server, or data-less redeemer).
-func (b *Bank) Redeem(issuerPub ed25519.PublicKey, token Token, r DeliveryReceipt) (credited bool, reason string) {
+func (b *Bank) Redeem(issuerPub *rsa.PublicKey, token Token, r DeliveryReceipt) (credited bool, reason string) {
 	if !VerifyToken(issuerPub, token) {
 		return false, "token not issued"
 	}

@@ -3,17 +3,19 @@ package demand
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"testing"
 
+	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/por"
 	"github.com/nerolabs/silt/ports"
 )
 
-// scene sets up an issuer, a fetcher, a server, and one object C with the bytes +
-// PoR tags the fetcher would have received from the server.
+// scene sets up a (blind-signing RSA) issuer, a fetcher, a server, and one object C
+// with the bytes + PoR tags the fetcher would have received from the server.
 type scene struct {
-	issuerPub  ed25519.PublicKey
-	issuerPriv ed25519.PrivateKey
+	issuerPub  *rsa.PublicKey
+	issuerPriv *rsa.PrivateKey
 	fetcher    ed25519.PrivateKey
 	server     ports.NodeID
 	object     ports.Hash
@@ -23,7 +25,7 @@ type scene struct {
 
 func newScene(t *testing.T, objectLabel string) scene {
 	t.Helper()
-	ipub, ipriv, err := ed25519.GenerateKey(rand.Reader)
+	ipriv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("issuer key: %v", err)
 	}
@@ -38,18 +40,25 @@ func newScene(t *testing.T, objectLabel string) scene {
 	}
 	tags := ObjectKey(object).Tags(object[:], data) // as the publisher would tag C
 	return scene{
-		issuerPub: ipub, issuerPriv: ipriv, fetcher: fpriv,
+		issuerPub: &ipriv.PublicKey, issuerPriv: ipriv, fetcher: fpriv,
 		server: ports.HashBytes([]byte("server-A")), object: object, data: data, tags: tags,
 	}
 }
 
+// token runs a full blind withdrawal: the fetcher blinds a fresh serial, the issuer
+// blind-signs it (never seeing the serial), and the fetcher unblinds into a Token.
 func (s scene) token(t *testing.T) Token {
 	t.Helper()
-	serial := make([]byte, 32)
-	if _, err := rand.Read(serial); err != nil {
+	serial, err := blindtoken.NewSerial(rand.Reader)
+	if err != nil {
 		t.Fatalf("serial: %v", err)
 	}
-	return Issue(s.issuerPriv, serial)
+	blinded, secret, err := Withdraw(rand.Reader, s.issuerPub, serial)
+	if err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	blindSig := SignWithdrawal(s.issuerPriv, blinded)
+	return Unblind(s.issuerPub, serial, blindSig, secret)
 }
 
 // TestHonestDeliveryCreditsDemand: a real issued token, spent on a PoR-bound
@@ -93,18 +102,50 @@ func TestDoubleSpendRejected(t *testing.T) {
 // with an otherwise valid delivery proof.
 func TestForgedTokenRejected(t *testing.T) {
 	s := newScene(t, "obj-C")
-	// A token minted by an impostor issuer.
-	_, impostor, _ := ed25519.GenerateKey(rand.Reader)
-	serial := make([]byte, 32)
-	rand.Read(serial)
-	forged := Issue(impostor, serial)
+	// A token blind-signed by an IMPOSTOR issuer key.
+	impostor, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("impostor key: %v", err)
+	}
+	serial, _ := blindtoken.NewSerial(rand.Reader)
+	blinded, secret, _ := Withdraw(rand.Reader, &impostor.PublicKey, serial)
+	forged := Unblind(&impostor.PublicKey, serial, SignWithdrawal(impostor, blinded), secret)
 	r, _ := Ack(s.fetcher, forged, s.object, s.server, s.data, s.tags)
 	bank := NewBank()
 	if ok, _ := bank.Redeem(s.issuerPub, forged, r); ok {
-		t.Fatal("a token not signed by the issuer must be rejected")
+		t.Fatal("a token not signed by the REAL issuer must be rejected")
 	}
 	if bank.Demand(s.object) != 0 {
 		t.Fatal("forged token credited demand")
+	}
+}
+
+// TestBlindWithdrawalIsUnlinkable pins P1: the issuer, signing a blinded
+// withdrawal, learns nothing that ties it to the serial the token later redeems
+// under — the blinded value it saw is independent of the plain serial. (This is the
+// cryptographic half; the IP/timing channel is D3's job, still nominal.)
+func TestBlindWithdrawalIsUnlinkable(t *testing.T) {
+	s := newScene(t, "obj-C")
+	serial, _ := blindtoken.NewSerial(rand.Reader)
+	blinded, secret, err := Withdraw(rand.Reader, s.issuerPub, serial)
+	if err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	// The token redeems under a valid signature the issuer never made on the serial
+	// directly (it signed only `blinded`).
+	tok := Unblind(s.issuerPub, serial, SignWithdrawal(s.issuerPriv, blinded), secret)
+	if !VerifyToken(s.issuerPub, tok) {
+		t.Fatal("a blind-withdrawn token must verify under the issuer key")
+	}
+	// The issuer's signing-time view (`blinded`) must not equal or reveal the serial:
+	// a blinding factor r makes blinded = m·rᵉ, uniformly hiding m=FDH(serial).
+	if string(blinded) == string(serial) || string(blinded) == string(tok.Serial) {
+		t.Fatal("the blinded value the issuer signed leaked the serial — withdrawal is not blind")
+	}
+	// End to end: the unlinkable token still spends on a correct delivery.
+	r, _ := Ack(s.fetcher, tok, s.object, s.server, s.data, s.tags)
+	if ok, reason := NewBank().Redeem(s.issuerPub, tok, r); !ok {
+		t.Fatalf("blind-withdrawn token failed to redeem on a real delivery: %s", reason)
 	}
 }
 

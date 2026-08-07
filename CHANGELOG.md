@@ -9,6 +9,16 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **D-DEMAND P1 — blind-withdrawn retrieval token** (2026-08-08,
+  [#181](https://github.com/nerolabs/silt/issues/181)) — The demand token is now **blind-withdrawn**:
+  `core/blindtoken` gains a domain-separated demand variant (`BlindDemand`/`VerifyDemand` — a demand
+  token can't be presented as a publish token or credit under the same key), and `core/demand` upgrades
+  the token from a placeholder issuer-signed serial to `Withdraw → SignWithdrawal → Unblind`. The issuer
+  blind-signs the token **without learning its serial**, so the token that later redeems is
+  cryptographically unlinkable to its withdrawal. Fetcher-unlinkability stays **nominal until D3
+  issuance-mixing** (H8) closes the IP/timing channel — the blind signature hides the serial, not the
+  withdrawer's network identity. The P0 unforgeability red-team carries over (now over blind tokens),
+  plus an unlinkability regression. Whole suite green with \`-race\`.
 - **D-DEMAND P0 — the blind demand receipt primitive (witnessed delivery, unforgeable-at-the-token-level)** (2026-08-08,
   [#181](https://github.com/nerolabs/silt/issues/181)) — First phase of the B axis (served-demand) of the
   systemic claim. New pure `core/demand`: an issuer-signed retrieval **token**, a **PoR-bound
