@@ -363,6 +363,21 @@ release iff:
   drawn from the *object's* reserve, capped by `BountyFor`, so a self-dealer at best
   churns its own prepaid credit, and only by doing genuine, verifiable repair work.
 
+- **Why BOTH legs are needed even though silt content-addresses every shard**
+  (a subtlety the wiring surfaced). Each shard's ID is individually committed in the
+  manifest, so it is tempting to drop the recompute leg and let the identity-bound SW
+  PoR against the committed shard ID be the *whole* proof. **That fails against a
+  malicious caretaker.** SW PoR proves the holder's bytes are consistent with the
+  *tags it stores*, and the tags are derived from the **layout key** — which
+  caretakers hold. A caretaker that reconstructs *wrong* bytes `Y` can compute valid
+  tags for `Y` under `unitID = X` (the committed ID) and hand `(Y, tags)` to a holder;
+  that holder then *passes* the retrievability challenge for `X` while holding the
+  wrong bytes. Retrievability alone therefore certifies "holds bytes matching some
+  tags," not "holds the correct shard." **The recompute leg closes this**: it
+  re-derives the correct bytes from the survivors and checks the content address, never
+  trusting the caretaker's tags. So M0 keeps both legs — recompute for correctness
+  (tag-forgery-proof), identity-bound SW PoR for durable possession.
+
 **The invariant, restated for this slice.** Nothing here mints consensus standing.
 `PayBounty` stays `neutral`; the only standing motion slice 2 adds is a
 **slash** (`reduces`). The Invariant-A guard (`core/credit/invariant_a_test.go`)
