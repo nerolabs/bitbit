@@ -9,6 +9,26 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **D-DEMAND P2 — the optimistic fair-exchange abort-safety floor** (2026-08-07,
+  [#181](https://github.com/nerolabs/silt/issues/181)) — The demand exchange is content C (server →
+  fetcher) ⟷ a delivery receipt (fetcher → server). Fair exchange provably needs a TTP (Pagnia–
+  Gärtner); silt's is the validator quorum as a threshold-distributed TTP (Asokan–Shoup–Waidner),
+  invoked only on dispute. This ships the **optimistic phase + both abort-SAFETY properties**, which
+  hold structurally today: **(1) fetcher-side** — an aborted exchange never *consumes* the token (a
+  serial is spent only by a completed `Redeem`), so a server that takes the commitment and delivers
+  nothing leaves the paid token reusable at another server (the fetcher can't be robbed of its token);
+  **(2) server-side** — a fetcher's pre-release `ExchangeCommitment` (a signed promise made before
+  content release, domain-separated from the receipt and carrying no PoR proof) can *never* redeem as
+  demand, so a server can't turn "the fetcher engaged" into a fake completed delivery — the
+  unforgeability bound `#receipts(C) ≤ #completed correct deliveries` survives the abort path.
+  Regression-locked (token-reusable-after-abort, commitment-is-not-a-receipt, domain separation,
+  optimistic path still credits). *Gated, deliberately not built: the dispute-RESOLUTION half — turning
+  a server-held commitment into a TTP-affidavit on fetcher default requires the quorum to verify
+  delivery completed without the fetcher, i.e. verifiable encryption of C + threshold key-escrow to the
+  quorum, which has no pure-Go library in 2026 (the same wall H7's blind proof-of-repair hit). Demand-
+  neutrality keeps this low-stakes: an unresolved abort only undercounts a neutral observable, never
+  standing. `ExchangeCommitment` is the seam the future threshold-crypto resolver consumes.* Whole
+  suite green with \`-race\`.
 - **D-DEMAND P3b — the bonded-fetcher credential (second cost-to-wash lever)** (2026-08-07,
   [#181](https://github.com/nerolabs/silt/issues/181)) — Witnessed demand can now be gated on a
   **bond-distinct fetcher credential**: with `demand.Bank.RequireBondedFetcher` (wired on the daemon

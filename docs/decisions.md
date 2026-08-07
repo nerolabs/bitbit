@@ -221,7 +221,21 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   over the existing token-request wire, then `SubmitDeliveryReceipt` (a `MsgDeliveryReceipt` carrying
   the token + PoR-bound ack) to the server, which banks it into a **neutral witnessed-demand
   observable** (`WitnessedDemand`) — never standing; replays and forged/mis-issued tokens are rejected
-  over the wire. ☐ P2 optimistic dispute; **✅ P3** — BOTH cost-to-wash levers now built +
+  over the wire. **◑ P2 optimistic fair exchange — the abort-SAFETY floor is built + regression-locked
+  (`core/demand/fairexchange.go`); the dispute-RESOLUTION half is gated on threshold crypto silt does
+  not ship.** Built: the ASW optimistic phase (`ExchangeCommitment` — a fetcher's pre-release,
+  non-repudiable promise) + both abort-safety properties, which hold structurally today — (1)
+  fetcher-side: an aborted exchange never CONSUMES the token (spent only by a completed Redeem), so a
+  non-delivering server leaves the paid token reusable elsewhere; (2) server-side: a pre-release
+  commitment is domain-separated from the receipt and carries no PoR, so it can NEVER redeem as demand
+  — `#receipts(C) ≤ #completed correct deliveries` survives the abort path. GATED: converting a
+  server-held commitment into a TTP-affidavit on fetcher default needs the quorum-TTP to verify
+  delivery completed without the fetcher — i.e. verifiable encryption of C + threshold key-escrow to
+  the validator quorum, which has **no pure-Go library in 2026 (the same class of wall H7's blind
+  proof-of-repair hit)**. Demand-NEUTRALITY keeps this low-stakes: an unresolved server-side abort only
+  UNDERCOUNTS a neutral observable (never standing), so the missing affidavit path costs no security
+  today. Held in tension; `ExchangeCommitment` is the exact seam the future threshold-crypto resolver
+  consumes. **✅ P3** — BOTH cost-to-wash levers now built +
   regression-locked. **P3a fee-burn** (a self-dealing sim: a server running its own fetcher mints N
   valid receipts — authenticity is *not* provable, Douceur — but each burns a real retrieval fee, so
   cost-to-wash = N·fee for zero standing, since demand is neutral). **P3b bonded-fetcher credential**
