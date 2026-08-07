@@ -24,10 +24,13 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   Regression-locked (token-reusable-after-abort, commitment-is-not-a-receipt, domain separation,
   optimistic path still credits). *Gated, deliberately not built: the dispute-RESOLUTION half — turning
   a server-held commitment into a TTP-affidavit on fetcher default requires the quorum to verify
-  delivery completed without the fetcher, i.e. verifiable encryption of C + threshold key-escrow to the
-  quorum, which has no pure-Go library in 2026 (the same wall H7's blind proof-of-repair hit). Demand-
-  neutrality keeps this low-stakes: an unresolved abort only undercounts a neutral observable, never
-  standing. `ExchangeCommitment` is the seam the future threshold-crypto resolver consumes.* Whole
+  delivery completed without the fetcher — i.e. verifiable escrow of the content key (Camenisch–Shoup)
+  + threshold decryption t-of-n across validators. The threshold-decryption/DKG half is available in Go
+  (dedis/kyber, drand-grade); the wall is the verifiable-escrow primitive (no adoptable pure-Go impl)
+  plus the large new crypto trust surface — disproportionate to a neutral observable. Same strategy as
+  H7 (floor now, heavy crypto as a fast-follow), different primitive. Demand-neutrality keeps this
+  low-stakes: an unresolved abort only undercounts a neutral observable, never standing.
+  `ExchangeCommitment` is the seam the future resolver consumes.* Whole
   suite green with \`-race\`.
 - **D-DEMAND P3b — the bonded-fetcher credential (second cost-to-wash lever)** (2026-08-07,
   [#181](https://github.com/nerolabs/silt/issues/181)) — Witnessed demand can now be gated on a

@@ -33,14 +33,19 @@ import (
 // WHAT IS GATED (the dispute-RESOLUTION half, deliberately not built): converting a
 // server-held commitment into a TTP-affidavit receipt on a fetcher default requires
 // the quorum-TTP to VERIFY that delivery genuinely completed WITHOUT the fetcher's
-// cooperation — i.e. verifiable encryption of C with the decryption key threshold-
-// escrowed to the validator quorum. silt ships no threshold / verifiable-encryption
-// crypto (no pure-Go library in 2026) — the same class of gap H7's blind proof-of-
-// repair documents (a floor is shipped; the heavy crypto is a fast-follow). Demand-
-// NEUTRALITY keeps the residual low-stakes for M0: an unresolved server-side abort
-// only UNDERCOUNTS a neutral observable (never standing), so the missing affidavit
-// path costs no security today. Held in tension; ExchangeCommitment is the exact seam
-// the future threshold-crypto resolver consumes.
+// cooperation — i.e. VERIFIABLE ESCROW of the content key (Camenisch–Shoup: encrypt K
+// under the TTP's key + a ZK proof the ciphertext opens C) with THRESHOLD DECRYPTION
+// t-of-n across the validators (so no single one is the center). The threshold-
+// decryption / DKG half is available in Go (dedis/kyber, drand-grade); the missing
+// piece is the verifiable-escrow primitive — no adoptable, audited pure-Go
+// implementation — and standing up the whole stack is a large NEW cryptographic trust
+// surface. That is disproportionate for M0, where the protected quantity is a NEUTRAL,
+// never-standing observable: an unresolved server-side abort only UNDERCOUNTS demand
+// (never moves standing), so the missing affidavit path costs no security today. Same
+// STRATEGY as H7's blind proof-of-repair (ship a floor, document the heavy crypto as a
+// fast-follow), different primitive (H7 was a char-2 field-algebra wall; this is a
+// missing verifiable-escrow lib). Held in tension; ExchangeCommitment is the exact seam
+// the future resolver consumes.
 
 // commitDomain separates a pre-release exchange promise from a delivery receipt: a
 // commitment signature can never be lifted onto a DeliveryReceipt (different domain,

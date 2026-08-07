@@ -230,9 +230,13 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   commitment is domain-separated from the receipt and carries no PoR, so it can NEVER redeem as demand
   — `#receipts(C) ≤ #completed correct deliveries` survives the abort path. GATED: converting a
   server-held commitment into a TTP-affidavit on fetcher default needs the quorum-TTP to verify
-  delivery completed without the fetcher — i.e. verifiable encryption of C + threshold key-escrow to
-  the validator quorum, which has **no pure-Go library in 2026 (the same class of wall H7's blind
-  proof-of-repair hit)**. Demand-NEUTRALITY keeps this low-stakes: an unresolved server-side abort only
+  delivery completed without the fetcher — i.e. **verifiable escrow of the content key (Camenisch–
+  Shoup) + threshold decryption t-of-n across the validators**. The threshold-decryption/DKG half IS
+  available in Go (dedis/kyber, drand-grade); the wall is the **verifiable-escrow primitive — no
+  adoptable audited pure-Go impl — plus the large new crypto trust surface of the whole stack**,
+  disproportionate to a NEUTRAL observable. (Same *strategy* as H7 — floor now, heavy crypto as a
+  fast-follow — different *primitive*: H7 was a char-2 field-algebra wall, this is a missing
+  verifiable-escrow lib.) Demand-NEUTRALITY keeps this low-stakes: an unresolved server-side abort only
   UNDERCOUNTS a neutral observable (never standing), so the missing affidavit path costs no security
   today. Held in tension; `ExchangeCommitment` is the exact seam the future threshold-crypto resolver
   consumes. **✅ P3** — BOTH cost-to-wash levers now built +
