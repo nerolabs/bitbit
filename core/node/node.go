@@ -20,6 +20,7 @@ import (
 	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/bond"
 	"github.com/nerolabs/silt/core/chain"
+	"github.com/nerolabs/silt/core/demand"
 	"github.com/nerolabs/silt/core/denylist"
 	"github.com/nerolabs/silt/core/dht"
 	"github.com/nerolabs/silt/core/link"
@@ -305,6 +306,13 @@ type Node struct {
 	// charged token request blinded in the credit domain). creditSpent is this
 	// issuer's online double-spend set.
 	creditSpent map[string]bool
+
+	// D-DEMAND (#181): the witnessed-demand ledger (demandBank) a server banks
+	// delivery receipts into, and the issuer public key it trusts to have signed the
+	// retrieval tokens those receipts spend (demandIssuer). Nil until EnableDemandBank.
+	// Demand is a NEUTRAL observable — never wired to consensus standing (γ→1/N).
+	demandBank   *demand.Bank
+	demandIssuer *rsa.PublicKey
 
 	// failure-domain gossip: domainID is this node's own domain hash
 	// (0 = unset); peerDomains accumulates peers' domains from gossip, so
@@ -737,6 +745,8 @@ func (n *Node) handle(from ports.NodeID, msg ports.Message) {
 		n.reply(from, msg, n.answerChallenge(msg))
 	case ports.MsgRepairClaim:
 		n.handleRepairClaim(from, msg) // async: replies MsgRepairVote when the two legs settle (H7)
+	case ports.MsgDeliveryReceipt:
+		n.handleDeliveryReceipt(from, msg) // D-DEMAND: verify + bank a delivery receipt
 	case ports.MsgBondChallenge:
 		n.reply(from, msg, n.answerBondChallenge(msg))
 	case ports.MsgTokenRequest:

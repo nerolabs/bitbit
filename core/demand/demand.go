@@ -39,6 +39,7 @@ import (
 	"crypto/sha256"
 	"io"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/nerolabs/silt/core/blindtoken"
 	"github.com/nerolabs/silt/core/por"
 	"github.com/nerolabs/silt/ports"
@@ -248,3 +249,26 @@ func (b *Bank) Redeem(issuerPub *rsa.PublicKey, token Token, r DeliveryReceipt) 
 // Demand is the witnessed-delivery count banked for object — an observable, never
 // standing. Reading it moves nothing.
 func (b *Bank) Demand(object ports.Hash) int64 { return b.demand[object] }
+
+// SubmittedReceipt bundles a delivery receipt with the token that authorized it —
+// the pair a fetcher hands the server so the server can bank and redeem in one
+// message. Marshal to CBOR for the wire.
+type SubmittedReceipt struct {
+	Token   Token
+	Receipt DeliveryReceipt
+}
+
+// Marshal serializes the bundle to CBOR.
+func (s SubmittedReceipt) Marshal() ([]byte, error) {
+	return cbor.Marshal(s)
+}
+
+// UnmarshalSubmittedReceipt parses a wire bundle. Every field is untrusted input to
+// be re-verified at Redeem, never established fact.
+func UnmarshalSubmittedReceipt(b []byte) (SubmittedReceipt, error) {
+	var s SubmittedReceipt
+	if err := cbor.Unmarshal(b, &s); err != nil {
+		return SubmittedReceipt{}, err
+	}
+	return s, nil
+}
