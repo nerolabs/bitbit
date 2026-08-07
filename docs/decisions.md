@@ -48,10 +48,15 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-S7 — durability is funded by an internal, non-speculative credit reserve
 
-- **Status:** ✅ DIRECTION DECIDED + **construction DESIGNED (proven-parts composition;
-  not yet built → H7/#95)** — 2026-08-06. (Was "construction routed to research,"
-  2026-08-05; the commission delivered a *design*, not code — the field-bridge / transparent-PCS
-  choices and the build are the H7 track.)
+- **Status:** ✅ DIRECTION DECIDED + **BUILT (H7/#95, merged 2026-08-08).** The durability
+  economy (per-object escrow, serve auto-skim, rarest-shard bounty), the verified
+  proof-of-correct-repair gate, and the finite-but-renewable instruments (funded horizon +
+  instrument `g`) all ship, adversarially verified end to end. **One scope change surfaced by
+  the build:** the plaintext-blind homomorphic-commitment correctness leg (the "transparent
+  binary-field PCS" the design preferred) is a **GF(2⁸) theorem-level dead end in pure Go**, so
+  M0 ships the **Merkle-recompute floor** and the blind/bandwidth-free upgrade is a documented
+  fast-follow (see the construction bullet below and
+  [`design/h7-proof-of-repair.md`](design/h7-proof-of-repair.md) §3/§7/§13).
 - **Research basis:** Memo 07 (durability economics) named the wall; the follow-up
   commission (`research-outcome/commission/A1-*`) **delivered the construction and the
   equilibrium.** Memo 07's finding stands: cold-data repair that is **token-less AND
@@ -86,11 +91,20 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   holds the bytes, re-challengeable over time); the **DAS/PeerDAS quorum** pattern supplies
   the **center-less** checking. ~100 B proof, one–two pairings to verify, no plaintext seen,
   bounty releases iff *both* correctness and retrievability verify, a false claim is publicly
-  attributable and bond-slashable. → build **H7**.
-  - **B8 / no-trusted-setup:** prefer a **transparent, binary-field polynomial commitment
-    (FRI-Binius)** — matches silt's GF(2⁸) storage natively, no powers-of-tau ceremony —
-    over KZG (48 B proof but needs an SRS). Transparent proofs are ~10–100× larger (KBs),
-    still ≪ a 64 KiB shard.
+  attributable and bond-slashable. **Built as H7.**
+  - **B8 / no-trusted-setup — the blind correctness leg is deferred (build outcome).** The design
+    preferred a **transparent, binary-field polynomial commitment (FRI-Binius)** over KZG (no SRS,
+    matches GF(2⁸) natively). Building against the real code **pressure-tested and rejected the
+    pure-field-commitment path for M0**: there is **no ring homomorphism GF(2⁸)→F_r** (characteristic
+    2 vs prime `r`), so a prime-field Pedersen/KZG commitment cannot carry silt's GF(2⁸) RS relation
+    with a linear homomorphic check (Semi-AVID-PR only works because its code lives *in* the
+    commitment field — adopting it faithfully = a storage-format change to F_p), and no mature,
+    standalone, pure-Go **characteristic-2-native** commitment (FRI-Binius/lattice-SIS) existed to
+    adopt (B8: never hand-roll one). **So M0 ships the `core/repairproof` Merkle-recompute floor:**
+    reconstruct the target from k survivors and check it is byte-identical to the manifest-committed
+    shard id — sound, pure-Go, publicly checkable, content-blind, but **not bandwidth-blind** (an
+    explicit M0 non-goal, not a silently-broken claim). The blind upgrade (F_p re-encode, or a
+    char-2-native commitment when a library exists) is a fast-follow.
   - **Genuinely open (off today's critical path, → research frontier):**
     proof-of-correct-repair for **MSR / regenerating codes** (Clay, Product-Matrix) has no
     published construction; silt ships plain-RS reconstruction, so this is a roadmap item,
@@ -106,7 +120,9 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   the funded horizon per object) — solvent for *any* sign of `g` — and treats "perpetual"
   as a claim silt *earns only if measured `g` stays positive*, never an architectural
   promise. **Instrument `g` (credit-cost of one shard-repair, per year) as the single number
-  that decides perpetual-vs-finite.** Correlation to watch: the same cost regime that breaks
+  that decides perpetual-vs-finite.** *(Built: the per-object `DurabilitySnapshot` and the pure
+  `credit.CostPerRepair` / `Horizon` / `G` instruments — `g > 0` = cost declining = solvency-
+  favourable, always measured, never assumed.)* Correlation to watch: the same cost regime that breaks
   cold-data solvency (`g ≤ 0`) also cheapens Sybil standing (one ledger) — provision the two
   as *correlated*, not independent.
 

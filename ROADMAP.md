@@ -52,6 +52,17 @@ lives — proven by spec + an **external** red-team, never self-graded.
   that slashes double-signers. The **H1–H6 systemic hardening pass is complete** —
   every standing/consensus/DHT/privacy surface has a shipped mechanism + inverted-PoC
   regression + the Invariant-A/B guardrails.
+- **Durability is funded and verifiable — H7 is BUILT (#95).** The S7 spine ships: a
+  per-object credit escrow, a **serve auto-skim** (popular data self-funds its repair),
+  a rarest-shard bounty, and a **verified proof-of-correct-repair** — a bounty pays the
+  new holder of a rebuilt shard only when correctness (Merkle recompute against the
+  manifest-anchored survivors) *and* an identity-bound Shacham–Waters retrievability
+  proof both verify, with an attributable false claim bond-slashed. It ships as an
+  explicit **finite-but-renewable** contract with the funded horizon and **instrument
+  `g`** measured, and the self-dealing red-team (garbage claim → slash, don't-store →
+  deny, double-count → deny) is a permanent regression. *The plaintext-blind
+  correctness commitment was found a GF(2⁸) dead end in pure Go, so M0 ships the
+  Merkle-recompute floor and the bandwidth-blind upgrade is a documented fast-follow.*
 - **The mission was reframed — the composition reset.** M0's Sybil corner is a
   **systemic claim held in tension**, not a Sybil-proof primitive (impossible by
   Douceur). It is stated as **C1 (no discount)** — forging a fraction *q* of standing
@@ -76,14 +87,7 @@ handful of items that need a new result, not a decision.
 
 ### Build tracks
 
-- **H7 — durability, funded and verifiable (next).** The S7 spine: per-object
-  credit escrow + auto-skim + rarest-shard bounty, and **center-less
-  proof-of-correct-repair** built as the A1 composition (transparent binary-field
-  polynomial commitment [FRI-Binius] for correctness + Shacham–Waters PoR for
-  retrievability + a DAS quorum for center-less checking). Ships as an explicit
-  **finite-but-renewable** contract; **instrument `g`** (credit-denominated cost
-  decline) as the number that decides perpetual-vs-finite. *(#95.)*
-- **H8 — metadata-layer privacy.** The D-PRIV build track: mixnet transport +
+- **H8 — metadata-layer privacy (next).** The D-PRIV build track: mixnet transport +
   **private DHT lookup** (server-held-DB PIR, Peer2PIR model — routing/provider
   records only; blobs ride the mixnet) + **D3 issuance-mixing** (route token
   issuance over the content-blind relay from an ephemeral identity, epoch-batched)
