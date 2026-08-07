@@ -163,7 +163,13 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
 
 ## D-DEMAND — standing is priced on cost-to-wash, never on receipt count
 
-- **Status:** ▶ DIRECTION DECIDED — 2026-08-06; prototype-first build (H-demand).
+- **Status:** ▶ DIRECTION DECIDED — 2026-08-06; **P0 BUILT (#181, 2026-08-08)** — the pure
+  receipt primitive (`core/demand`: issue → PoR-bound delivery-ack → bank → redeem, single
+  object, no privacy) with the unforgeability-at-the-token-level red-team. **NEUTRAL by
+  construction** (a redeemed receipt records witnessed demand as an observable, never wired to
+  standing — so even a forged/self-dealt receipt buys zero standing; the γ→1/N firewall holds).
+  P1 (blind withdrawal) / unlinkability (needs D3, shared with H8) / P2 (fair-exchange dispute) /
+  P3 (cost-to-wash economics + self-dealing red-team) remain.
 - **Research basis:** `B2-demand-receipt.md`. The blind demand receipt is the load-bearing
   interlock between the Sybil corner (standing must track *witnessed* demand, not
   self-declared popularity) and privacy (who-fetches-what stays unlinkable). It **splits
@@ -195,10 +201,13 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
      bonded fetcher identity per unit of fake demand" — the best achievable under no-center.
 - **Doc-truth rule:** any claim that the receipt *proves* real, organic, third-party demand
   is **false and must be struck** — it proves *a paid correct delivery happened*, unlinkably.
-- **Build (prototype-first, P0→P3):** issue → PoR-bound delivery ack → bank → redeem, with
-  fee-burn + bonded-fetcher credential, then a **self-dealing red-team** measuring
-  cost-per-fake-demand vs honest. **Hard dependency:** property (b) unlinkability is *nominal
-  until D3 issuance-mixing is solved* (the IP/timing channel) — shared with D-PRIV and the
+- **Build (prototype-first, P0→P3):** ✅ **P0 built** — issue → PoR-bound delivery ack → bank →
+  redeem (`core/demand`), single object, no privacy, with the unforgeability red-team (forged
+  token, tampered/lifted receipt, wrong-object, data-less delivery, double-spend — each rejected;
+  the tag-forgery and authenticity residuals documented). ☐ P1 blind withdrawal + unlinkable ack;
+  ☐ P2 optimistic dispute; ☐ P3 fee-burn + bonded-fetcher credential + a self-dealing red-team
+  measuring cost-per-fake-demand vs honest. **Hard dependency:** property (b) unlinkability is
+  *nominal until D3 issuance-mixing is solved* (the IP/timing channel) — shared with D-PRIV and the
   privacy build-track.
 
 ## D-C2 — "no quiet capture" is held in tension, never closed (by theorem)
