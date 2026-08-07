@@ -62,6 +62,18 @@ type Ledger struct {
 	// (distinct secret ⇒ distinct root). Honest identities never collide.
 	rootOwner map[ports.Hash]ports.NodeID
 
+	// escrow holds each object's durability reserve, keyed by the object's
+	// root (its Merkle identity). It is the H7/S7 durability budget: prepaid
+	// credit that pays repair bounties, topped up by an auto-skim of the
+	// object's own serving revenue. It lives in the BALANCE economy — it
+	// moves the credit unit between balances and reserves — and NEVER feeds
+	// Reputation. That firewall is the one load-bearing H7 invariant (the
+	// durability budget must confer ZERO consensus standing, or one physical
+	// copy of a shared shard could answer for N pledges); it is asserted
+	// structurally by the Invariant-A guard, which classifies every escrow
+	// press `neutral`. See escrow.go.
+	escrow map[ports.Hash]*objectEscrow
+
 	// Audit economics: storage that survives a spot-check earns rent;
 	// storage that turns out to be a lie is slashed hard. Balances may
 	// go negative — debt is the scarlet letter. Exported so scenarios
@@ -81,6 +93,7 @@ func New(fee, grant int64) *Ledger {
 		fee: fee, grant: grant,
 		accounts:    make(map[ports.NodeID]*account),
 		rootOwner:   make(map[ports.Hash]ports.NodeID),
+		escrow:      make(map[ports.Hash]*objectEscrow),
 		AuditReward: 1_000,
 		AuditSlash:  25_000,
 	}
