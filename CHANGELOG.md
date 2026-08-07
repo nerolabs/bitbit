@@ -9,6 +9,15 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **Registry economics — `-freeload` role separation for the daemon** (2026-08-09,
+  [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon can now be started with `-freeload`
+  to serve the **registry / relay / routing** role while **refusing to store or serve content** — so
+  a public-infrastructure operator can run a rendezvous registry without being conscripted into
+  hosting arbitrary content (the conflation that caps how many public registries the network can
+  attract, which bootstrap/NAT-traversal depend on). The mechanism (`node.SetFreeload`, honored by
+  the serve paths) already existed and was sim-only; this exposes it on the real daemon and announces
+  the role. The node still carries DHT routing. *(The leaner `-registry-only` mode — no storage node
+  constructed at all — is the follow-up.)* Covered by a real-TCP e2e; whole suite green with \`-race\`.
 - **H9 takedown transparency — the CT-style append-only log** (2026-08-09,
   [#180](https://github.com/nerolabs/silt/issues/180)) — New `core/translog`: an RFC 6962
   (Certificate Transparency) append-only Merkle log — adopted, not invented (B8) — for honored

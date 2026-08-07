@@ -137,7 +137,23 @@ var (
 	reBootstrap = regexp.MustCompile(`bootstrapped \((\d+) table entries\)`)
 	reCommitted = regexp.MustCompile(`chain: committed block (\d+)`)
 	reLink      = regexp.MustCompile(`^silt:v1:\S+`)
+	reFreeload  = regexp.MustCompile(`freeload: ON`)
 )
+
+// TestFreeloadRoleSeparation (#47): a daemon started with -freeload announces the
+// role and still comes up as a routing peer — it serves registry/relay/routing but
+// refuses to host content. Role separation for public-infra operators, not a broken
+// node.
+func TestFreeloadRoleSeparation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e spawns processes; skipped under -short")
+	}
+	d := startDaemon(t, "freeloader",
+		"-listen", "127.0.0.1:0", "-store", t.TempDir(),
+		"-freeload", "-mdns=false", "-id-seed", "4700")
+	d.waitFor(t, reFreeload, 20*time.Second) // the role is announced
+	d.waitFor(t, rePeer, 20*time.Second)     // and it still runs as a routing peer
+}
 
 // runClient runs a one-shot `silt <args>` (swarm add/get) to completion,
 // returning its stdout. Diagnostics on stderr are folded into the
