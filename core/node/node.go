@@ -150,15 +150,15 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		K: 8, Alpha: 3,
-		RequestTimeout: 500 * ports.Millisecond,
-		Replication:    3,
+		RequestTimeout:  500 * ports.Millisecond,
+		Replication:     3,
 		RepairInterval:  60 * ports.Second,
 		RepairSlack:     2,
 		RepairQuorumTau: 1, // per-node-local ledgers: each caretaker-judge confirms retrievability itself
-		HotThreshold:   8,
-		DemandInterval: 60 * ports.Second,
-		LeaseTTL:       180 * ports.Second,
-		FanoutReplicas: 2,
+		HotThreshold:    8,
+		DemandInterval:  60 * ports.Second,
+		LeaseTTL:        180 * ports.Second,
+		FanoutReplicas:  2,
 
 		ReachabilityTimeout: 3 * ports.Second,
 		FetchAttempts:       3,
