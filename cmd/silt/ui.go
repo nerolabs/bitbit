@@ -339,7 +339,10 @@ func (s *uiServer) apiRegistry(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, err := s.reg.All(r.Context())
 	if err != nil {
-		httpError(w, 502, err)
+		// A remote public registry no longer serves a bulk /all dump (F-3), so a UI
+		// pointed at one degrades to an empty list rather than erroring. An operator's
+		// OWN registry (-serve-registry) is read in-process and lists fully.
+		writeJSON(w, []any{})
 		return
 	}
 	type row struct {
