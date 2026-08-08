@@ -9,7 +9,7 @@ at a glance and the research team has one surface to push on.
 Each residual carries:
 - **Class** — why it is not closed: **theorem** (an impossibility result forbids closing it),
   **crypto-gap** (the construction exists but has no adoptable pure-Go impl — see
-  [`pure-go-crypto-gaps.md`](pure-go-crypto-gaps.md)), **scope** (deliberately deferred past
+  [`primitive-availability-gaps.md`](primitive-availability-gaps.md)), **scope** (deliberately deferred past
   M0), or **research-frontier** (open problem, routed out).
 - **What it is** · **Why not closed** · **How it's bounded today** · **What would close it** ·
   **Open question for research**.
@@ -92,7 +92,7 @@ discount, C2 no quiet capture, the demand→standing firewall) — those are hel
 - **Why not built:** a bare `firstSeenTick` age gate is *pre-farmable* (the coin-age
   anti-pattern — Peercoin's CAA attack; NeuCoin removed coin-age). The only sound form is a
   **continuous VDF chained to the bond identity** — an M1+ construction (see
-  [`pure-go-crypto-gaps.md`](pure-go-crypto-gaps.md) §5).
+  [`primitive-availability-gaps.md`](primitive-availability-gaps.md) §5).
 - **Open question:** is a bond-anchored continuous VDF worth its always-on cost over an
   already-non-substitutable D axis, or is D-only acquisition the right permanent answer?
 
@@ -136,7 +136,7 @@ discount, C2 no quiet capture, the demand→standing firewall) — those are hel
 ## D. Durability & takedown
 
 ### D1. Bandwidth-blind proof-of-repair (H7)
-- **Class:** crypto-gap (see [`pure-go-crypto-gaps.md`](pure-go-crypto-gaps.md) §1).
+- **Class:** crypto-gap (see [`primitive-availability-gaps.md`](primitive-availability-gaps.md) §1).
 - **What it is:** M0 ships the Merkle-recompute floor (fetch k survivors, recompute, compare) —
   sound and content-blind but **not bandwidth-blind**. The blind form needs a char-2-native
   polynomial commitment (FRI-Binius) with no pure-Go impl.
@@ -164,7 +164,7 @@ discount, C2 no quiet capture, the demand→standing firewall) — those are hel
   across realistic cost trajectories.
 
 ### D5. Provable non-globality of takedown — ZK threshold predicate (D-TAKEDOWN)
-- **Class:** crypto-gap (see [`pure-go-crypto-gaps.md`](pure-go-crypto-gaps.md) §4).
+- **Class:** crypto-gap (see [`primitive-availability-gaps.md`](primitive-availability-gaps.md) §4).
 - **What it is:** M0 ships the CT-style transparency log (provable *recording* of every
   takedown, inclusion + consistency proofs). The stronger *survivor-Nakamoto* metric — a ZK
   predicate "≥ t distinct-domain PoR-fresh replicas are gone" — needs a ZK stack with no
@@ -204,7 +204,7 @@ discount, C2 no quiet capture, the demand→standing firewall) — those are hel
 ## F. Cryptographic dependency gaps (pure-Go)
 
 Five constructions silt *would* adopt but for which no mature pure-Go impl exists in 2026 —
-enumerated in [`pure-go-crypto-gaps.md`](pure-go-crypto-gaps.md): (1) char-2-native polynomial
+enumerated in [`primitive-availability-gaps.md`](primitive-availability-gaps.md): (1) char-2-native polynomial
 commitment (blind PoR); (2) threshold decryption + DKG (fair-exchange dispute / accountable
 disclosure); (3) verifiable encryption; (4) ZK threshold predicate (D5); (5) continuous
 identity-chained VDF (B1). Each ships a sound floor and defers the full form.

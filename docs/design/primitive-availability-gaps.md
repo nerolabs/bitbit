@@ -5,8 +5,8 @@
 > **four different binding constraints under one "pure-Go" label**, which wrongly invited
 > "maybe drop pure-Go" as a remedy — when dropping pure-Go would unblock almost none of these.
 > The true constraint is **primitive maturity + construction design**, not the language.
-> *(Recommended follow-up: rename this file to `primitive-availability-gaps.md`; deferred
-> only because it would churn links in `owned-residuals.md`, which is under research review.)*
+> *(Renamed from `pure-go-crypto-gaps.md` — the old name undersold the content: only one or
+> two of these are actually pure-Go library gaps.)*
 
 silt follows **B8 — adopt, don't invent**: it never hand-rolls a novel cryptographic
 primitive. It also ships as a single static `CGO_ENABLED=0` binary that cross-compiles
