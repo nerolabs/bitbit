@@ -60,6 +60,16 @@ missing address diversity, or buy your way past elapsed time). C1 is the fold:
 address-diverse storage.** C2 is the residue C1 cannot touch (an honest whale
 concentrating real standing).
 
+> **Shipped subset — the B (served-demand) axis is NEUTRAL.** `D×A×T×B` is the
+> *target* composition; in the shipped M0 subset served-demand confers **zero**
+> consensus standing — it is a neutral observable, severed from standing by the
+> γ→1/N firewall (`m0.md` §3/§7, `#181`/`#182`), so today standing ≈ `D×A×T`. The
+> demand mechanism (`core/demand`) is built and blind/unlinkable, but a receipt —
+> forged, self-dealt, or wash — buys **nothing** that matters to consensus. So your
+> demand/wash attacks (personas below) are a test of that **firewall**: find any path
+> by which served/witnessed demand moves consensus standing. "Demand doesn't move
+> standing" is the design's claim — break it, or confirm it held.
+
 **A break is one of three things:** (i) a strategy that earns
 consensus-controlling standing for **less than *q · C_honest***; (ii) a strategy
 that **concentrates past capture** (violates C2); or (iii) a strategy that

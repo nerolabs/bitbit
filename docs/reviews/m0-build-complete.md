@@ -1,16 +1,19 @@
-# M0 build backlog — COMPLETE (handoff to the red-team + acceptance teams)
+# M0 build backlog — COMPLETE (status + owned-residuals reference)
 
 **Status (2026-08-08):** the M0 build backlog is **complete**. This is the counterpart
 to `m0-remaining-backlog.md` (the earlier "what is NOT done yet" brief) — that list is
 now cleared. What remains for M0 RC is the **verify gate**, not more building.
 
-This brief tells the red-team and acceptance teams (a) what to attack / accept, and
-(b) the residuals that are **known and held-in-tension** — please do not re-report
-these as new; challenge whether the *framing* is honest, not whether they exist.
-
-It is the **status overlay**; the standing detailed briefs remain `m0-redteam-brief.md`
-and `m0-acceptance-brief.md` (this directory). Read this first for *what changed and
-what is known*, then those for the depth.
+> **⚠️ HOW TO USE THIS — read before sharing with a review team.** Your **blind brief**
+> (`m0-redteam-brief.md` for the red team, `m0-acceptance-brief.md` for acceptance) is
+> the **primary directive** — it stands alone; you find breaks / test flows
+> independently from the code and the public docs. This file is an **owner status +
+> owned-residuals reference**. If the owner shares it with you, use **§4 (held-in-
+> tension residuals) ONLY, to AVOID RE-REPORTING owned items** — exactly as a prior
+> blind pass was told to skim the old "not-done" list. **Do NOT treat §2 (built
+> surface) or §3 (what to red-team) as a hunting checklist** — reading them as an answer
+> key defeats a blind pass. Challenge whether the *framing* of the residuals is honest,
+> not whether they exist.
 
 ---
 
