@@ -127,8 +127,10 @@ someday.
 
 Chunks land in `.silt/objects/<xx>/<hash>` — sharded one level deep by a
 2-hex prefix, each file named by its SHA-256. Add the same file twice in
-(default) convergent mode and you get the same root with zero new bytes
-stored. Delete or corrupt up to n−k shards per stripe (default: any 6 of
+**convergent mode** (`-mode convergent`) and you get the same root with zero
+new bytes stored; the **default is `-mode private`** (a random per-file key —
+privacy-by-default, no cross-file dedup, no guessed-plaintext confirmation
+attack, H6). Delete or corrupt up to n−k shards per stripe (default: any 6 of
 16) and `get` silently reconstructs them from parity; one loss beyond that
 and it names the dead stripe and refuses.
 

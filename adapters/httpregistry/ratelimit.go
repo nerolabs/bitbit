@@ -16,6 +16,17 @@ import (
 const (
 	defaultRatePerSec = 20.0 // sustained requests/second per client IP
 	defaultBurst      = 40.0 // absorbed instantaneous burst per client IP
+
+	// Work-proportional pricing for GET /all (red-team blind-2026-08-08 F-3): a
+	// per-request token bucket meters the wrong quantity when one endpoint does
+	// O(N) work — /all serializes the whole registry for the same one token as a
+	// 183-byte /lookup (measured ~20,000× byte amplification at N=20k). So /all is
+	// additionally charged one token per allEntriesPerToken entries it serves,
+	// letting the bucket go into bounded debt — the amplification is now PRICED
+	// per source. (This bounds per-SOURCE cost; a distributed /all flood and full
+	// cursor pagination remain — see the #48 CHANGELOG note.)
+	allEntriesPerToken = 64.0
+	maxDebtSeconds     = 60.0 // cap how long one heavy response can lock a source out
 )
 
 type tokenBucket struct {
@@ -60,6 +71,31 @@ func (l *ipRateLimiter) allow(ip string, now time.Time) bool {
 	}
 	b.tokens--
 	return true
+}
+
+// charge deducts cost tokens from ip's bucket (refilling first), letting the balance
+// go into bounded debt so an expensive O(N) response — a big GET /all — imposes a
+// real, work-proportional cooldown on that source instead of costing one flat token.
+// The debt is floored so a single huge response can't lock a caller out for more than
+// ~maxDebtSeconds. This is the fix for metering request COUNT when per-request work is
+// unbounded (Crosby–Wallach algorithmic-complexity DoS).
+func (l *ipRateLimiter) charge(ip string, cost float64, now time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b := l.buckets[ip]
+	if b == nil {
+		b = &tokenBucket{tokens: l.burst, last: now}
+		l.buckets[ip] = b
+	}
+	b.tokens += now.Sub(b.last).Seconds() * l.rate
+	if b.tokens > l.burst {
+		b.tokens = l.burst
+	}
+	b.last = now
+	b.tokens -= cost
+	if floor := -(l.burst + l.rate*maxDebtSeconds); b.tokens < floor {
+		b.tokens = floor
+	}
 }
 
 // cleanupLoop drops buckets idle long enough to have refilled fully anyway — so a

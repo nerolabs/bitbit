@@ -128,6 +128,11 @@ func ServeTLS(addr string, ident *identity.Identity, reg ports.Registry) (boundA
 }
 
 func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr string, shutdown func(), err error) {
+	// Read-cost bounding (#48): a per-IP rate limit + server timeouts keep a public
+	// registry cheap to run and hard to exhaust (slowloris, lookup floods). GET /all is
+	// additionally priced by work (F-3), so it is created up here for the /all handler to
+	// charge against.
+	lim := newIPRateLimiter(defaultRatePerSec, defaultBurst)
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /publish", func(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +184,10 @@ func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr strin
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// Price the O(N) serialization by work, not one flat token (F-3): dumping the
+		// whole registry now costs the caller ~len/allEntriesPerToken extra tokens, so a
+		// single source can't repeatedly amplify a token into a full-registry download.
+		lim.charge(clientIP(r), float64(len(entries))/allEntriesPerToken, time.Now())
 		out := make([]entryJSON, 0, len(entries))
 		for _, e := range entries {
 			out = append(out, toJSON(e))
@@ -193,10 +202,8 @@ func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr strin
 	if tlsCfg != nil {
 		ln = tls.NewListener(ln, tlsCfg)
 	}
-	// Read-cost bounding (#48): a per-IP rate limit + server timeouts keep a public
-	// registry cheap to run and hard to exhaust (slowloris, lookup floods, unbounded
-	// /all serialization).
-	lim := newIPRateLimiter(defaultRatePerSec, defaultBurst)
+	// Server timeouts round out the read-cost bounding (#48) against slowloris and slow
+	// reads/writes (the per-IP limiter `lim` is created above; /all is priced by work).
 	srv := &http.Server{
 		Handler:           lim.limit(mux),
 		ReadHeaderTimeout: 5 * time.Second,

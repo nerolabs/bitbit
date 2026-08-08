@@ -34,13 +34,22 @@ type account struct {
 	// the identity-bound bond (core/bond) this node last PROVED it holds
 	// under a random challenge; it is the only large, unforgeable input to
 	// Reputation, so N identities cost N real bonds on real disk. bondFails
-	// counts challenges it could not answer. firstSeen/lastBond bound when
-	// standing began and was last refreshed, so DecayStale can retire it —
-	// standing must be *continuously* re-proven, making time-in-good-
-	// standing the scarce resource (you cannot buy last month's uptime).
+	// counts challenges it could not answer.
+	//
+	// TIME (T axis), stated honestly: the T factor is shipped for standing
+	// RETENTION only — DecayStale + BondMaxAge (below) retire standing that is
+	// not *continuously* re-proven, so a released plot cannot coast. There is
+	// NO acquisition-time accrual: full standing is granted on the first passing
+	// bond challenge, so acquisition is priced by D (real bonded bytes) alone —
+	// a zero-age identity that proves the bytes reaches full standing at once.
+	// A time-of-ACQUISITION ramp is deferred: a bare age gate is pre-farmable
+	// (the coin-age anti-pattern), and the only sound form is a continuous
+	// bond-anchored VDF (M1+). lastBondTick drives the retention decay.
+	// firstSeenTick is recorded but is currently DEAD for standing — no
+	// standing calculation reads it; it is not an acquisition-age gate.
 	bondedBytes   int64
 	bondFails     int
-	firstSeenTick uint64
+	firstSeenTick uint64 // recorded; NOT read by any standing calc (see T-axis note above)
 	lastBondTick  uint64
 	// equivocations counts PROVEN consensus double-signs (core/chain). It is
 	// the gravest offense — an attack on consensus itself — so it does not

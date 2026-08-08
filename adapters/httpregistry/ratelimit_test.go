@@ -37,6 +37,42 @@ func TestRateLimiterBurstThenThrottleThenRefill(t *testing.T) {
 	}
 }
 
+// TestChargePricesAllByWork is the F-3 regression (red-team blind-2026-08-08): a big
+// GET /all must cost the caller tokens PROPORTIONAL TO WORK, not one flat token, so a
+// single source can't amplify one token into an unbounded full-registry dump. After
+// serving a large /all, that IP's bucket is drained into debt and the next request is
+// throttled — the amplification is now priced.
+func TestChargePricesAllByWork(t *testing.T) {
+	l := newIPRateLimiter(10, 5) // 10/s, burst 5
+	defer l.close()
+	now := time.Unix(3_000_000, 0)
+	const ip = "198.51.100.9"
+
+	// One /all-sized request is allowed (spends 1 of the 5 burst tokens)...
+	if !l.allow(ip, now) {
+		t.Fatal("the first request should be allowed")
+	}
+	// ...then priced by the work it did: a 20k-entry registry at 64 entries/token
+	// costs ~312 tokens, far exceeding the burst → the bucket goes deep into debt.
+	l.charge(ip, 20_000/allEntriesPerToken, now)
+
+	// The very next request from the same IP, same instant, must be throttled — the
+	// caller cannot immediately repeat the expensive dump (the pre-fix behavior the
+	// red-team measured: 40 unpriced /all in one burst, zero 429).
+	if l.allow(ip, now) {
+		t.Fatal("F-3 regression: a source that just pulled a large /all must be throttled, not free to repeat it")
+	}
+	// A small /all (few entries) costs a fraction of a token, so normal use is
+	// unaffected — the price tracks the work, it isn't a flat penalty on /all.
+	l2 := newIPRateLimiter(10, 5)
+	defer l2.close()
+	l2.allow("10.0.0.5", now)
+	l2.charge("10.0.0.5", 10/allEntriesPerToken, now) // 10 entries → ~0.16 tokens
+	if !l2.allow("10.0.0.5", now) {
+		t.Fatal("a small /all must not lock out a normal caller")
+	}
+}
+
 // TestRateLimiterIsPerIP: one noisy client does not throttle another.
 func TestRateLimiterIsPerIP(t *testing.T) {
 	l := newIPRateLimiter(1, 2)
