@@ -20,3 +20,4 @@ _examples_*/
 
 # stray legacy build artifact (old project name; see audit 2026-08-06)
 /shardnet
+integration/economy/silt

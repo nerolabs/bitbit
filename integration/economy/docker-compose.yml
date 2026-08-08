@@ -1,0 +1,121 @@
+# The economy + blind-credit field test, on one host, in containers:
+#
+#   econ (flat bridge 10.80.0.0/24)
+#     ├─ val1  (10.80.0.11)  validator + token ISSUER + serves the registry
+#     ├─ val2  (10.80.0.12)  validator + token ISSUER (second quorum signer)
+#     ├─ holder(10.80.0.20)  plain storage node — hosts + serves chunks
+#     └─ leech (10.80.0.30)  -freeload: routes but REFUSES to store/serve
+#
+# Both validators run -require-tokens 1: the chain accepts an entry only if it
+# carries a blind-signed publish token, NOT a durable Publisher identity. A
+# client acquires a token from -token-quorum validators and publishes carrying
+# it (unlinkable). run.sh drives the token/credit path and the controls.
+#
+# NodeIDs are deterministic from -id-seed, so the bootstrap/attester wiring can
+# be hard-coded (seed 1 -> 171e68…, seed 2 -> 49a396…). node.sh stamps each
+# container's own IP via -advertise so peers can dial it back on the flat net.
+
+networks:
+  econ:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.80.0.0/24 }]
+
+services:
+  # Second issuer/attester. Started first so val1 can bootstrap to a known peer.
+  val2:
+    image: silt-economy
+    entrypoint: ["node.sh"]
+    environment:
+      LISTEN_PORT: "4001"
+    command:
+      - silt
+      - daemon
+      - -id-seed=2
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -validator
+      - -objective=false
+      - -min-rep=100
+      - -quorum=1
+      - -attesters=171e68f02e6f66bf9ff65c13c75d9b2b492c2f40ed61e06507cb8b227c3970d5
+      - -require-tokens=1
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    networks:
+      econ:
+        ipv4_address: 10.80.0.12
+
+  # Registry host + issuer #1. Bootstraps to val2, attests with val2.
+  val1:
+    image: silt-economy
+    entrypoint: ["node.sh"]
+    environment:
+      LISTEN_PORT: "4001"
+    command:
+      - silt
+      - daemon
+      - -id-seed=1
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -validator
+      - -objective=false
+      - -min-rep=100
+      - -quorum=1
+      - -attesters=49a396496b0973f889ae30bf6f546ef366c535c2b13f6be4f91791cf42375fbd
+      - -require-tokens=1
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+      - -bootstrap=49a396496b0973f889ae30bf6f546ef366c535c2b13f6be4f91791cf42375fbd@10.80.0.12:4001
+    networks:
+      econ:
+        ipv4_address: 10.80.0.11
+
+  # Plain holder: real capacity, hosts + serves chunks (a would-be earner).
+  holder:
+    image: silt-economy
+    entrypoint: ["node.sh"]
+    environment:
+      LISTEN_PORT: "4001"
+    command:
+      - silt
+      - daemon
+      - -id-seed=10
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+      - -bootstrap=171e68f02e6f66bf9ff65c13c75d9b2b492c2f40ed61e06507cb8b227c3970d5@10.80.0.11:4001
+      - -registry=171e68f02e6f66bf9ff65c13c75d9b2b492c2f40ed61e06507cb8b227c3970d5@https://10.80.0.11:4003
+    networks:
+      econ:
+        ipv4_address: 10.80.0.20
+
+  # Freeloader: -freeload routes but holds/serves NO content (the leech role).
+  leech:
+    image: silt-economy
+    entrypoint: ["node.sh"]
+    environment:
+      LISTEN_PORT: "4001"
+    command:
+      - silt
+      - daemon
+      - -id-seed=11
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -freeload
+      - -mdns=false
+      - -log=info
+      - -bootstrap=171e68f02e6f66bf9ff65c13c75d9b2b492c2f40ed61e06507cb8b227c3970d5@10.80.0.11:4001
+      - -registry=171e68f02e6f66bf9ff65c13c75d9b2b492c2f40ed61e06507cb8b227c3970d5@https://10.80.0.11:4003
+    networks:
+      econ:
+        ipv4_address: 10.80.0.30
