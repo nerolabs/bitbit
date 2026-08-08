@@ -1,0 +1,135 @@
+# Proof-of-retrieval (PoR) audit field test — a real multi-daemon swarm on one
+# flat Docker network:
+#
+#            seed (registry + bootstrap, 10.60.0.10)
+#              |
+#   holder1 .21   holder2 .22   holder3 .23   holder4 .24     (honest holders)
+#              \        \         /        /
+#                     caretaker .30  (-care <careLink>, -log info: repair loop)
+#
+# run.sh publishes an erasure-coded file so shards scatter across the holders,
+# then physically `rm`s one holder's shard files from its /data/objects tree
+# (the store's on-disk layout) while that daemon keeps running. The caretaker's
+# repair sweep probes shard availability over the real wire, detects the loss,
+# reconstructs from parity, and re-scatters the rebuilt shards to fresh nodes.
+# A POSITIVE CONTROL holder is left untouched and must stay quiet.
+#
+# Every daemon binds 0.0.0.0 but self-advertises its own container IP via
+# entry.sh (a wildcard bind is never advertised on its own — daemon.go).
+#
+# Isolation: image tag silt-audit, project name audit, subnet 10.60.0.0/24.
+
+networks:
+  swarm:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.60.0.0/24 }]
+
+services:
+  # Public rendezvous: bootstrap peer + key-pinned HTTPS registry. -capacity 1
+  # so it refuses to store content — shards land only on the holders, making the
+  # placement (and the deletion) unambiguous.
+  seed:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command:
+      - -id-seed=1
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=1
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.10
+
+  holder1:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command: &holder_cmd
+      - -id-seed=21
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+      - -bootstrap=${SEED_ID:-unset}@10.60.0.10:4001
+      - -registry=${SEED_ID:-unset}@https://10.60.0.10:4003
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.21
+
+  holder2:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command:
+      - -id-seed=22
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+      - -bootstrap=${SEED_ID:-unset}@10.60.0.10:4001
+      - -registry=${SEED_ID:-unset}@https://10.60.0.10:4003
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.22
+
+  holder3:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command:
+      - -id-seed=23
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+      - -bootstrap=${SEED_ID:-unset}@10.60.0.10:4001
+      - -registry=${SEED_ID:-unset}@https://10.60.0.10:4003
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.23
+
+  holder4:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command:
+      - -id-seed=24
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+      - -bootstrap=${SEED_ID:-unset}@10.60.0.10:4001
+      - -registry=${SEED_ID:-unset}@https://10.60.0.10:4003
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.24
+
+  # The caretaker: repairs the published file via its care link. -log info makes
+  # its repair sweep narrate placements / "stripe repaired" / "stripe degraded"
+  # into /data/debug.log. run.sh injects the care link through CARE_LINK.
+  caretaker:
+    image: silt-audit
+    entrypoint: ["entry.sh", "4001"]
+    command:
+      - -id-seed=30
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -min-rep=0
+      - -log=info
+      - -bootstrap=${SEED_ID:-unset}@10.60.0.10:4001
+      - -registry=${SEED_ID:-unset}@https://10.60.0.10:4003
+      - -care=${CARE_LINK:-unset}
+    networks:
+      swarm:
+        ipv4_address: 10.60.0.30
