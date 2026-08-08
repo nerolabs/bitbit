@@ -1,0 +1,18 @@
+# Override: recreate opA honoring an operator-local -denylist. The denylist
+# file is written into opA's store (/data/deny.txt) by run.sh before this
+# override recreates the container, so the daemon reads it at startup and
+# purges + refuses the named root. The static IP from the base compose is
+# preserved across the recreate, so opA stays reachable at 10.90.0.11.
+services:
+  opA:
+    command:
+      - silt
+      - daemon
+      - -id-seed=1
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -log=info
+      - -denylist=/data/deny.txt

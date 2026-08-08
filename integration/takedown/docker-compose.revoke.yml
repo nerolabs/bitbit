@@ -1,0 +1,25 @@
+# Override: recreate the validator proposing an on-chain takedown of
+# ${REVOKE_ROOT}. The chain enforces the EXISTENCE check — a validator may
+# only revoke a root already committed on its ledger (ValidateProposal /
+# validateTakedowns → ErrRevokeUnknownRoot). run.sh recreates the validator
+# once with the real committed root (proposal commits a takedown block) and
+# once with a bogus, never-published root (the -revoke loop spins waiting for
+# the root to appear in the ledger, so NO takedown block is ever committed).
+# The static IP (10.90.0.10) is preserved across the recreate.
+services:
+  val:
+    command:
+      - silt
+      - daemon
+      - -id-seed=9
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -validator
+      - -min-rep=0
+      - -quorum=0
+      - -objective=false
+      - -log=info
+      - -revoke=${REVOKE_ROOT:?set REVOKE_ROOT}

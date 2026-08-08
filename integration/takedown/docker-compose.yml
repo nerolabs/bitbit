@@ -1,0 +1,97 @@
+# Field test #6 — takedown. One flat container network; three real daemons:
+#
+#   10.90.0.10  val   chain-backed validator + registry (trusted self-commit).
+#                     Holds the on-chain ledger, so it is where the -revoke
+#                     existence check is exercised (real vs bogus root).
+#   10.90.0.11  opA   an independent operator (own file-backed registry) that
+#                     will load a -denylist and take the target root DOWN.
+#   10.90.0.12  opB   a second independent operator (own file-backed registry)
+#                     that NEVER denies — the per-operator control: it keeps
+#                     serving the exact same (convergent → identical) root.
+#
+# opA and opB are deliberately SEPARATE operators with their own registries so
+# the per-operator scope is unambiguous: the same convergent file yields the
+# SAME root on both, and a takedown on opA leaves opB's copy untouched. There
+# is no global switch — denial is per-hash and per-operator, exactly the claim.
+#
+# run.sh drives the whole thing (publish, deny, fetch, revoke, reverse) via
+# `docker compose exec`, so no ports are published to the host.
+
+networks:
+  swarm:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.90.0.0/24 }]   # isolated from sibling harnesses
+
+services:
+  # Chain-backed validator + registry. Trusted self-commit (-min-rep 0,
+  # -quorum 0) so a single box can commit publications and takedowns — the
+  # legitimate one-operator configuration the daemon prints a notice for. This
+  # is the vantage for the on-chain -revoke existence check.
+  val:
+    image: silt-takedown
+    entrypoint: ["node.sh"]
+    command:
+      - silt
+      - daemon
+      - -id-seed=9
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -validator
+      - -min-rep=0
+      - -quorum=0
+      - -objective=false
+      - -log=info
+    volumes:
+      - val-data:/data     # persist the store (chain, chunks) across the -revoke recreate
+    networks:
+      swarm:
+        ipv4_address: 10.90.0.10
+
+  # Operator A — will deny. Independent file-backed registry.
+  opA:
+    image: silt-takedown
+    entrypoint: ["node.sh"]
+    command:
+      - silt
+      - daemon
+      - -id-seed=1
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - opA-data:/data     # persist the store + deny.txt across the denylist recreate
+    networks:
+      swarm:
+        ipv4_address: 10.90.0.11
+
+  # Operator B — never denies (per-operator control). Independent registry.
+  opB:
+    image: silt-takedown
+    entrypoint: ["node.sh"]
+    command:
+      - silt
+      - daemon
+      - -id-seed=2
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=2G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - opB-data:/data
+    networks:
+      swarm:
+        ipv4_address: 10.90.0.12
+
+volumes:
+  val-data:
+  opA-data:
+  opB-data:

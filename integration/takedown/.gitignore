@@ -1,0 +1,5 @@
+# the host-built linux binary (rebuilt by run.sh; never committed)
+silt
+# run artifacts, in case an older run wrote them here
+*.out
+deny.txt
