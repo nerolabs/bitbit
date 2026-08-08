@@ -220,6 +220,67 @@ func TestDeMatureSuperQuorumReplacesTheAnchorNet(t *testing.T) {
 	t.Log("≥⅔ real-bond coalition COMMITS with no anchor: liveness preserved center-lessly")
 }
 
+// TestWeakSubjectivityCheckpointRefusesLongRangeReorg is the F-1 slice-4 regression:
+// a weak-subjectivity checkpoint pins a recent trusted block, so a fork that rewrites
+// history AT OR BEFORE it is refused — even when it is strictly HEAVIER (the long-range
+// attack that makes the maturity latch safe for a fresh node). A heavier fork that
+// keeps the checkpoint and only reorgs AFTER it is still adopted normally.
+func TestWeakSubjectivityCheckpointRefusesLongRangeReorg(t *testing.T) {
+	mkBlock := func(w *world, prev ports.Hash, h uint64, e ports.Entry, nAtt int) *Block {
+		b := &Block{Version: BlockVersion, Height: h, Prev: prev, Entries: []ports.Entry{e}}
+		Sign(b, w.prop)
+		for _, v := range w.vals[:nAtt] {
+			b.Atts = append(b.Atts, Attest(b, v))
+		}
+		return b
+	}
+
+	// Canonical history g → c1 → c2 (weights 3, 3). Build it first to learn c1's hash.
+	tmp := newWorld(DefaultConfig())
+	g := tmp.genesis()
+	c1 := mkBlock(tmp, g.Hash(), 1, entry(1), 3)
+	c2 := mkBlock(tmp, c1.Hash(), 2, entry(2), 3)
+
+	// Pin the checkpoint at height 1 (= c1). A fresh replica carrying it:
+	cfg := DefaultConfig()
+	cfg.WSCheckpoint = WSCheckpoint{Height: 1, Hash: c1.Hash()}
+	w := newWorld(cfg)
+	gg := w.genesis()
+	if gg.Hash() != g.Hash() {
+		t.Fatal("setup: genesis must match")
+	}
+	for _, b := range []*Block{c1, c2} {
+		if err := w.c.Append(*b); err != nil {
+			t.Fatalf("append canonical %d: %v", b.Height, err)
+		}
+	}
+
+	// A HEAVIER fork that diverges at height 1 (rewrites the checkpoint block): weights
+	// 4 + 4 = 8 > canonical 6. It must be REFUSED regardless of weight.
+	preC1 := mkBlock(w, g.Hash(), 1, entry(3), 4)
+	preC2 := mkBlock(w, preC1.Hash(), 2, entry(4), 4)
+	adopted, err := w.c.Reconcile([]Block{*g, *preC1, *preC2})
+	if adopted || !errors.Is(err, ErrPreCheckpointReorg) {
+		t.Fatalf("a heavier fork rewriting the checkpoint block must be refused with ErrPreCheckpointReorg (adopted=%v err=%v)", adopted, err)
+	}
+	if _, ok := w.c.LookupRoot(entry(2).Root); !ok {
+		t.Fatal("the canonical (checkpointed) history must remain after refusing the long-range fork")
+	}
+	t.Log("long-range reorg REFUSED: a heavier fork that rewrites pre-checkpoint history is rejected")
+
+	// A HEAVIER fork that KEEPS the checkpoint (c1) and only reorgs AFTER it (height 2)
+	// is adopted normally: weight 3 + 4 = 7 > canonical 6.
+	postC2 := mkBlock(w, c1.Hash(), 2, entry(5), 4)
+	adopted, err = w.c.Reconcile([]Block{*g, *c1, *postC2})
+	if err != nil || !adopted {
+		t.Fatalf("a heavier POST-checkpoint reorg must be adopted (adopted=%v err=%v)", adopted, err)
+	}
+	if _, ok := w.c.LookupRoot(entry(5).Root); !ok {
+		t.Fatal("the post-checkpoint reorg's entry should be present after adoption")
+	}
+	t.Log("post-checkpoint reorg ADOPTED: weak subjectivity only pins history at/before the checkpoint")
+}
+
 // TestMaturityLatchSurvivesReloadAndReconcile pins that the latch is a CONSENSUS
 // fact (a pure function of the committed blocks), not process-local memory: a fresh
 // replica that Reloads the same history, and a replica that Reconciles onto it,

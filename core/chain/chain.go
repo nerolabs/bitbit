@@ -133,6 +133,28 @@ type Config struct {
 	// single one-time proof. Decay is a deterministic function of block height, so
 	// every replica expires standing in lockstep. Zero (default) = no expiry.
 	BondTTLBlocks uint64
+	// WSCheckpoint is a WEAK-SUBJECTIVITY checkpoint (F-1): a recent trusted block
+	// (height + hash) this replica refuses to reorg AT OR BEFORE, regardless of fork
+	// weight. silt is weakly subjective — a node syncing from genesis (or long
+	// offline) cannot distinguish the real matured chain from a forged long-range one
+	// on chain data alone (Buterin WS; Gaži–Kiayias–Russell stake-bleeding) — so the
+	// one-way maturity latch is only safe if a fresh node is ALSO pinned to a recent
+	// trusted state out-of-band. Every production PoS chain does exactly this
+	// (Ethereum checkpoint-sync, Cosmos ADR-044 unbonding, Casper finality); Bitcoin
+	// removed its hardcoded checkpoints once cheaper protections existed. A reorg that
+	// rewrites history at/before the checkpoint is rejected as a long-range attack.
+	// The trusting window (how recent the checkpoint must be) is the weak-subjectivity
+	// period, bounded by BondTTLBlocks + slashing depth (the eviction/unbonding
+	// analogue). Zero Height = no checkpoint (genesis-trusting; safe only at launch,
+	// on a trusted swarm, or before the network has matured). See docs/design/m0.md §10.
+	WSCheckpoint WSCheckpoint
+}
+
+// WSCheckpoint is a recent trusted (height, hash) a replica will not reorg before.
+// See Config.WSCheckpoint.
+type WSCheckpoint struct {
+	Height uint64
+	Hash   ports.Hash
 }
 
 func DefaultConfig() Config {
@@ -318,21 +340,22 @@ func DecodeBlocks(raw []byte) ([]Block, error) {
 }
 
 var (
-	ErrLowReputation  = errors.New("chain: reputation below threshold")
-	ErrNoQuorum       = errors.New("chain: insufficient valid attestations")
-	ErrBadSignature   = errors.New("chain: bad signature")
-	ErrWrongParent    = errors.New("chain: block does not extend the local head")
-	ErrDupRoot        = errors.New("chain: root already registered")
-	ErrUseConsensus   = errors.New("chain: replica is read-only; entries are committed via consensus")
-	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
-	ErrDeMatureQuorum = errors.New("chain: de-matured network requires a real-bond super-quorum (≥⅔ of live bonded weight)")
-	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
-	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
-	ErrBlockVersion   = errors.New("chain: unsupported block version")
-	ErrPublisherEntry = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
-	ErrEmptyFork      = errors.New("chain: cannot reconcile an empty fork")
-	ErrNoGenesis      = errors.New("chain: local replica has no genesis to anchor a reconcile")
-	ErrForeignGenesis = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
+	ErrLowReputation      = errors.New("chain: reputation below threshold")
+	ErrNoQuorum           = errors.New("chain: insufficient valid attestations")
+	ErrBadSignature       = errors.New("chain: bad signature")
+	ErrWrongParent        = errors.New("chain: block does not extend the local head")
+	ErrDupRoot            = errors.New("chain: root already registered")
+	ErrUseConsensus       = errors.New("chain: replica is read-only; entries are committed via consensus")
+	ErrAnchorRequired     = errors.New("chain: immature network requires anchor attestations (training wheels)")
+	ErrDeMatureQuorum     = errors.New("chain: de-matured network requires a real-bond super-quorum (≥⅔ of live bonded weight)")
+	ErrPreCheckpointReorg = errors.New("chain: fork rewrites history at or before the weak-subjectivity checkpoint (long-range reorg refused)")
+	ErrTokenRequired      = errors.New("chain: entry has no publish token (required)")
+	ErrTokenSpent         = errors.New("chain: publish token serial already spent (double-spend)")
+	ErrBlockVersion       = errors.New("chain: unsupported block version")
+	ErrPublisherEntry     = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
+	ErrEmptyFork          = errors.New("chain: cannot reconcile an empty fork")
+	ErrNoGenesis          = errors.New("chain: local replica has no genesis to anchor a reconcile")
+	ErrForeignGenesis     = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
 	// ErrRevokeUnknownRoot rejects a takedown that names a root the chain has
 	// never committed. Without this a quorum could revoke a competitor's
 	// unpublished hash, or a hash that never existed — arbitrary censorship of
@@ -1415,6 +1438,18 @@ func (c *Chain) Reconcile(fork []Block) (bool, error) {
 	}
 	if fork[0].Height != 0 || fork[0].Hash() != c.blocks[0].Hash() {
 		return false, ErrForeignGenesis // must branch from our own genesis
+	}
+	// Weak-subjectivity guard (F-1): refuse — regardless of weight — any fork that does
+	// not contain the trusted checkpoint block, i.e. that rewrites finalized history at
+	// or before it. This is the long-range-attack defense that makes the maturity latch
+	// safe for a fresh/long-offline node. Cheap and positional (fork blocks are
+	// contiguous from genesis, so index == height; the block hash covers the height, so
+	// a match pins the exact checkpoint block). Checked before the replay so a
+	// long-range fork is rejected without doing the work.
+	if cp := c.cfg.WSCheckpoint; cp.Height > 0 {
+		if uint64(len(fork)) <= cp.Height || fork[cp.Height].Hash() != cp.Hash {
+			return false, ErrPreCheckpointReorg
+		}
 	}
 	// Re-validate the candidate history end to end in a fresh replica.
 	tmp := New(c.cfg, c.rep)

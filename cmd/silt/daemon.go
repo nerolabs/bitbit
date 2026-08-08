@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,6 +88,7 @@ func cmdDaemon(args []string) error {
 	forgeBlock := fs.String("forge-block", "", "RED-TEAM / TEST-HARNESS ONLY: propose a block with a FORGED (corrupted) proposer signature to this peer ID, to prove an honest validator rejects it before attesting (#184 forged-block→reject). Never honest")
 	lowbondPropose := fs.String("lowbond-propose", "", "RED-TEAM / TEST-HARNESS ONLY: as an under-bonded validator, propose a well-formed block to this peer ID, to prove an honest validator refuses a proposer without a qualifying bond (#184 low-bond→reject). Never honest")
 	equivocate := fs.String("equivocate", "", "RED-TEAM / TEST-HARNESS ONLY: run this validator as a Byzantine EQUIVOCATOR. Given two peer validator IDs \"idX,idYZ\", it double-signs at height 1 — placing block X on idX and a heavier conflicting fork (Y,Z) on idYZ — so honest replicas that reconcile the fork catch the double-sign and slash this node (#184, proving the accountability property over the real wire). NEVER use on a real network; a correct node refuses to equivocate")
+	wsCheckpoint := fs.String("ws-checkpoint", "", "weak-subjectivity checkpoint HEIGHT:HASH (M0 F-1): a recent trusted committed block this node REFUSES to reorg at or before, regardless of fork weight — the long-range-attack defense that makes the objective maturity latch safe for a fresh/long-offline node. Obtain it out-of-band (the daemon prints `checkpoint: HEIGHT:HASH` for its committed head; cross-check several independent nodes). It must be recent — within ~the bond-TTL window. Empty = genesis-trusting (safe only at launch, on a trusted swarm, or before the network matures)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -406,6 +408,23 @@ func cmdDaemon(args []string) error {
 		// ride the same knobs as the node-side floor: a sub-floor bond earns no
 		// on-chain standing, and standing lapses without a fresh proof within the
 		// TTL. cfg.MinBondBytes is 0 unless -min-bond-floor was set.
+		var wsCP chain.WSCheckpoint
+		if *wsCheckpoint != "" {
+			parts := strings.SplitN(*wsCheckpoint, ":", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("-ws-checkpoint must be HEIGHT:HASH, got %q", *wsCheckpoint)
+			}
+			h, herr := strconv.ParseUint(parts[0], 10, 64)
+			if herr != nil {
+				return fmt.Errorf("-ws-checkpoint height %q: %w", parts[0], herr)
+			}
+			hash, perr := ports.ParseHash(parts[1])
+			if perr != nil {
+				return fmt.Errorf("-ws-checkpoint hash %q: %w", parts[1], perr)
+			}
+			wsCP = chain.WSCheckpoint{Height: h, Hash: hash}
+			fmt.Printf("chain: weak-subjectivity checkpoint pinned at %d:%s — a reorg at or before it is refused (F-1)\n", h, hash)
+		}
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			ByzantineQuorum: effByz,
@@ -413,6 +432,7 @@ func cmdDaemon(args []string) error {
 			OperatorMargin: *operatorMargin,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
+			WSCheckpoint: wsCP,
 		}, ledger.Reputation)
 		if *allowPublisher {
 			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
@@ -509,6 +529,10 @@ func cmdDaemon(args []string) error {
 				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
 					m.NakamotoBonds, m.NakamotoOperators, m.Margin,
 					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants, wheels)
+				// Export the committed head as a copy-pasteable weak-subjectivity
+				// checkpoint (F-1): a fresh/long-offline node pins one via -ws-checkpoint
+				// to refuse a long-range reorg. Publish it / cross-check across nodes.
+				fmt.Printf("  checkpoint: %d:%s\n", b.Height, b.Hash())
 			}
 			if err := chainstore.Save(chainPath, ch.Blocks(0)); err != nil {
 				fmt.Fprintln(os.Stderr, "chain save:", err)
