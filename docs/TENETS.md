@@ -50,9 +50,13 @@ which the corners *co-mature* rather than arriving finished. Precisely:
 - **Sybil-resistance is the corner that bootstraps.** It is the *weakest on a
   young network* — a small network is cheapest to flood — and it *strengthens as
   real, sustained work accrues*. During the launch window, anchor validators are
-  explicit, time-boxed training wheels that shed on measured decentralization
-  (see immutable #3: *no permanent center*). This is the live edge where the
-  novel contribution concentrates.
+  explicit, time-boxed training wheels that shed on measured decentralization via a
+  **one-way latch** (`everMature`) that, once tripped, never re-arms — so a later
+  drop in decentralization cannot hand the launch anchors permanent power (immutable
+  #3: *no permanent center*, F-1). De-maturation liveness is then a real-bond ≥⅔
+  super-quorum, and a fresh node is pinned to a recent **weak-subjectivity checkpoint**
+  for cold sync (silt is weakly subjective, like every proof-of-stake-class system).
+  This is the live edge where the novel contribution concentrates.
 
 **M0 is falsifiable, not a slogan.** It is *held* if and only if the adversarial
 red-team suite (V3), written by a party *other than the author* (see B8),
@@ -572,7 +576,13 @@ reviewed consensus.**
      (C1) is sound in the mature regime, the anchors scaffold the young one, and
      the bridge is the **shed metric** — cost-to-corrupt / Nakamoto-coefficient
      over bond-distinct *operators*, sampled Byzantine-robustly. The bet, stated
-     plainly: maturity is reached before the scaffolding can be captured.
+     plainly: maturity is reached before the scaffolding can be captured. The shed
+     is mechanized as a **one-way latch** (`everMature`) that never re-arms, so no
+     later concentration can restore a standing dependency on the anchors (F-1);
+     de-maturation liveness is a real-bond ≥⅔ super-quorum, and cold sync is pinned
+     to a **weak-subjectivity checkpoint** — the honest cost of "no permanent
+     center" is a bounded, socially-recoverable re-centralization residual (the
+     honest whale), owned in `design/m0.md` §10, not a privileged party.
   4. **Access is unsurveilled — silt refuses to surveil, and pursues
      access-privacy to the trilemma's limit** (Don't #3). silt builds *no*
      mechanism to log or link who-fetched-what, and pushes access-privacy as far

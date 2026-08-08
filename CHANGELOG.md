@@ -8,6 +8,29 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **F-1: the maturity shed is now a genuine one-way ratchet (anchors never re-arm)** (2026-08-08) —
+  A blind red-team pass (re-)found that the launch-anchor "training wheels" were gated on the **live**
+  `Mature()`, which recomputes decentralization from the *current* bonded set — so an honest whale
+  growing **real** bond past ⌊total/3⌋ could flip a matured chain back to immature and **re-arm the
+  zero-bond anchors**, either halting the chain (if the anchors were gone) or handing them permanent,
+  standing-free power (contradicting immutable #3, *no permanent center*). Fixed as a bundle:
+  - **One-way `everMature` latch** — the anchor requirement (and anchors' bond-free eligibility) is now
+    gated on whether the network has *ever* matured, a replay-derived **consensus fact** (latched in
+    `apply`, re-derived on reload, carried across a reorg). Once matured, the anchors never re-arm.
+  - **Real-bond super-quorum de-maturation fallback** — if a matured network later drops below the
+    decentralization bar, a commit needs a **real-bond super-majority** (≥⅔ of live bonded weight, no
+    anchor sign-off) instead of the retired anchors — center-less liveness that preserves accountable
+    safety (`ErrDeMatureQuorum`).
+  - **Weak-subjectivity checkpoint** — silt is now explicitly weakly subjective; a fresh/long-offline
+    node pins a recent trusted block with `-ws-checkpoint HEIGHT:HASH` and **refuses any reorg at or
+    before it** (`ErrPreCheckpointReorg`), the long-range-attack defense that makes the latch safe. The
+    daemon prints `checkpoint: HEIGHT:HASH` for its committed head so operators can publish/cross-check it.
+  - The two residuals are **owned, not hidden** (`docs/design/m0.md` §10): a bounded, socially-recoverable
+    re-centralization risk (the honest whale — the same trade Ethereum/Cosmos/Bitcoin made) and the
+    weak-subjectivity dependency itself. Regressions invert the red-team PoC (both halt and
+    permanent-center horns killed; super-quorum enforced; long-range reorg refused).
+
 ### Added
 - **`-registry-only` — the leanest public-registry role** (2026-08-08,
   [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon started with `-registry-only` serves a
