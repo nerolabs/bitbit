@@ -193,9 +193,19 @@ func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr strin
 	if tlsCfg != nil {
 		ln = tls.NewListener(ln, tlsCfg)
 	}
-	srv := &http.Server{Handler: mux}
+	// Read-cost bounding (#48): a per-IP rate limit + server timeouts keep a public
+	// registry cheap to run and hard to exhaust (slowloris, lookup floods, unbounded
+	// /all serialization).
+	lim := newIPRateLimiter(defaultRatePerSec, defaultBurst)
+	srv := &http.Server{
+		Handler:           lim.limit(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go srv.Serve(ln)
-	return ln.Addr().String(), func() { srv.Close() }, nil
+	return ln.Addr().String(), func() { lim.close(); srv.Close() }, nil
 }
 
 // Client implements ports.Registry against a Serve endpoint.
