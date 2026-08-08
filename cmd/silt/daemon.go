@@ -499,8 +499,12 @@ func cmdDaemon(args []string) error {
 			if ch.Objective() {
 				m := ch.C2Metric()
 				wheels := "engaged (young network — anchor quorum still required)"
-				if ch.Mature() {
-					wheels = "shed (decentralized enough)"
+				if ch.EverMature() {
+					// One-way latch (F-1): once shed, the anchors never re-arm.
+					wheels = "shed permanently (network matured — F-1 one-way latch)"
+					if !ch.Mature() {
+						wheels = "shed permanently (matured; live decentralization has since dropped — real-bond super-quorum in force, anchors NOT re-armed)"
+					}
 				}
 				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
 					m.NakamotoBonds, m.NakamotoOperators, m.Margin,

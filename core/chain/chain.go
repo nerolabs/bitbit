@@ -372,6 +372,20 @@ type Chain struct {
 	// ever committed a block — the monotonic decentralization signal the
 	// training wheels shed on (see Mature).
 	validatorsSeen map[ports.NodeID]bool
+	// everMature is the ONE-WAY MATURITY LATCH (F-1): true once Mature() has held
+	// at ANY committed height. The launch anchors are load-bearing only while this
+	// is FALSE, so once a network is first certified decentralized the zero-bond
+	// anchors NEVER become load-bearing again — the one-way ratchet immutable #3
+	// promises. Like validatorsSeen/bonded it is a pure, monotonic function of the
+	// committed block sequence (latched in apply, re-derived on Reload, carried
+	// across a reorg by adopt), so every replica agrees on it as a CONSENSUS fact.
+	// It is never reset. The old code gated anchors on the LIVE Mature(), which
+	// re-armed the wheels whenever concentration rose — even from one honest whale
+	// growing REAL bond — handing a zero-bond anchor permanent power, or halting the
+	// chain if the anchors were gone. De-maturation liveness AFTER the latch is
+	// carried by the real-bond super-quorum fallback (RequiredQuorum), never by
+	// re-arming anchors. See docs/design/m0.md §10 (F-1).
+	everMature bool
 	// Publisher-privacy publish tokens (F1): when tokenQuorum > 0 every entry
 	// must carry a PublishToken blind-signed by that many distinct qualified
 	// validators (issuer keys from issuerKey), and spent records each serial so
@@ -466,7 +480,10 @@ func (c *Chain) Objective() bool { return c.objective() }
 // exemption: it grants ELIGIBILITY, never fork-choice WEIGHT (weight is always
 // summed real bond), so a declared anchor cannot outweigh a real bond.
 func (c *Chain) launchAnchor(id ports.NodeID) bool {
-	return len(c.cfg.Anchors) > 0 && c.cfg.Anchors[id] && !c.Mature()
+	// Gated on the one-way latch, not the live Mature(): once the network has ever
+	// matured, anchors lose bond-free eligibility FOREVER (F-1). An anchor that
+	// registered its own real bond stays a normal validator on that real weight.
+	return len(c.cfg.Anchors) > 0 && c.cfg.Anchors[id] && !c.everMature
 }
 
 // attesterQualified reports whether id may have its attestation counted toward
@@ -713,14 +730,31 @@ func (c *Chain) RequireTokens(quorum int, issuerKey func(ports.NodeID) *rsa.Publ
 // spinning up many minimum bonds, then capture consensus once the wheels shed —
 // this is cost-to-corrupt over bond-distinct operators: a set whose weight is
 // dominated by a few bonds has a LOW coefficient and stays immature no matter how
-// many satellite keys are added. It reads the CURRENT bonded set, so maturity
-// RE-ENGAGES the wheels if decentralization later drops (the post-shed escape
-// hatch). Legacy mode has no on-chain bonded set, so it falls back to the head
-// count of distinct qualified validators seen.
+// many satellite keys are added. It reads the CURRENT bonded set — the LIVE metric.
+// It does NOT gate the anchors: that is the one-way latch EverMature() (F-1), so a
+// later drop in decentralization can never re-arm the wheels. Mature() vs
+// EverMature() diverge only in the de-maturation window, which the real-bond
+// super-quorum handles. Legacy mode has no on-chain bonded set, so it falls back to
+// the head count of distinct qualified validators seen.
 func (c *Chain) Mature() bool {
 	if c.cfg.MatureValidators <= 0 {
 		return true
 	}
+	return c.matureNow()
+}
+
+// EverMature reports the one-way maturity LATCH (F-1): whether the network has
+// been certified mature at ANY committed height. This — not the live Mature() — is
+// what gates the launch anchors, so once a network first decentralizes the anchors
+// never re-arm. A pure function of the committed blocks (see the everMature field).
+func (c *Chain) EverMature() bool { return c.everMature }
+
+// matureNow is the LIVE maturity metric over the CURRENT bonded set. Mature()
+// wraps it; the latch (everMature) is what gates anchors. The two diverge exactly
+// in the de-maturation window (everMature && !matureNow): the network matured, then
+// concentration/attrition dropped it back below the bar — handled by the real-bond
+// super-quorum, never by re-arming anchors (F-1).
+func (c *Chain) matureNow() bool {
 	if !c.objective() {
 		n := 0
 		for id := range c.validatorsSeen {
@@ -1012,10 +1046,13 @@ func (c *Chain) ValidateCommit(b *Block) error {
 	if req := c.RequiredQuorum(); valid < req {
 		return fmt.Errorf("%w: %d qualified, need %d", ErrNoQuorum, valid, req)
 	}
-	// Training wheels: while immature, the quorum must ALSO carry anchor
-	// sign-off, so a Sybil quorum can't capture a young network before it has
-	// decentralized. Sheds automatically once the network is Mature.
-	if len(c.cfg.Anchors) > 0 && c.cfg.AnchorQuorum > 0 && !c.Mature() {
+	// Training wheels: while the network has NEVER YET matured, the quorum must
+	// ALSO carry anchor sign-off, so a Sybil quorum can't capture a young network
+	// before it has decentralized. Gated on the one-way latch (everMature), NOT the
+	// live Mature() — so a later drop in decentralization (e.g. an honest whale
+	// concentrating real bond) can never re-arm the anchors (F-1). Once matured,
+	// de-maturation liveness is the real-bond super-quorum (RequiredQuorum), not this.
+	if len(c.cfg.Anchors) > 0 && c.cfg.AnchorQuorum > 0 && !c.everMature {
 		anchors := 0
 		for id := range seen { // seen = the distinct qualified attesters
 			if c.cfg.Anchors[id] {
@@ -1260,6 +1297,13 @@ func (c *Chain) apply(b Block) {
 			c.validatorsSeen[id] = true
 		}
 	}
+	// Latch maturity (F-1): once the network is first certified mature, record it
+	// permanently, so the launch anchors never re-arm. Checked AFTER this block's
+	// bonds/slashes/TTL are applied, so it reflects the post-block bonded set.
+	// Monotonic — only ever set, never cleared.
+	if !c.everMature && c.Mature() {
+		c.everMature = true
+	}
 }
 
 // Weight is the chain's fork-choice weight: the cumulative count, over every
@@ -1388,6 +1432,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.bondRootProven = t.bondRootProven
 	c.bondRegHeight = t.bondRegHeight
 	c.slashed = t.slashed
+	c.everMature = t.everMature // the maturity latch is a function of the adopted history (F-1)
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {
