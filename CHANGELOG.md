@@ -9,6 +9,14 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **`-registry-only` — the leanest public-registry role** (2026-08-08,
+  [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon started with `-registry-only` serves a
+  file-backed registry over HTTPS and constructs **no storage node at all** — no DHT, chunk store,
+  chain, or caretaker. It sits below `-freeload` (which is still a full routing node that merely refuses
+  to host content): a public-infrastructure operator can now run a rendezvous registry at minimal cost.
+  The daemon returns to a tiny registry-serving path before any of the node machinery is built. Proven
+  over real TLS (`e2e/registry_only_test.go`: a pinned client publishes + looks up an entry, and the
+  daemon never announces a routing peer). With `-freeload` (PR #201) this completes #47.
 - **Registry read-cost bounding — keep public registries cheap to run** (2026-08-08,
   [#48](https://github.com/nerolabs/silt/issues/48)) — A registry is a costless public good only if a
   single caller can't drive unbounded cost, so the registry HTTP server now enforces a **per-client-IP

@@ -53,6 +53,7 @@ func cmdDaemon(args []string) error {
 	care := fs.String("care", "", "comma-separated care links (siltcare:...) to repair — no decryption possible or needed")
 	capacity := fs.String("capacity", "5G", "storage pledge, e.g. 2G, 500M (matches the client's default so the node contributes measurable, countable storage; \"\" = unlimited but doesn't count toward network storage)")
 	freeload := fs.Bool("freeload", false, "role separation (#47): serve the registry/relay/routing role but REFUSE to store or serve content — for public-infrastructure operators who run a rendezvous registry without being conscripted into hosting arbitrary content. The node still carries DHT routing; it just holds and serves no chunks")
+	registryOnly := fs.Bool("registry-only", false, "the LEANEST public-registry role (#47): serve a file-backed registry over HTTPS and construct NO storage node at all — no DHT, chunk store, chain, or caretaker. Unlike -freeload (a full routing node that refuses to host content), this builds nothing but the registry server, so a public-infrastructure operator runs a rendezvous registry at minimal cost. Needs -serve-registry <addr>")
 	// Empty default is deliberate: no built-in seed domain (neutral infra,
 	// community-run) — see the discovery package doc (#27 Part A).
 	dnsSeed := fs.String("dns-seed", "", "domain whose TXT records list bootstrap peers")
@@ -111,6 +112,32 @@ func cmdDaemon(args []string) error {
 		}
 	}
 	id := ident.NodeID()
+
+	// -registry-only (#47): the leanest public-registry role — serve a file-backed
+	// registry over HTTPS and construct NO storage node (no DHT, chunk store, chain, or
+	// caretaker). This returns before the node, transport, and everything downstream is
+	// built, so a rendezvous registry runs at minimal cost. Blocks until the process is
+	// stopped.
+	if *registryOnly {
+		if *serveRegistry == "" {
+			return fmt.Errorf("-registry-only needs -serve-registry <addr> (the address to serve the registry on)")
+		}
+		if err := os.MkdirAll(*storeDir, 0o755); err != nil {
+			return err
+		}
+		freg, err := fileregistry.Open(filepath.Join(*storeDir, "registry.jsonl"))
+		if err != nil {
+			return err
+		}
+		bound, shutdown, err := httpregistry.ServeTLS(*serveRegistry, ident, freg)
+		if err != nil {
+			return err
+		}
+		defer shutdown()
+		fmt.Printf("registry-only: %s serving a file-backed registry at https://%s (no storage node, #47)\n", id, bound)
+		fmt.Println("serving; Ctrl-C to stop")
+		select {} // block until the process is stopped; the registry server runs in its own goroutine
+	}
 
 	loop := eventloop.New()
 	tr, err := tcpnet.New(loop, ident, *listen)
