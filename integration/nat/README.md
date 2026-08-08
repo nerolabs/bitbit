@@ -62,6 +62,18 @@ docker compose down -v                     # tear down when done
 - **`./run.sh`** — cross-NAT publish → fetch through the relay (proves the
   relay path; the automatable form of the #65 fetch-under-load test — raise the
   fetch concurrency here to exercise the retry against a real saturated relay).
+- **`./loadtest.sh`** — the #65 **fetch-under-load / saturated-relay** field
+  test, on its own `-p natload` project + `docker-compose.load.yml` overlay
+  (networks 10.70/71/72, image `silt-natload`) so it never collides with a
+  concurrent `./run.sh`. Same topology, but it **bandwidth-caps the relay's
+  public interface with `tc qdisc htb`** (NET_ADMIN) and fires **N concurrent
+  `silt swarm get`** from nodeB through it. Asserts graceful degradation: every
+  fetch bit-perfect, none hangs (each `timeout`-capped), splices really crossed.
+  `N=<n>`, `RATE=<r>mbit`, `FILE_BYTES=<b>` are tunable. Default `N=12` sits
+  under the relay's per-peer splice cap (`PerPeerSessions=16`) and PASSES;
+  `N=24 ./loadtest.sh` enters the STRESS zone where the shallow fetch retry
+  budget can't outlast sustained saturation and some fetches fail loudly with
+  `netget: manifest chunks unreachable` (a real finding — see the PR).
 - **`RESTART=1 ./run.sh`** — the #69 test: after the fetch, restart the whole
   swarm (stores persist, in-memory provider records do not) and re-fetch,
   proving each holder reloads its persisted proofs and re-announces its coded

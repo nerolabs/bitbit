@@ -8,6 +8,8 @@ dist/
 
 # host-built binary for the NAT integration harness (rebuilt by run.sh)
 integration/nat/silt
+integration/nat/silt-natload
+integration/nat/silt.load.tmp
 integration/nat/probe.bin
 
 # top-level built binary (go build -o silt ./cmd/silt) and default stores

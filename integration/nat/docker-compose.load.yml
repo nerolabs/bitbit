@@ -1,0 +1,130 @@
+# Field test #7 — fetch-under-load / saturated relay (issue #65).
+#
+# A self-contained twin of docker-compose.yml that REUSES the same Dockerfile,
+# natgw.sh and node.sh, but on its OWN networks (10.70/71/72) and image tag so
+# it never collides with a concurrent `docker compose -p nat` run of the base
+# harness. Topology is identical: two NATed nodes + a public relay/registry,
+# content forced to live only on nodeA (relay -capacity=1) so every fetched
+# byte must cross the relay.
+#
+#   lanA (internal) ──[natA: MASQUERADE]──┐
+#     └─ nodeA (NATed, publisher)          │
+#                                          ├─ public ── relay (+ registry)
+#   lanB (internal) ──[natB: MASQUERADE]──┘
+#     └─ nodeB (NATed, fetcher under load)
+#
+# loadtest.sh brings this up, publishes from A, bandwidth-caps the relay's
+# public interface with `tc qdisc` (NET_ADMIN), then fires N concurrent
+# `silt swarm get` from B and asserts graceful degradation: every fetch
+# completes bit-perfect, none hangs, splices really crossed, backoff engaged.
+
+networks:
+  public:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.70.0.0/24 }]
+  lanA:
+    driver: bridge
+    internal: true          # no route out except through natA
+    ipam:
+      config: [{ subnet: 10.71.0.0/24 }]
+  lanB:
+    driver: bridge
+    internal: true
+    ipam:
+      config: [{ subnet: 10.72.0.0/24 }]
+
+services:
+  relay:
+    image: silt-natload
+    # NET_ADMIN so loadtest.sh can `tc qdisc` a bandwidth cap onto eth0 — the
+    # saturation knob for this scenario (there is no relay-rate CLI flag; the
+    # relay's own MaxSessions/PerPeerSessions caps are hardcoded defaults).
+    cap_add: [NET_ADMIN]
+    command:
+      - silt
+      - daemon
+      - -id-seed=1                    # deterministic NodeID across runs
+      - -listen=0.0.0.0:4001
+      - -relay=0.0.0.0:4002
+      - -serve-registry=0.0.0.0:4003
+      - -advertise=10.70.0.10:4001
+      - -store=/data
+      - -capacity=1        # relay+registry only: refuse storage so content lives on nodeA, forcing splices
+      - -mdns=false
+      - -debug
+    networks:
+      public:
+        ipv4_address: 10.70.0.10
+
+  natA:
+    image: silt-natload
+    entrypoint: ["natgw.sh"]
+    environment:
+      LAN_SUBNET: 10.71.0.0/24
+      NAT_MODE: ${NAT_MODE:-cone}
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      public:
+        ipv4_address: 10.70.0.11
+      lanA:
+        ipv4_address: 10.71.0.2
+
+  natB:
+    image: silt-natload
+    entrypoint: ["natgw.sh"]
+    environment:
+      LAN_SUBNET: 10.72.0.0/24
+      NAT_MODE: ${NAT_MODE:-cone}
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      public:
+        ipv4_address: 10.70.0.12
+      lanB:
+        ipv4_address: 10.72.0.2
+
+  nodeA:
+    image: silt-natload
+    entrypoint: ["node.sh"]
+    environment:
+      GATEWAY: 10.71.0.2
+    cap_add: [NET_ADMIN]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=5G
+      - -mdns=false
+      - -debug
+      - -bootstrap=${RELAY_ID:-unset}@10.70.0.10:4001
+      - -relay-via=${RELAY_ID:-unset}@10.70.0.10:4002
+      - -registry=${RELAY_ID:-unset}@https://10.70.0.10:4003
+    networks:
+      lanA:
+        ipv4_address: 10.71.0.100
+
+  nodeB:
+    image: silt-natload
+    entrypoint: ["node.sh"]
+    environment:
+      GATEWAY: 10.72.0.2
+    cap_add: [NET_ADMIN]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=1        # the NATed fetcher vantage (holds nothing)
+      - -mdns=false
+      - -debug
+      - -bootstrap=${RELAY_ID:-unset}@10.70.0.10:4001
+      - -relay-via=${RELAY_ID:-unset}@10.70.0.10:4002
+      - -registry=${RELAY_ID:-unset}@https://10.70.0.10:4003
+    networks:
+      lanB:
+        ipv4_address: 10.72.0.100
