@@ -68,7 +68,7 @@ func cmdDaemon(args []string) error {
 	anchorList := fs.String("anchors", "", "launch-window training wheels: comma-separated anchor validator IDs whose sign-off an immature-network commit also requires (empty = no training wheels)")
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
 	matureValidators := fs.Int("mature-validators", 0, "required NAKAMOTO COEFFICIENT (M0 H4): the anchor requirement sheds only once this many bond-DISTINCT operators are needed to reach ⅓ of the bonded weight — cost-to-corrupt, not a head-count, so one operator with many keys can't trip the wheels off (0 = never require anchors)")
-	operatorMargin := fs.Int("operator-margin", 1, "operator margin M (M0 C2 / D-C2): the maturity shed discounts the bond-distinct Nakamoto coefficient by M (⌊k̂/M⌋) — since on-chain data carries no operator label, one operator may split a stake across ~M keys, so a splitter must clear mature-validators×M distinct bonds to shed the wheels. 1 = no discount (single-operator/trusted); an untrusted swarm sets it higher for margin against key-splitting")
+	operatorMargin := fs.Int("operator-margin", 1, "operator margin M (M0 C2 / D-C2): the maturity shed discounts the bond-distinct Nakamoto coefficient by M (⌊k̂/M⌋) — since on-chain data carries no operator label, one operator may split a stake across ~M keys, so a splitter must clear mature-validators×M distinct bonds to shed the wheels. LEFT UNSET it defaults to a conservative M>1 for an untrusted objective swarm (safe-by-default, like -min-bond-floor); an explicit 1 = no split margin (single-operator/trusted). M stays a heuristic — unverifiable on-chain (#182)")
 	quorum := fs.Int("quorum", 3, "MINIMUM attestations (excluding the proposer) to commit a block — a floor; with -byzantine-quorum the effective requirement rises to the Byzantine threshold over the qualified set. Lower only for a trusted/one-box swarm")
 	byzantineQuorum := fs.Bool("byzantine-quorum", false, "size the commit quorum at the Byzantine threshold (M0 H4): the support set becomes a supermajority n−f of the qualified bonded set, so two quorums always share an honest validator (safety as the set grows). LEFT UNSET it defaults ON for an untrusted objective validator; an explicit =false opts out (trusted swarm). Only ever RAISES the bar")
 	objective := fs.Bool("objective", true, "DEFAULT-ON for an untrusted validator: consensus fork-choice by OBJECTIVE on-chain bond (F6), so eligibility, quorum, and fork-choice weight are a function of verifiable on-chain bond registrations — identical on every replica — and honest replicas can't diverge under a partition (the M0 consensus denial). Bootstrap a multi-validator quorum with -anchors (the launch set); validators register their real bonds live as they propose. Auto-off for a trusted swarm (-min-rep 0). Pass -objective=false to run the legacy subjective path, which does NOT hold the M0 denial under an adversarial partition")
@@ -211,7 +211,7 @@ func cmdDaemon(args []string) error {
 	// recomputed just-in-time. At the measured ~270 MB/s plot throughput
 	// (bond.BenchmarkSeal) and this daemon's ~2s window that is ~540 MiB, so the
 	// default carries ~2x margin.
-	floorSet, ttlSet, byzSet := false, false, false
+	floorSet, ttlSet, byzSet, marginSet := false, false, false, false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "min-bond-floor":
@@ -220,6 +220,8 @@ func cmdDaemon(args []string) error {
 			ttlSet = true
 		case "byzantine-quorum":
 			byzSet = true
+		case "operator-margin":
+			marginSet = true
 		}
 	})
 	explicitFloor, ferr := parseSize(*minBondFloor)
@@ -253,6 +255,18 @@ func cmdDaemon(args []string) error {
 	effByz, byzDefaulted := effectiveByzantineQuorum(byzSet, *byzantineQuorum, objectivePath)
 	if byzDefaulted {
 		fmt.Println("consensus: Byzantine quorum sizing defaulted ON for this untrusted (objective) swarm — a commit needs a supermajority of the qualified bonded set so two quorums always share an honest validator. Override with -byzantine-quorum=false (safe only for a trusted swarm).")
+	}
+	// The C2 operator margin M gets the same safe-by-default treatment (D-C2 / red-team
+	// blind-2026-08-08): shipping the split-defense mechanism but defaulting M=1 left an
+	// untrusted objective swarm with ZERO margin against one operator splitting real stake
+	// across NodeIDs to fake decentralization — the Invariant-B footgun ("safe config is
+	// the default"). It only ever RAISES the bar to shed the training wheels (a splitter
+	// must clear mature-validators×M distinct bonds), so an auto-armed M>1 never weakens an
+	// existing config. M stays an honest heuristic (on-chain data carries no operator label,
+	// #182); this defaults it to a conservative value, tunable per deployment.
+	effMargin, marginDefaulted := effectiveOperatorMargin(marginSet, *operatorMargin, objectivePath)
+	if marginDefaulted {
+		fmt.Printf("consensus: operator-margin defaulted to %d for this untrusted (objective) swarm — the C2 maturity shed discounts the bond-distinct Nakamoto coefficient by M, so one operator splitting real stake across ~M NodeIDs cannot fake the decentralization that sheds the launch anchors. Override with -operator-margin (1 = no split margin; safe only for a trusted/single-operator swarm).\n", effMargin)
 	}
 	if effFloor > 0 {
 		cfg.MinBondBytes = effFloor
@@ -429,7 +443,7 @@ func cmdDaemon(args []string) error {
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			ByzantineQuorum: effByz,
 			Anchors:         anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
-			OperatorMargin: *operatorMargin,
+			OperatorMargin: effMargin,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
 			WSCheckpoint: wsCP,
@@ -1183,4 +1197,30 @@ func effectiveByzantineQuorum(byzSet, explicit, objectivePath bool) (on, default
 		return true, true
 	}
 	return false, false
+}
+
+// DerivedOperatorMargin is the C2 split-defense margin M an untrusted (objective)
+// validator gets when the operator sets none. M discounts the bond-distinct Nakamoto
+// coefficient to ⌊k̂/M⌋, so a single operator splitting real stake across ~M NodeIDs
+// cannot fake the decentralization that sheds the launch anchors — a splitter must
+// clear mature-validators×M distinct bonds. Shipping the mechanism but defaulting
+// M=1 (no margin) was the Invariant-B footgun the blind red-team flagged. The value is
+// a conservative heuristic (Evolving) — M stays fundamentally unverifiable on-chain
+// (#182), so this is margin, not proof; a real deployment can raise it.
+const DerivedOperatorMargin = 2
+
+// effectiveOperatorMargin decides the C2 operator margin, mirroring the floor/TTL/
+// Byzantine derivations: an explicit -operator-margin always wins (including 1, the
+// trusted/single-operator opt-out), otherwise the untrusted objective path gets
+// DerivedOperatorMargin and every other posture keeps the explicit value. It only ever
+// raises the bar to shed the wheels, so defaulting it up for an untrusted validator can
+// never weaken an existing config.
+func effectiveOperatorMargin(marginSet bool, explicit int, objectivePath bool) (margin int, defaulted bool) {
+	if marginSet {
+		return explicit, false
+	}
+	if objectivePath && explicit < DerivedOperatorMargin {
+		return DerivedOperatorMargin, true
+	}
+	return explicit, false
 }

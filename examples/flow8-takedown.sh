@@ -42,8 +42,12 @@ PEERA=$(awk '/^peer:/{print $2}' "$W/opA.stdout"); REGA=$(grep '^registry:' "$W/
 PEERB=$(awk '/^peer:/{print $2}' "$W/opB.stdout"); REGB=$(grep '^registry:' "$W/opB.stdout" | sed -E 's/.*serving ([^ ]+).*/\1/')
 
 echo "=== publish the same file to both (convergent → same root) ==="
-$SILT swarm add "$W/doc.bin" -peers "$PEERA" -registry "$REGA" >"$W/addA.out" 2>&1
-$SILT swarm add "$W/doc.bin" -peers "$PEERB" -registry "$REGB" >"$W/addB.out" 2>&1
+# -mode convergent is REQUIRED for the identical-root premise: swarm add defaults to
+# -mode private (random per-file key, H6), which would give two DIFFERENT roots and
+# make this test deny one root while confirming an unrelated one still serves. With
+# convergent, both operators hold the SAME root, so the takedown is tested on it.
+$SILT swarm add "$W/doc.bin" -mode convergent -peers "$PEERA" -registry "$REGA" >"$W/addA.out" 2>&1
+$SILT swarm add "$W/doc.bin" -mode convergent -peers "$PEERB" -registry "$REGB" >"$W/addB.out" 2>&1
 LINK=$(grep -o 'silt:v1:[^ ]*' "$W/addA.out" | head -1); LINKB=$(grep -o 'silt:v1:[^ ]*' "$W/addB.out" | head -1)
 ROOTHEX=$($SILT info "$LINK" -store "$W/opA" 2>/dev/null | awk '/^root:/{print $2}')
 echo "link A: $LINK"; echo "link B: $LINKB"; echo "ROOTHEX=$ROOTHEX"
