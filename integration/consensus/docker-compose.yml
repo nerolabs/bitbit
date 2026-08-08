@@ -1,0 +1,155 @@
+# Multi-validator consensus + partition-heal, on one host, in containers:
+#
+#   flat network 10.50.0.0/24 (all four validators can route to each other)
+#
+#     valA (10.50.0.11)  registry  ─┐   GROUP 1 (heavier): commits [g,a1,a2]
+#     valB (10.50.0.12)  attester  ─┘   — NOT partitioned; a healed C reconnects here
+#
+#     valC (10.50.0.13)  registry  ─┐   GROUP 2 (lighter): commits [g,c1]
+#     valD (10.50.0.14)  attester  ─┘   — carry -block-peers valA,valB → severed link
+#
+# All four share the SAME -anchors launch set, so every replica starts from an
+# identical genesis config and objective fork-choice weight is computed the same
+# way everywhere. run.sh derives each NodeID from its -id-seed up front (via
+# `silt id`), so -anchors / -attesters / -block-peers are fillable before launch.
+#
+# The M0 keystone under test: OBJECTIVE on-chain-bond fork-choice. Under the
+# partition, the two groups each commit their OWN fork and do NOT diverge onto a
+# shared-but-conflicting head; when C heals (restart WITHOUT -block-peers) it
+# reloads its persisted [g,c1], sees group 1's heavier fork, and REORGS onto it —
+# the whole set converges to the heavier-bonded chain.
+
+networks:
+  swarm:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.50.0.0/24 }]
+
+# Named volumes so each validator's /data (chain.cbor, plot, proofs) PERSISTS
+# across a container recreate. This is load-bearing for the heal: valC is
+# recreated WITHOUT -block-peers (the heal override), and it must reload its
+# persisted [g,c1] from the SAME store to reconcile against the heavier fork —
+# a fresh empty store would just catch up, not reload-and-reconcile.
+volumes:
+  dataA:
+  dataB:
+  dataC:
+  dataD:
+
+services:
+  # GROUP 1 — heavier fork. valA hosts a chain-backed registry; valB attests it.
+  valA:
+    image: silt-consensus
+    command:
+      - silt
+      - daemon
+      - -id-seed=7001
+      - -listen=0.0.0.0:4001
+      - -advertise=10.50.0.11:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -validator
+      - -min-bond=1M
+      - -mature-validators=99          # never shed the anchors: keep a stable objective launch set
+      - -anchors=${ANCHORS:-unset}
+      - -attesters=${ID_B:-unset}
+      - -quorum=1
+      - -min-bond-floor=0
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - dataA:/data
+    networks:
+      swarm:
+        ipv4_address: 10.50.0.11
+
+  valB:
+    image: silt-consensus
+    command:
+      - silt
+      - daemon
+      - -id-seed=7002
+      - -listen=0.0.0.0:4001
+      - -advertise=10.50.0.12:4001
+      - -store=/data
+      - -validator
+      - -min-bond=1M
+      - -mature-validators=99
+      - -anchors=${ANCHORS:-unset}
+      - -attesters=${ID_A:-unset}
+      - -bootstrap=${ID_A:-unset}@10.50.0.11:4001
+      - -quorum=1
+      - -min-bond-floor=0
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - dataB:/data
+    networks:
+      swarm:
+        ipv4_address: 10.50.0.12
+
+  # GROUP 2 — lighter fork. valC hosts its own registry; valD attests it. Both
+  # PARTITIONED from group 1 via -block-peers (drop all traffic to/from A,B).
+  valC:
+    image: silt-consensus
+    command:
+      - silt
+      - daemon
+      - -id-seed=7003
+      - -listen=0.0.0.0:4001
+      - -advertise=10.50.0.13:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -validator
+      - -min-bond=1M
+      - -mature-validators=99
+      - -anchors=${ANCHORS:-unset}
+      - -attesters=${ID_D:-unset}
+      - -block-peers=${ID_A:-unset},${ID_B:-unset}
+      - -quorum=1
+      - -min-bond-floor=0
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - dataC:/data
+    networks:
+      swarm:
+        ipv4_address: 10.50.0.13
+
+  valD:
+    image: silt-consensus
+    command:
+      - silt
+      - daemon
+      - -id-seed=7004
+      - -listen=0.0.0.0:4001
+      - -advertise=10.50.0.14:4001
+      - -store=/data
+      - -validator
+      - -min-bond=1M
+      - -mature-validators=99
+      - -anchors=${ANCHORS:-unset}
+      - -attesters=${ID_C:-unset}
+      - -bootstrap=${ID_C:-unset}@10.50.0.13:4001
+      - -block-peers=${ID_A:-unset},${ID_B:-unset}
+      - -quorum=1
+      - -min-bond-floor=0
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    volumes:
+      - dataD:/data
+    networks:
+      swarm:
+        ipv4_address: 10.50.0.14
