@@ -8,6 +8,73 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Security
+- **F-1: the maturity shed is now a genuine one-way ratchet (anchors never re-arm)** (2026-08-08) —
+  A blind red-team pass (re-)found that the launch-anchor "training wheels" were gated on the **live**
+  `Mature()`, which recomputes decentralization from the *current* bonded set — so an honest whale
+  growing **real** bond past ⌊total/3⌋ could flip a matured chain back to immature and **re-arm the
+  zero-bond anchors**, either halting the chain (if the anchors were gone) or handing them permanent,
+  standing-free power (contradicting immutable #3, *no permanent center*). Fixed as a bundle:
+  - **One-way `everMature` latch** — the anchor requirement (and anchors' bond-free eligibility) is now
+    gated on whether the network has *ever* matured, a replay-derived **consensus fact** (latched in
+    `apply`, re-derived on reload, carried across a reorg). Once matured, the anchors never re-arm.
+  - **Real-bond super-quorum de-maturation fallback** — if a matured network later drops below the
+    decentralization bar, a commit needs a **real-bond super-majority** (≥⅔ of live bonded weight, no
+    anchor sign-off) instead of the retired anchors — center-less liveness that preserves accountable
+    safety (`ErrDeMatureQuorum`).
+  - **Weak-subjectivity checkpoint** — silt is now explicitly weakly subjective; a fresh/long-offline
+    node pins a recent trusted block with `-ws-checkpoint HEIGHT:HASH` and **refuses any reorg at or
+    before it** (`ErrPreCheckpointReorg`), the long-range-attack defense that makes the latch safe. The
+    daemon prints `checkpoint: HEIGHT:HASH` for its committed head so operators can publish/cross-check it.
+  - The two residuals are **owned, not hidden** (`docs/design/m0.md` §10): a bounded, socially-recoverable
+    re-centralization risk (the honest whale — the same trade Ethereum/Cosmos/Bitcoin made) and the
+    weak-subjectivity dependency itself. Regressions invert the red-team PoC (both halt and
+    permanent-center horns killed; super-quorum enforced; long-range reorg refused).
+
+### Changed
+- **Truth-in-labelling sweep + split-defense safe-default — remediating the M0 blind
+  red-team + acceptance passes** (2026-08-08) — The reviews found the composition sound (no C1
+  discount, no C2 capture, demand→standing firewall holds both directions) but flagged a cluster of
+  *docs-ahead-of-code* overclaims and two documentation gaps. Corrected:
+  - **The time (T) axis is relabelled as retention-only.** `Reputation()` has no acquisition-time
+    term (`firstSeenTick` is recorded but read by no standing calc), so full standing is granted on
+    the first passing bond challenge and acquisition is priced by **D alone**. The docs (`m0.md` §3
+    & §4, `TENETS.md`, `core/credit/credit.go`) previously asserted T was a live acquisition factor
+    ("cannot buy last month's uptime"); they now state T ships for *retention only* (decay/TTL) and
+    that a time-acquisition ramp is deferred (a bare age gate is pre-farmable — the coin-age
+    anti-pattern; the only sound form is a continuous bond-anchored VDF, M1+).
+  - **`GET /all` registry read-cost is now priced by work, not per request** (F-3). A per-IP token
+    bucket that charges one token regardless of endpoint metered the wrong quantity — `/all`
+    serializes the whole registry O(N) for the same token as a 183-byte `/lookup` (~20,000×
+    amplification at N=20k). `/all` now additionally charges ~one token per 64 entries served,
+    draining the source's bucket into bounded debt, so a single caller can't repeatedly amplify one
+    token into a full-registry dump. Regression: `TestChargePricesAllByWork`. (A *distributed* `/all`
+    flood and full cursor pagination remain post-launch — the #48 entry now says so.)
+  - **The C2 operator margin M is safe-by-default.** `-operator-margin` now auto-arms to a
+    conservative `M>1` for an untrusted (objective) validator — exactly as `-min-bond-floor` and
+    `-byzantine-quorum` already do — instead of shipping `M=1` (zero protection against one operator
+    splitting real stake across NodeIDs to fake the decentralization that sheds the launch anchors).
+    An explicit `-operator-margin 1` still opts out for a trusted/single-operator swarm. M stays an
+    honest heuristic (unverifiable on-chain, #182). Regression:
+    `TestOperatorMarginDefaultsAboveOneForUntrustedValidator`.
+  - **The seam-4 demand-receipt one-liner (`m0.md`) no longer reads as closed.** Two residual leaks
+    (a receipt is forgeable with zero object bytes; a bonded-mode receipt links fetch→standing key)
+    are neutralized *today* by the firewall (demand has no consensus consumer) but must be closed
+    before any demand→standing fusion — now stated as such.
+
+### Fixed
+- **Acceptance-pass documentation gaps** (2026-08-08) — From the fresh-operator acceptance pass (all
+  nine flows worked; these were doc/test issues, not broken capabilities):
+  - `docs/user-seam.md` Role 4 "become a validator" walkthrough errored as written — the default
+    objective fork-choice path needs `-anchors` to bootstrap a young network's on-chain bonded weight,
+    which the walkthrough omitted (`bonded 0, needs …`). It now passes `-objective=false` to match the
+    cited test `TestBondEarnedStandingCommitsOverTCP`, with a note on the objective/anchor launch path.
+  - `README.md` said the default add mode was "convergent"; the default is `-mode private` (H6). Fixed.
+  - `examples/flow8-takedown.sh` published with the (now private) default, giving two *different* roots
+    so the takedown test denied one root and confirmed an unrelated one still served. It now publishes
+    `-mode convergent` so both operators hold the **same** root, actually demonstrating per-operator
+    takedown of a shared root.
+
 ### Added
 - **`-registry-only` — the leanest public-registry role** (2026-08-08,
   [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon started with `-registry-only` serves a
@@ -22,10 +89,12 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   single caller can't drive unbounded cost, so the registry HTTP server now enforces a **per-client-IP
   token-bucket rate limit** (generous defaults — 20 req/s, burst 40 — so normal clients never notice;
   sustained floods from one source get `429`) plus **server timeouts** (read-header / read / write /
-  idle) against slowloris and lookup/`/all`-serialization floods. Idle rate buckets are pruned on a
-  timer so a caller cycling source IPs can't grow the bucket map without bound (the map would be its
-  own cost vector). Covers the read-cost-bounding lever of #48; liveness-pruning of dead entries and
-  federation/sharding remain as post-launch work.
+  idle) against slowloris. Idle rate buckets are pruned on a timer so a caller cycling source IPs
+  can't grow the bucket map without bound (the map would be its own cost vector). `GET /all` is
+  additionally **priced by work** (see the Fixed entry below) — a flat token bucket alone meters
+  request *count*, not the O(N) serialization `/all` does. Covers the read-cost-bounding lever of #48
+  for a **single source**; a distributed `/all` flood, full cursor pagination, liveness-pruning of
+  dead entries, and federation/sharding remain as post-launch work.
 
 ### Fixed
 - **Prepaid publish credits were silently dropped over real TCP** (2026-08-08,

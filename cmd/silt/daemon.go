@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func cmdDaemon(args []string) error {
 	anchorList := fs.String("anchors", "", "launch-window training wheels: comma-separated anchor validator IDs whose sign-off an immature-network commit also requires (empty = no training wheels)")
 	anchorQuorum := fs.Int("anchor-quorum", 0, "anchor attestations an immature-network commit needs (0 = off)")
 	matureValidators := fs.Int("mature-validators", 0, "required NAKAMOTO COEFFICIENT (M0 H4): the anchor requirement sheds only once this many bond-DISTINCT operators are needed to reach ⅓ of the bonded weight — cost-to-corrupt, not a head-count, so one operator with many keys can't trip the wheels off (0 = never require anchors)")
-	operatorMargin := fs.Int("operator-margin", 1, "operator margin M (M0 C2 / D-C2): the maturity shed discounts the bond-distinct Nakamoto coefficient by M (⌊k̂/M⌋) — since on-chain data carries no operator label, one operator may split a stake across ~M keys, so a splitter must clear mature-validators×M distinct bonds to shed the wheels. 1 = no discount (single-operator/trusted); an untrusted swarm sets it higher for margin against key-splitting")
+	operatorMargin := fs.Int("operator-margin", 1, "operator margin M (M0 C2 / D-C2): the maturity shed discounts the bond-distinct Nakamoto coefficient by M (⌊k̂/M⌋) — since on-chain data carries no operator label, one operator may split a stake across ~M keys, so a splitter must clear mature-validators×M distinct bonds to shed the wheels. LEFT UNSET it defaults to a conservative M>1 for an untrusted objective swarm (safe-by-default, like -min-bond-floor); an explicit 1 = no split margin (single-operator/trusted). M stays a heuristic — unverifiable on-chain (#182)")
 	quorum := fs.Int("quorum", 3, "MINIMUM attestations (excluding the proposer) to commit a block — a floor; with -byzantine-quorum the effective requirement rises to the Byzantine threshold over the qualified set. Lower only for a trusted/one-box swarm")
 	byzantineQuorum := fs.Bool("byzantine-quorum", false, "size the commit quorum at the Byzantine threshold (M0 H4): the support set becomes a supermajority n−f of the qualified bonded set, so two quorums always share an honest validator (safety as the set grows). LEFT UNSET it defaults ON for an untrusted objective validator; an explicit =false opts out (trusted swarm). Only ever RAISES the bar")
 	objective := fs.Bool("objective", true, "DEFAULT-ON for an untrusted validator: consensus fork-choice by OBJECTIVE on-chain bond (F6), so eligibility, quorum, and fork-choice weight are a function of verifiable on-chain bond registrations — identical on every replica — and honest replicas can't diverge under a partition (the M0 consensus denial). Bootstrap a multi-validator quorum with -anchors (the launch set); validators register their real bonds live as they propose. Auto-off for a trusted swarm (-min-rep 0). Pass -objective=false to run the legacy subjective path, which does NOT hold the M0 denial under an adversarial partition")
@@ -87,6 +88,7 @@ func cmdDaemon(args []string) error {
 	forgeBlock := fs.String("forge-block", "", "RED-TEAM / TEST-HARNESS ONLY: propose a block with a FORGED (corrupted) proposer signature to this peer ID, to prove an honest validator rejects it before attesting (#184 forged-block→reject). Never honest")
 	lowbondPropose := fs.String("lowbond-propose", "", "RED-TEAM / TEST-HARNESS ONLY: as an under-bonded validator, propose a well-formed block to this peer ID, to prove an honest validator refuses a proposer without a qualifying bond (#184 low-bond→reject). Never honest")
 	equivocate := fs.String("equivocate", "", "RED-TEAM / TEST-HARNESS ONLY: run this validator as a Byzantine EQUIVOCATOR. Given two peer validator IDs \"idX,idYZ\", it double-signs at height 1 — placing block X on idX and a heavier conflicting fork (Y,Z) on idYZ — so honest replicas that reconcile the fork catch the double-sign and slash this node (#184, proving the accountability property over the real wire). NEVER use on a real network; a correct node refuses to equivocate")
+	wsCheckpoint := fs.String("ws-checkpoint", "", "weak-subjectivity checkpoint HEIGHT:HASH (M0 F-1): a recent trusted committed block this node REFUSES to reorg at or before, regardless of fork weight — the long-range-attack defense that makes the objective maturity latch safe for a fresh/long-offline node. Obtain it out-of-band (the daemon prints `checkpoint: HEIGHT:HASH` for its committed head; cross-check several independent nodes). It must be recent — within ~the bond-TTL window. Empty = genesis-trusting (safe only at launch, on a trusted swarm, or before the network matures)")
 	debug := fs.Bool("debug", false, "shorthand for -log debug (the full firehose)")
 	logLevel := fs.String("log", "", "write events at or above this level to <store>/debug.log (error|warn|info|debug); info narrates the normal path (placements, commits, repairs) to validate behavior in the field without the debug firehose")
 	relayServe := fs.String("relay", "", "offer relay service at this address (e.g. 0.0.0.0:4002): content-blind ciphertext forwarding for NATed peers, capped; pointless unless this node is publicly reachable")
@@ -209,7 +211,7 @@ func cmdDaemon(args []string) error {
 	// recomputed just-in-time. At the measured ~270 MB/s plot throughput
 	// (bond.BenchmarkSeal) and this daemon's ~2s window that is ~540 MiB, so the
 	// default carries ~2x margin.
-	floorSet, ttlSet, byzSet := false, false, false
+	floorSet, ttlSet, byzSet, marginSet := false, false, false, false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "min-bond-floor":
@@ -218,6 +220,8 @@ func cmdDaemon(args []string) error {
 			ttlSet = true
 		case "byzantine-quorum":
 			byzSet = true
+		case "operator-margin":
+			marginSet = true
 		}
 	})
 	explicitFloor, ferr := parseSize(*minBondFloor)
@@ -251,6 +255,18 @@ func cmdDaemon(args []string) error {
 	effByz, byzDefaulted := effectiveByzantineQuorum(byzSet, *byzantineQuorum, objectivePath)
 	if byzDefaulted {
 		fmt.Println("consensus: Byzantine quorum sizing defaulted ON for this untrusted (objective) swarm — a commit needs a supermajority of the qualified bonded set so two quorums always share an honest validator. Override with -byzantine-quorum=false (safe only for a trusted swarm).")
+	}
+	// The C2 operator margin M gets the same safe-by-default treatment (D-C2 / red-team
+	// blind-2026-08-08): shipping the split-defense mechanism but defaulting M=1 left an
+	// untrusted objective swarm with ZERO margin against one operator splitting real stake
+	// across NodeIDs to fake decentralization — the Invariant-B footgun ("safe config is
+	// the default"). It only ever RAISES the bar to shed the training wheels (a splitter
+	// must clear mature-validators×M distinct bonds), so an auto-armed M>1 never weakens an
+	// existing config. M stays an honest heuristic (on-chain data carries no operator label,
+	// #182); this defaults it to a conservative value, tunable per deployment.
+	effMargin, marginDefaulted := effectiveOperatorMargin(marginSet, *operatorMargin, objectivePath)
+	if marginDefaulted {
+		fmt.Printf("consensus: operator-margin defaulted to %d for this untrusted (objective) swarm — the C2 maturity shed discounts the bond-distinct Nakamoto coefficient by M, so one operator splitting real stake across ~M NodeIDs cannot fake the decentralization that sheds the launch anchors. Override with -operator-margin (1 = no split margin; safe only for a trusted/single-operator swarm).\n", effMargin)
 	}
 	if effFloor > 0 {
 		cfg.MinBondBytes = effFloor
@@ -406,13 +422,31 @@ func cmdDaemon(args []string) error {
 		// ride the same knobs as the node-side floor: a sub-floor bond earns no
 		// on-chain standing, and standing lapses without a fresh proof within the
 		// TTL. cfg.MinBondBytes is 0 unless -min-bond-floor was set.
+		var wsCP chain.WSCheckpoint
+		if *wsCheckpoint != "" {
+			parts := strings.SplitN(*wsCheckpoint, ":", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("-ws-checkpoint must be HEIGHT:HASH, got %q", *wsCheckpoint)
+			}
+			h, herr := strconv.ParseUint(parts[0], 10, 64)
+			if herr != nil {
+				return fmt.Errorf("-ws-checkpoint height %q: %w", parts[0], herr)
+			}
+			hash, perr := ports.ParseHash(parts[1])
+			if perr != nil {
+				return fmt.Errorf("-ws-checkpoint hash %q: %w", parts[1], perr)
+			}
+			wsCP = chain.WSCheckpoint{Height: h, Hash: hash}
+			fmt.Printf("chain: weak-subjectivity checkpoint pinned at %d:%s — a reorg at or before it is refused (F-1)\n", h, hash)
+		}
 		ch := chain.New(chain.Config{
 			MinProposerRep: *minRep, MinAttesterRep: *minRep, Quorum: *quorum,
 			ByzantineQuorum: effByz,
 			Anchors:         anchorSet, AnchorQuorum: *anchorQuorum, MatureValidators: *matureValidators,
-			OperatorMargin: *operatorMargin,
+			OperatorMargin: effMargin,
 			AllowPublisher: *allowPublisher, MinBond: minBondBytes,
 			MinBondBytes: cfg.MinBondBytes, BondTTLBlocks: effTTL,
+			WSCheckpoint: wsCP,
 		}, ledger.Reputation)
 		if *allowPublisher {
 			fmt.Println("publisher: durable Publisher entries PERMITTED — publishes may record permanent linkage (trusted deployment)")
@@ -499,12 +533,20 @@ func cmdDaemon(args []string) error {
 			if ch.Objective() {
 				m := ch.C2Metric()
 				wheels := "engaged (young network — anchor quorum still required)"
-				if ch.Mature() {
-					wheels = "shed (decentralized enough)"
+				if ch.EverMature() {
+					// One-way latch (F-1): once shed, the anchors never re-arm.
+					wheels = "shed permanently (network matured — F-1 one-way latch)"
+					if !ch.Mature() {
+						wheels = "shed permanently (matured; live decentralization has since dropped — real-bond super-quorum in force, anchors NOT re-armed)"
+					}
 				}
 				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
 					m.NakamotoBonds, m.NakamotoOperators, m.Margin,
 					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants, wheels)
+				// Export the committed head as a copy-pasteable weak-subjectivity
+				// checkpoint (F-1): a fresh/long-offline node pins one via -ws-checkpoint
+				// to refuse a long-range reorg. Publish it / cross-check across nodes.
+				fmt.Printf("  checkpoint: %d:%s\n", b.Height, b.Hash())
 			}
 			if err := chainstore.Save(chainPath, ch.Blocks(0)); err != nil {
 				fmt.Fprintln(os.Stderr, "chain save:", err)
@@ -1155,4 +1197,30 @@ func effectiveByzantineQuorum(byzSet, explicit, objectivePath bool) (on, default
 		return true, true
 	}
 	return false, false
+}
+
+// DerivedOperatorMargin is the C2 split-defense margin M an untrusted (objective)
+// validator gets when the operator sets none. M discounts the bond-distinct Nakamoto
+// coefficient to ⌊k̂/M⌋, so a single operator splitting real stake across ~M NodeIDs
+// cannot fake the decentralization that sheds the launch anchors — a splitter must
+// clear mature-validators×M distinct bonds. Shipping the mechanism but defaulting
+// M=1 (no margin) was the Invariant-B footgun the blind red-team flagged. The value is
+// a conservative heuristic (Evolving) — M stays fundamentally unverifiable on-chain
+// (#182), so this is margin, not proof; a real deployment can raise it.
+const DerivedOperatorMargin = 2
+
+// effectiveOperatorMargin decides the C2 operator margin, mirroring the floor/TTL/
+// Byzantine derivations: an explicit -operator-margin always wins (including 1, the
+// trusted/single-operator opt-out), otherwise the untrusted objective path gets
+// DerivedOperatorMargin and every other posture keeps the explicit value. It only ever
+// raises the bar to shed the wheels, so defaulting it up for an untrusted validator can
+// never weaken an existing config.
+func effectiveOperatorMargin(marginSet bool, explicit int, objectivePath bool) (margin int, defaulted bool) {
+	if marginSet {
+		return explicit, false
+	}
+	if objectivePath && explicit < DerivedOperatorMargin {
+		return DerivedOperatorMargin, true
+	}
+	return explicit, false
 }

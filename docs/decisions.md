@@ -320,6 +320,12 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   read, never a core capability. This is a bright line, consistent with the content-blind
   firewall; it is a *values/legal* call, not a research question.
 
+> **See also:** [`design/pure-go-crypto-gaps.md`](design/pure-go-crypto-gaps.md) — the
+> consolidated index of primitives silt *would* adopt but for which no mature pure-Go
+> implementation exists in 2026 (blind proof-of-repair, threshold decryption/DKG, verifiable
+> encryption, a ZK threshold predicate, a continuous identity-chained VDF). Each is recorded
+> inline in its decision below; that page puts the cryptographic dependency surface in one place.
+
 ## D-CRYPTO-AGILITY — a stated post-V1 track, not a V1 gate
 
 - **Status:** ▶ SCOPE DERIVED — 2026-08-05.

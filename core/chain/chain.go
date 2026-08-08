@@ -133,6 +133,28 @@ type Config struct {
 	// single one-time proof. Decay is a deterministic function of block height, so
 	// every replica expires standing in lockstep. Zero (default) = no expiry.
 	BondTTLBlocks uint64
+	// WSCheckpoint is a WEAK-SUBJECTIVITY checkpoint (F-1): a recent trusted block
+	// (height + hash) this replica refuses to reorg AT OR BEFORE, regardless of fork
+	// weight. silt is weakly subjective — a node syncing from genesis (or long
+	// offline) cannot distinguish the real matured chain from a forged long-range one
+	// on chain data alone (Buterin WS; Gaži–Kiayias–Russell stake-bleeding) — so the
+	// one-way maturity latch is only safe if a fresh node is ALSO pinned to a recent
+	// trusted state out-of-band. Every production PoS chain does exactly this
+	// (Ethereum checkpoint-sync, Cosmos ADR-044 unbonding, Casper finality); Bitcoin
+	// removed its hardcoded checkpoints once cheaper protections existed. A reorg that
+	// rewrites history at/before the checkpoint is rejected as a long-range attack.
+	// The trusting window (how recent the checkpoint must be) is the weak-subjectivity
+	// period, bounded by BondTTLBlocks + slashing depth (the eviction/unbonding
+	// analogue). Zero Height = no checkpoint (genesis-trusting; safe only at launch,
+	// on a trusted swarm, or before the network has matured). See docs/design/m0.md §10.
+	WSCheckpoint WSCheckpoint
+}
+
+// WSCheckpoint is a recent trusted (height, hash) a replica will not reorg before.
+// See Config.WSCheckpoint.
+type WSCheckpoint struct {
+	Height uint64
+	Hash   ports.Hash
 }
 
 func DefaultConfig() Config {
@@ -318,20 +340,22 @@ func DecodeBlocks(raw []byte) ([]Block, error) {
 }
 
 var (
-	ErrLowReputation  = errors.New("chain: reputation below threshold")
-	ErrNoQuorum       = errors.New("chain: insufficient valid attestations")
-	ErrBadSignature   = errors.New("chain: bad signature")
-	ErrWrongParent    = errors.New("chain: block does not extend the local head")
-	ErrDupRoot        = errors.New("chain: root already registered")
-	ErrUseConsensus   = errors.New("chain: replica is read-only; entries are committed via consensus")
-	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
-	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
-	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
-	ErrBlockVersion   = errors.New("chain: unsupported block version")
-	ErrPublisherEntry = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
-	ErrEmptyFork      = errors.New("chain: cannot reconcile an empty fork")
-	ErrNoGenesis      = errors.New("chain: local replica has no genesis to anchor a reconcile")
-	ErrForeignGenesis = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
+	ErrLowReputation      = errors.New("chain: reputation below threshold")
+	ErrNoQuorum           = errors.New("chain: insufficient valid attestations")
+	ErrBadSignature       = errors.New("chain: bad signature")
+	ErrWrongParent        = errors.New("chain: block does not extend the local head")
+	ErrDupRoot            = errors.New("chain: root already registered")
+	ErrUseConsensus       = errors.New("chain: replica is read-only; entries are committed via consensus")
+	ErrAnchorRequired     = errors.New("chain: immature network requires anchor attestations (training wheels)")
+	ErrDeMatureQuorum     = errors.New("chain: de-matured network requires a real-bond super-quorum (≥⅔ of live bonded weight)")
+	ErrPreCheckpointReorg = errors.New("chain: fork rewrites history at or before the weak-subjectivity checkpoint (long-range reorg refused)")
+	ErrTokenRequired      = errors.New("chain: entry has no publish token (required)")
+	ErrTokenSpent         = errors.New("chain: publish token serial already spent (double-spend)")
+	ErrBlockVersion       = errors.New("chain: unsupported block version")
+	ErrPublisherEntry     = errors.New("chain: entry carries a durable Publisher (records permanent linkage; publish unlinkably or run an explicitly trusted deployment)")
+	ErrEmptyFork          = errors.New("chain: cannot reconcile an empty fork")
+	ErrNoGenesis          = errors.New("chain: local replica has no genesis to anchor a reconcile")
+	ErrForeignGenesis     = errors.New("chain: fork does not share our genesis (refusing to swap chains)")
 	// ErrRevokeUnknownRoot rejects a takedown that names a root the chain has
 	// never committed. Without this a quorum could revoke a competitor's
 	// unpublished hash, or a hash that never existed — arbitrary censorship of
@@ -372,6 +396,20 @@ type Chain struct {
 	// ever committed a block — the monotonic decentralization signal the
 	// training wheels shed on (see Mature).
 	validatorsSeen map[ports.NodeID]bool
+	// everMature is the ONE-WAY MATURITY LATCH (F-1): true once Mature() has held
+	// at ANY committed height. The launch anchors are load-bearing only while this
+	// is FALSE, so once a network is first certified decentralized the zero-bond
+	// anchors NEVER become load-bearing again — the one-way ratchet immutable #3
+	// promises. Like validatorsSeen/bonded it is a pure, monotonic function of the
+	// committed block sequence (latched in apply, re-derived on Reload, carried
+	// across a reorg by adopt), so every replica agrees on it as a CONSENSUS fact.
+	// It is never reset. The old code gated anchors on the LIVE Mature(), which
+	// re-armed the wheels whenever concentration rose — even from one honest whale
+	// growing REAL bond — handing a zero-bond anchor permanent power, or halting the
+	// chain if the anchors were gone. De-maturation liveness AFTER the latch is
+	// carried by the real-bond super-quorum fallback (RequiredQuorum), never by
+	// re-arming anchors. See docs/design/m0.md §10 (F-1).
+	everMature bool
 	// Publisher-privacy publish tokens (F1): when tokenQuorum > 0 every entry
 	// must carry a PublishToken blind-signed by that many distinct qualified
 	// validators (issuer keys from issuerKey), and spent records each serial so
@@ -466,7 +504,10 @@ func (c *Chain) Objective() bool { return c.objective() }
 // exemption: it grants ELIGIBILITY, never fork-choice WEIGHT (weight is always
 // summed real bond), so a declared anchor cannot outweigh a real bond.
 func (c *Chain) launchAnchor(id ports.NodeID) bool {
-	return len(c.cfg.Anchors) > 0 && c.cfg.Anchors[id] && !c.Mature()
+	// Gated on the one-way latch, not the live Mature(): once the network has ever
+	// matured, anchors lose bond-free eligibility FOREVER (F-1). An anchor that
+	// registered its own real bond stays a normal validator on that real weight.
+	return len(c.cfg.Anchors) > 0 && c.cfg.Anchors[id] && !c.everMature
 }
 
 // attesterQualified reports whether id may have its attestation counted toward
@@ -713,14 +754,31 @@ func (c *Chain) RequireTokens(quorum int, issuerKey func(ports.NodeID) *rsa.Publ
 // spinning up many minimum bonds, then capture consensus once the wheels shed —
 // this is cost-to-corrupt over bond-distinct operators: a set whose weight is
 // dominated by a few bonds has a LOW coefficient and stays immature no matter how
-// many satellite keys are added. It reads the CURRENT bonded set, so maturity
-// RE-ENGAGES the wheels if decentralization later drops (the post-shed escape
-// hatch). Legacy mode has no on-chain bonded set, so it falls back to the head
-// count of distinct qualified validators seen.
+// many satellite keys are added. It reads the CURRENT bonded set — the LIVE metric.
+// It does NOT gate the anchors: that is the one-way latch EverMature() (F-1), so a
+// later drop in decentralization can never re-arm the wheels. Mature() vs
+// EverMature() diverge only in the de-maturation window, which the real-bond
+// super-quorum handles. Legacy mode has no on-chain bonded set, so it falls back to
+// the head count of distinct qualified validators seen.
 func (c *Chain) Mature() bool {
 	if c.cfg.MatureValidators <= 0 {
 		return true
 	}
+	return c.matureNow()
+}
+
+// EverMature reports the one-way maturity LATCH (F-1): whether the network has
+// been certified mature at ANY committed height. This — not the live Mature() — is
+// what gates the launch anchors, so once a network first decentralizes the anchors
+// never re-arm. A pure function of the committed blocks (see the everMature field).
+func (c *Chain) EverMature() bool { return c.everMature }
+
+// matureNow is the LIVE maturity metric over the CURRENT bonded set. Mature()
+// wraps it; the latch (everMature) is what gates anchors. The two diverge exactly
+// in the de-maturation window (everMature && !matureNow): the network matured, then
+// concentration/attrition dropped it back below the bar — handled by the real-bond
+// super-quorum, never by re-arming anchors (F-1).
+func (c *Chain) matureNow() bool {
 	if !c.objective() {
 		n := 0
 		for id := range c.validatorsSeen {
@@ -1012,10 +1070,13 @@ func (c *Chain) ValidateCommit(b *Block) error {
 	if req := c.RequiredQuorum(); valid < req {
 		return fmt.Errorf("%w: %d qualified, need %d", ErrNoQuorum, valid, req)
 	}
-	// Training wheels: while immature, the quorum must ALSO carry anchor
-	// sign-off, so a Sybil quorum can't capture a young network before it has
-	// decentralized. Sheds automatically once the network is Mature.
-	if len(c.cfg.Anchors) > 0 && c.cfg.AnchorQuorum > 0 && !c.Mature() {
+	// Training wheels: while the network has NEVER YET matured, the quorum must
+	// ALSO carry anchor sign-off, so a Sybil quorum can't capture a young network
+	// before it has decentralized. Gated on the one-way latch (everMature), NOT the
+	// live Mature() — so a later drop in decentralization (e.g. an honest whale
+	// concentrating real bond) can never re-arm the anchors (F-1). Once matured,
+	// de-maturation liveness is the real-bond super-quorum (RequiredQuorum), not this.
+	if len(c.cfg.Anchors) > 0 && c.cfg.AnchorQuorum > 0 && !c.everMature {
 		anchors := 0
 		for id := range seen { // seen = the distinct qualified attesters
 			if c.cfg.Anchors[id] {
@@ -1025,6 +1086,45 @@ func (c *Chain) ValidateCommit(b *Block) error {
 		if anchors < c.cfg.AnchorQuorum {
 			return fmt.Errorf("%w: %d of required %d", ErrAnchorRequired, anchors, c.cfg.AnchorQuorum)
 		}
+	}
+	// De-maturation super-quorum (F-1, ships WITH the latch): once matured, the
+	// anchors never re-arm — but if live decentralization has since dropped below the
+	// bar (everMature && !matureNow, e.g. an honest whale concentrated real bond or
+	// small bonds lapsed), a commit instead needs a real-bond SUPER-MAJORITY: ≥⅔ of
+	// the LIVE bonded weight, no anchor sign-off. This is the center-less replacement
+	// for the retired anchor net — it keeps liveness for a genuinely-willing real
+	// quorum (the HALT horn stays dead) and preserves accountable safety (any two ⅔
+	// super-quorums share > ⅓ of the weight, so they intersect in honest bond). In
+	// the normal mature-and-still-decentralized case this is a no-op.
+	if c.everMature && c.objective() && !c.matureNow() {
+		if err := c.requireDeMatureSuperQuorum(b, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requireDeMatureSuperQuorum enforces the F-1 de-maturation rule: the committing
+// coalition (proposer + the distinct qualified attesters `seen`) must control ≥⅔ of
+// the live bonded weight. Only real committed bond counts (in the de-maturation
+// window launchAnchor is false, so `seen` is bonded validators only). A pure function
+// of the committed bonded set, so every replica agrees.
+func (c *Chain) requireDeMatureSuperQuorum(b *Block, seen map[ports.NodeID]bool) error {
+	var total int64
+	for _, w := range c.bonded {
+		total += w
+	}
+	if total <= 0 {
+		return nil // no bonded weight to measure against (nothing to protect)
+	}
+	committed := c.bonded[b.ProposerID()]
+	for id := range seen {
+		committed += c.bonded[id]
+	}
+	need := (2*total + 2) / 3 // ⌈2·total/3⌉
+	if committed < need {
+		return fmt.Errorf("%w: coalition holds %d MiB of %d MiB bonded (need ≥%d MiB)",
+			ErrDeMatureQuorum, committed>>20, total>>20, need>>20)
 	}
 	return nil
 }
@@ -1260,6 +1360,13 @@ func (c *Chain) apply(b Block) {
 			c.validatorsSeen[id] = true
 		}
 	}
+	// Latch maturity (F-1): once the network is first certified mature, record it
+	// permanently, so the launch anchors never re-arm. Checked AFTER this block's
+	// bonds/slashes/TTL are applied, so it reflects the post-block bonded set.
+	// Monotonic — only ever set, never cleared.
+	if !c.everMature && c.Mature() {
+		c.everMature = true
+	}
 }
 
 // Weight is the chain's fork-choice weight: the cumulative count, over every
@@ -1332,6 +1439,18 @@ func (c *Chain) Reconcile(fork []Block) (bool, error) {
 	if fork[0].Height != 0 || fork[0].Hash() != c.blocks[0].Hash() {
 		return false, ErrForeignGenesis // must branch from our own genesis
 	}
+	// Weak-subjectivity guard (F-1): refuse — regardless of weight — any fork that does
+	// not contain the trusted checkpoint block, i.e. that rewrites finalized history at
+	// or before it. This is the long-range-attack defense that makes the maturity latch
+	// safe for a fresh/long-offline node. Cheap and positional (fork blocks are
+	// contiguous from genesis, so index == height; the block hash covers the height, so
+	// a match pins the exact checkpoint block). Checked before the replay so a
+	// long-range fork is rejected without doing the work.
+	if cp := c.cfg.WSCheckpoint; cp.Height > 0 {
+		if uint64(len(fork)) <= cp.Height || fork[cp.Height].Hash() != cp.Hash {
+			return false, ErrPreCheckpointReorg
+		}
+	}
 	// Re-validate the candidate history end to end in a fresh replica.
 	tmp := New(c.cfg, c.rep)
 	tmp.tokenQuorum, tmp.issuerKey = c.tokenQuorum, c.issuerKey
@@ -1388,6 +1507,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.bondRootProven = t.bondRootProven
 	c.bondRegHeight = t.bondRegHeight
 	c.slashed = t.slashed
+	c.everMature = t.everMature // the maturity latch is a function of the adopted history (F-1)
 }
 
 func (c *Chain) LookupRoot(root ports.Hash) (ports.Entry, bool) {
