@@ -5,8 +5,8 @@
 > **four different binding constraints under one "pure-Go" label**, which wrongly invited
 > "maybe drop pure-Go" as a remedy — when dropping pure-Go would unblock almost none of these.
 > The true constraint is **primitive maturity + construction design**, not the language.
-> *(Recommended follow-up: rename this file to `primitive-availability-gaps.md`; deferred
-> only because it would churn links in `owned-residuals.md`, which is under research review.)*
+> *(Renamed from `pure-go-crypto-gaps.md` — the old name undersold the content: only one or
+> two of these are actually pure-Go library gaps.)*
 
 silt follows **B8 — adopt, don't invent**: it never hand-rolls a novel cryptographic
 primitive. It also ships as a single static `CGO_ENABLED=0` binary that cross-compiles
@@ -104,9 +104,11 @@ that are genuinely valuable.**
   `gnark` (Consensys) is **pure Go** (no cgo in the default build; C++/CUDA backend is opt-in), a general
   R1CS/PLONKish stack with **~9 audits (2022–2024)** powering the Linea zkEVM, and it **can express** such
   a predicate. The real blockers are (a) both Groth16 and PLONK import a **trusted-setup ceremony**, which
-  silt (B8/no-trusted-setup) resists; (b) the genuine difficulty of designing a *sound* circuit over
-  distributed, freshness-attested replica state (what is the witness? who attests liveness? how is it
-  kept non-gameable?).
+  silt (B8/no-trusted-setup) resists — and for a censorship-resistance metric "who ran the ceremony" is
+  itself a capture vector; **no audited *transparent* (STARK/FRI) pure-Go backend exists**, so *that*
+  specific slice is a real remaining library gap; (b) the genuine difficulty of designing a *sound*
+  circuit over distributed, freshness-attested replica state (what is the witness? who attests liveness?
+  how is it kept non-gameable?).
 - **What ships instead (M0).** The **CT-style append-only transparency log** (`core/translog`, H9):
   provable *recording* of every revoke/unrevoke (inclusion + consistency proofs). Provable non-globality
   by transparency — the weaker, shipped form of D-TAKEDOWN.
