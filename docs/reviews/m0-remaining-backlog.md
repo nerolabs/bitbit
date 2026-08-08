@@ -1,5 +1,10 @@
 # M0 — what is NOT done yet (review brief for the research + red teams)
 
+> **⚠ SUPERSEDED (2026-08-08): this "NOT done" list is now CLEARED — the M0 build
+> backlog is complete.** See **`m0-build-complete.md`** for the current status overlay
+> (built surface, what to red-team/accept, the known held-in-tension residuals, and the
+> verify gate). This file is retained as the historical snapshot of the build backlog.
+
 > **Purpose.** This is the honest, specific list of what remains for M0, written for
 > the **research team** and the **adversarial red team** to weigh in on before that
 > work is committed to or the M0-RC verify gate is run. It is deliberately a
