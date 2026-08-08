@@ -9,6 +9,22 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Added
+- **GCP field test — an automated multi-machine RC gate** (2026-08-08,
+  [#52](https://github.com/nerolabs/silt/issues/52)) — `integration/fieldtest/` spins up a real
+  ~13-node silt network across three GCP regions (validators, storage, a `-registry-only` node, a
+  relay, a fetcher, a NAT gateway + natted peers, and an adversary), runs the acceptance flows
+  (publish → commit → fetch bit-perfect, earned-standing validator onboarding, multi-validator
+  convergence, f=1 fault tolerance, restart survival, per-hash takedown, cross-NAT via the relay) plus
+  the [#184](https://github.com/nerolabs/silt/issues/184) adversarial consensus drills
+  (equivocation→slash, partition→heal, forged/low-bond→reject) **over the real wire**, emits a
+  shareable report (`report.md` / `report.html`), and tears the whole network down. Deterministic and
+  self-configuring — every peer/anchor/attester reference is computed from `silt id -id-seed` + static
+  internal IPs before any VM boots, so there is no discovery wait. Cost-bounded four ways (SPOT
+  instances + per-VM TTL self-destruct + destroy-on-exit + optional budget alarm, with a
+  nuke-by-label fallback), reusable by outside developers against their own GCP project, and
+  `SMOKE=1` trims it to a 4-node run for a pennies-scale plumbing check. This automates roadmap
+  [#52](https://github.com/nerolabs/silt/issues/52) and is the standing field-test gate for every
+  release candidate.
 - **`-registry-only` — the leanest public-registry role** (2026-08-08,
   [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon started with `-registry-only` serves a
   file-backed registry over HTTPS and constructs **no storage node at all** — no DHT, chunk store,

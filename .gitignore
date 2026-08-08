@@ -20,3 +20,19 @@ _examples_*/
 
 # stray legacy build artifact (old project name; see audit 2026-08-06)
 /shardnet
+
+# GCP field test (integration/fieldtest): local secrets, built binaries,
+# generated topology, Terraform state, and run outputs — all regenerated per run.
+integration/fieldtest/config.env
+integration/fieldtest/silt-linux-amd64
+integration/fieldtest/.silt-local
+integration/fieldtest/topology.json
+integration/fieldtest/nodes.json
+integration/fieldtest/results.jsonl
+integration/fieldtest/report.md
+integration/fieldtest/report.html
+integration/fieldtest/terraform/topology.auto.tfvars.json
+integration/fieldtest/terraform/.terraform/
+integration/fieldtest/terraform/.terraform.lock.hcl
+integration/fieldtest/terraform/*.tfstate
+integration/fieldtest/terraform/*.tfstate.*
