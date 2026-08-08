@@ -1,0 +1,121 @@
+# Field test #8 — proof-of-space-time bond cost.
+#
+# Three real silt daemons on ONE bridge network, sealing REAL plots on REAL
+# container disks, so the M0 claim C1 ("no discount — a bond is genuinely
+# expensive to fake") becomes numbers instead of prose:
+#
+#   honest   ─┐  a -validator that SEALS a real ${BOND_SIZE} plot (measured:
+#             │  wall-clock plot time + on-disk bytes) and answers live
+#             │  proof-of-space-TIME challenges from its peer.
+#   peer     ─┤  a second -validator that MUTUALLY audits honest over the wire
+#             │  (real MsgBondChallenge → `bond challenge … passed=true`), and
+#             │  earns standing proportional to its own real bond.
+#   adversary ┘  the NEGATIVE control: an UNDER-BONDED validator that tries to
+#                propose a well-formed block to honest (-lowbond-propose); an
+#                honest validator REFUSES it (ErrLowReputation) before attesting
+#                — a shortcut earns nothing.
+#
+# The daemons run the LEGACY subjective path (-objective=false, like
+# examples/flow4) so a single small cluster commits without the objective
+# path's -anchors/-mature-validators launch set — the bond MECHANISM (seal,
+# challenge, standing, refusal) is identical on both paths; this test measures
+# the bond, not fork-choice.
+#
+# Peer/adversary NodeIDs are H(pubkey) of a fixed -id-seed, so run.sh learns
+# them up front (via `silt id` in a throwaway container) and fills -attesters /
+# bootstrap before launch — no probe daemon needed (as in flow4).
+
+networks:
+  bond:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.100.0.0/24 }]
+
+services:
+  # Honest validator: seals a real BOND_SIZE plot on a real disk store at
+  # /data/plot, self-narrates rising `standing`, and answers its peer's live
+  # space-time bond challenges. Also the -attesters target the peer audits.
+  honest:
+    image: silt-bond
+    command:
+      - silt
+      - daemon
+      - -id-seed=1
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -validator
+      - -objective=false
+      - -min-rep=100
+      - -quorum=1
+      - -attesters=${PEER_ID:-unset}
+      - -bond=${BOND_SIZE:-64M}
+      - -min-bond-floor=0
+      - -bond-audit=1s
+      - -bond-ttl=0
+      - -bond-label-k=64
+      - -capacity=2G
+      - -mdns=false
+      - -log=info
+    networks:
+      bond:
+        ipv4_address: 10.100.0.10
+
+  # Peer validator: mutually audits honest. Its `bond challenge peer=<honest>
+  # passed=true` line in /data/debug.log is the real over-the-wire verification
+  # that C1 rests on — an independent node recomputing honest's labels from the
+  # public seed H(pk,n) without holding the plot.
+  peer:
+    image: silt-bond
+    command:
+      - silt
+      - daemon
+      - -id-seed=2
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -validator
+      - -objective=false
+      - -min-rep=100
+      - -quorum=1
+      - -attesters=${HONEST_ID:-unset}
+      - -bootstrap=${HONEST_ID:-unset}@10.100.0.10:4001
+      - -bond=${BOND_SIZE:-64M}
+      - -min-bond-floor=0
+      - -bond-audit=1s
+      - -bond-ttl=0
+      - -bond-label-k=64
+      - -capacity=2G
+      - -mdns=false
+      - -log=info
+    networks:
+      bond:
+        ipv4_address: 10.100.0.11
+
+  # NEGATIVE control: an UNDER-BONDED validator (a 4K "plot") that tries to
+  # propose to honest anyway (-lowbond-propose). honest refuses it before
+  # attesting: `adversary: lowbond-propose proposal correctly REJECTED by …`.
+  # Started only in the negative phase (profile) so the positive phase stays clean.
+  adversary:
+    image: silt-bond
+    profiles: ["adversary"]
+    command:
+      - silt
+      - daemon
+      - -id-seed=9
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -validator
+      - -objective=false
+      - -min-rep=100
+      - -quorum=1
+      - -bootstrap=${HONEST_ID:-unset}@10.100.0.10:4001
+      - -bond=4K
+      - -min-bond-floor=0
+      - -bond-audit=1s
+      - -bond-ttl=0
+      - -lowbond-propose=${HONEST_ID:-unset}
+      - -capacity=1G
+      - -mdns=false
+      - -log=info
+    networks:
+      bond:
+        ipv4_address: 10.100.0.12
