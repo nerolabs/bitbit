@@ -1,0 +1,34 @@
+# Heal override: restart valC on its SAME persisted -store (/data) WITHOUT
+# -block-peers and bootstrapped to valA, per the -block-peers help text
+# ("HEAL by restarting without the flag — the persisted chain reloads and
+# reconciles"). run.sh applies this with:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.heal.yml up -d valC
+#
+# Everything else (the store volume, IP, network) is inherited from the base
+# file; only valC's command changes: the partition flag is gone and it now
+# bootstraps to / attests valA, so it discovers group 1's heavier fork and
+# reorgs onto it.
+services:
+  valC:
+    command:
+      - silt
+      - daemon
+      - -id-seed=7003
+      - -listen=0.0.0.0:4001
+      - -advertise=10.50.0.13:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -validator
+      - -min-bond=1M
+      - -mature-validators=99
+      - -anchors=${ANCHORS:-unset}
+      - -attesters=${ID_A:-unset}
+      - -bootstrap=${ID_A:-unset}@10.50.0.11:4001
+      - -quorum=1
+      - -min-bond-floor=0
+      - -bond=8M
+      - -bond-audit=1s
+      - -capacity=1G
+      - -mdns=false
+      - -log=info

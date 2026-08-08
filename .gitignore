@@ -10,6 +10,9 @@ dist/
 integration/nat/silt
 integration/nat/probe.bin
 
+# host-built binary for the consensus/partition-heal harness (rebuilt by run.sh)
+integration/consensus/silt
+
 # top-level built binary (go build -o silt ./cmd/silt) and default stores
 /silt
 .silt/
