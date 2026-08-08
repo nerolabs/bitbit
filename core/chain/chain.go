@@ -828,6 +828,19 @@ type C2 struct {
 	Participants int
 	// Margin is the operator margin M the coefficient was discounted by (≥1).
 	Margin int
+	// HHI is the Herfindahl–Hirschman concentration index over the participating
+	// bonds: Σ(share²) ∈ [1/n, 1]. 1 = one bond holds everything; 1/n = perfectly
+	// even. A high HHI is the **honest-whale** signal C2 cannot close on-chain (Kwon):
+	// surfaced as an out-of-band observability veto — measurement that makes
+	// concentration LOUD, never consensus enforcement (D-C2 / F-1 follow-up).
+	HHI float64
+	// Gini is the Gini coefficient of the bonded-weight distribution ∈ [0,1]:
+	// 0 = perfectly even, →1 = one holder. A companion inequality signal to HHI.
+	Gini float64
+	// TopShare is the largest single bond's fraction of participating weight ∈ [0,1].
+	// The most interpretable capture signal: a bond approaching ⅓ is one step from
+	// the Byzantine capture fraction (⌊total/3⌋) — the honest-whale alarm threshold.
+	TopShare float64
 }
 
 // C2Metric computes the concentration measurement over the participating,
@@ -866,6 +879,22 @@ func (c *Chain) C2Metric() C2 {
 		}
 	}
 	m.NakamotoOperators = m.NakamotoBonds / m.Margin // ⌊k̂/M⌋, conservative
+	// Concentration observability (D-C2 / F-1 follow-up): HHI, Gini, and the top
+	// bond's share. C2 cannot CLOSE the honest-whale residue on-chain (Kwon), so this
+	// is an out-of-band veto that makes a concentration event LOUD — measurement, not
+	// enforcement. sizes is sorted largest-first; ftotal > 0 here.
+	n := len(sizes)
+	ftotal := float64(total)
+	m.TopShare = float64(sizes[0]) / ftotal
+	var hhi, giniNum float64
+	for i, sz := range sizes {
+		share := float64(sz) / ftotal
+		hhi += share * share
+		// Gini numerator for a DESCENDING-sorted distribution: Σ (n−1−2i)·xᵢ.
+		giniNum += float64(n-1-2*i) * float64(sz)
+	}
+	m.HHI = hhi
+	m.Gini = giniNum / (float64(n) * ftotal)
 	return m
 }
 

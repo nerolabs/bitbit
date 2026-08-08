@@ -540,9 +540,18 @@ func cmdDaemon(args []string) error {
 						wheels = "shed permanently (matured; live decentralization has since dropped — real-bond super-quorum in force, anchors NOT re-armed)"
 					}
 				}
-				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
+				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | concentration HHI %.2f Gini %.2f top %.0f%% | wheels %s\n",
 					m.NakamotoBonds, m.NakamotoOperators, m.Margin,
-					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants, wheels)
+					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants,
+					m.HHI, m.Gini, m.TopShare*100, wheels)
+				// Concentration alarm (D-C2 / F-1 follow-up): the honest whale C2 cannot
+				// close on-chain, made LOUD out-of-band. A single bond at/above the ⅓
+				// Byzantine capture fraction is one step from being able to stall or
+				// (with more) capture consensus — a social/operational trigger, not an
+				// on-chain enforcement (impossible per Kwon).
+				if m.TopShare >= 1.0/3 {
+					fmt.Printf("  ⚠ CONCENTRATION ALARM: one bond holds %.0f%% of bonded weight (≥ the ⅓ capture fraction) — real standing is concentrating; this is the honest-whale residual C2 measures but cannot close on-chain. Act out-of-band.\n", m.TopShare*100)
+				}
 				// Export the committed head as a copy-pasteable weak-subjectivity
 				// checkpoint (F-1): a fresh/long-offline node pins one via -ws-checkpoint
 				// to refuse a long-range reorg. Publish it / cross-check across nodes.

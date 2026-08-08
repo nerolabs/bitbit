@@ -122,3 +122,41 @@ func TestC2Metric_OperatorMarginRaisesShedBar(t *testing.T) {
 		t.Fatal("10 equal bonds at M=2 (operators 2 ≥ 2) should mature — real decentralization clears the raised bar")
 	}
 }
+
+// TestC2Metric_ConcentrationSignals pins the F-1-follow-up observability fields:
+// HHI, Gini, and the top bond's share — the out-of-band veto that makes an
+// honest-whale concentration event LOUD (measurement, not enforcement). An even
+// set reads low on all three (no alarm); a whale-dominated set reads high and its
+// top share clears the ⅓ capture fraction (the daemon's alarm threshold).
+func TestC2Metric_ConcentrationSignals(t *testing.T) {
+	const minBond = int64(1) << 20
+	approx := func(got, want, eps float64) bool { d := got - want; return d < eps && d > -eps }
+
+	// Even: four equal bonds → HHI 1/4, Gini 0, top 1/4 (< ⅓, no alarm).
+	e := buildC2(t, 2, 1, []c2Bond{{key(20), minBond}, {key(21), minBond}, {key(22), minBond}, {key(23), minBond}})
+	em := e.C2Metric()
+	if !approx(em.HHI, 0.25, 0.001) || !approx(em.Gini, 0, 0.001) || !approx(em.TopShare, 0.25, 0.001) {
+		t.Fatalf("even set: HHI=%.4f Gini=%.4f top=%.4f, want ~0.25/0/0.25", em.HHI, em.Gini, em.TopShare)
+	}
+	if em.TopShare >= 1.0/3 {
+		t.Fatal("an even set must not trip the ⅓ concentration alarm")
+	}
+
+	// Whale: one 10 MiB bond + three 1 MiB → total 13 MiB. top 10/13≈0.77 (≥ ⅓,
+	// alarm), HHI≈0.61, Gini≈0.52.
+	w := buildC2(t, 2, 1, []c2Bond{{key(30), 10 << 20}, {key(31), minBond}, {key(32), minBond}, {key(33), minBond}})
+	wm := w.C2Metric()
+	if !approx(wm.TopShare, 10.0/13, 0.001) {
+		t.Fatalf("whale top share = %.4f, want ~%.4f", wm.TopShare, 10.0/13)
+	}
+	if wm.TopShare < 1.0/3 {
+		t.Fatal("a whale-dominated set must trip the ⅓ concentration alarm")
+	}
+	if !approx(wm.HHI, 0.6095, 0.002) || !approx(wm.Gini, 0.519, 0.002) {
+		t.Fatalf("whale HHI=%.4f Gini=%.4f, want ~0.61/0.52", wm.HHI, wm.Gini)
+	}
+	// Concentration must read strictly higher than the even set on every signal.
+	if !(wm.HHI > em.HHI && wm.Gini > em.Gini && wm.TopShare > em.TopShare) {
+		t.Fatal("the whale set must read more concentrated than the even set on HHI, Gini, and top share")
+	}
+}
