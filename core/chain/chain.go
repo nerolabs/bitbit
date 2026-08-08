@@ -325,6 +325,7 @@ var (
 	ErrDupRoot        = errors.New("chain: root already registered")
 	ErrUseConsensus   = errors.New("chain: replica is read-only; entries are committed via consensus")
 	ErrAnchorRequired = errors.New("chain: immature network requires anchor attestations (training wheels)")
+	ErrDeMatureQuorum = errors.New("chain: de-matured network requires a real-bond super-quorum (≥⅔ of live bonded weight)")
 	ErrTokenRequired  = errors.New("chain: entry has no publish token (required)")
 	ErrTokenSpent     = errors.New("chain: publish token serial already spent (double-spend)")
 	ErrBlockVersion   = errors.New("chain: unsupported block version")
@@ -1062,6 +1063,45 @@ func (c *Chain) ValidateCommit(b *Block) error {
 		if anchors < c.cfg.AnchorQuorum {
 			return fmt.Errorf("%w: %d of required %d", ErrAnchorRequired, anchors, c.cfg.AnchorQuorum)
 		}
+	}
+	// De-maturation super-quorum (F-1, ships WITH the latch): once matured, the
+	// anchors never re-arm — but if live decentralization has since dropped below the
+	// bar (everMature && !matureNow, e.g. an honest whale concentrated real bond or
+	// small bonds lapsed), a commit instead needs a real-bond SUPER-MAJORITY: ≥⅔ of
+	// the LIVE bonded weight, no anchor sign-off. This is the center-less replacement
+	// for the retired anchor net — it keeps liveness for a genuinely-willing real
+	// quorum (the HALT horn stays dead) and preserves accountable safety (any two ⅔
+	// super-quorums share > ⅓ of the weight, so they intersect in honest bond). In
+	// the normal mature-and-still-decentralized case this is a no-op.
+	if c.everMature && c.objective() && !c.matureNow() {
+		if err := c.requireDeMatureSuperQuorum(b, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requireDeMatureSuperQuorum enforces the F-1 de-maturation rule: the committing
+// coalition (proposer + the distinct qualified attesters `seen`) must control ≥⅔ of
+// the live bonded weight. Only real committed bond counts (in the de-maturation
+// window launchAnchor is false, so `seen` is bonded validators only). A pure function
+// of the committed bonded set, so every replica agrees.
+func (c *Chain) requireDeMatureSuperQuorum(b *Block, seen map[ports.NodeID]bool) error {
+	var total int64
+	for _, w := range c.bonded {
+		total += w
+	}
+	if total <= 0 {
+		return nil // no bonded weight to measure against (nothing to protect)
+	}
+	committed := c.bonded[b.ProposerID()]
+	for id := range seen {
+		committed += c.bonded[id]
+	}
+	need := (2*total + 2) / 3 // ⌈2·total/3⌉
+	if committed < need {
+		return fmt.Errorf("%w: coalition holds %d MiB of %d MiB bonded (need ≥%d MiB)",
+			ErrDeMatureQuorum, committed>>20, total>>20, need>>20)
 	}
 	return nil
 }

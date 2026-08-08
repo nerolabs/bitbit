@@ -129,6 +129,97 @@ func TestMaturityLatchDoesNotRearmAnchorsOnDemature(t *testing.T) {
 	t.Log("HORN-2 (PERMANENT CENTER) KILLED: once matured, a zero-bond anchor is no longer attester/proposer-qualified")
 }
 
+// TestDeMatureSuperQuorumReplacesTheAnchorNet is the F-1 slice-2 regression: once a
+// network has matured (anchors retired by the latch) and then de-matures, a commit no
+// longer needs anchors but DOES need a real-bond super-majority (≥⅔ of live bonded
+// weight). A small-validator coalition that meets the head-count quorum but holds < ⅔
+// of the weight is rejected; a coalition holding ≥⅔ commits. This is the center-less
+// liveness rule that replaces the retired anchor net (so the HALT horn stays dead
+// without handing power back to a standing-free set).
+func TestDeMatureSuperQuorumReplacesTheAnchorNet(t *testing.T) {
+	const minBond = int64(1) << 20
+	a1 := key(1)
+	w1, s1, s2, s3 := key(10), key(11), key(12), key(13)
+	cfg := Config{
+		Quorum: 1, MinBond: minBond,
+		Anchors:          map[ports.NodeID]bool{idOf(a1): true},
+		AnchorQuorum:     1,
+		MatureValidators: 2,
+		// BondTTLBlocks 0: nothing lapses, so we de-mature by CONCENTRATION alone and
+		// keep s1,s2,s3 bonded — the topology that lets a sub-⅔ coalition even form.
+	}
+	c := New(cfg, func(ports.NodeID) int64 { return 0 })
+	c.SetBondVerifier(objectiveVerify)
+
+	regs := []BondReg{bondReg(w1, minBond, ports.Hash{}), bondReg(s1, minBond, ports.Hash{}),
+		bondReg(s2, minBond, ports.Hash{}), bondReg(s3, minBond, ports.Hash{})}
+	g := &Block{Version: BlockVersion, Height: 0, Entries: []ports.Entry{entry(0)}, BondRegs: regs}
+	Sign(g, a1)
+	if err := c.AppendGenesis(*g); err != nil {
+		t.Fatalf("genesis: %v", err)
+	}
+	b := g
+	rounds := []struct {
+		p ed25519.PrivateKey
+		g []ed25519.PrivateKey
+	}{{w1, []ed25519.PrivateKey{s1, s2, s3}}, {s1, []ed25519.PrivateKey{w1}}}
+	for i, r := range rounds {
+		nb := &Block{Version: BlockVersion, Height: b.Height + 1, Prev: b.Hash(), Entries: []ports.Entry{entry(byte(i + 1))}}
+		Sign(nb, r.p)
+		nb.Atts = append(nb.Atts, Attest(nb, a1))
+		for _, k := range r.g {
+			nb.Atts = append(nb.Atts, Attest(nb, k))
+		}
+		if err := c.Append(*nb); err != nil {
+			t.Fatalf("bootstrap commit %d: %v", nb.Height, err)
+		}
+		b = nb
+	}
+	if !c.EverMature() {
+		t.Fatal("SETUP: network should be latched mature")
+	}
+
+	// De-mature by CONCENTRATION: w1 renews at 10x. Pre-block the network is still
+	// mature, so this block commits under normal rules; after apply it is de-matured
+	// while s1,s2,s3 stay bonded (TTL 0).
+	const whale = 10 * minBond
+	dm := &Block{Version: BlockVersion, Height: b.Height + 1, Prev: b.Hash(),
+		Entries: []ports.Entry{entry(9)}, BondRegs: []BondReg{bondReg(w1, whale, b.Hash())}}
+	Sign(dm, w1)
+	dm.Atts = []Attestation{Attest(dm, s1)}
+	if err := c.Append(*dm); err != nil {
+		t.Fatalf("de-maturing commit: %v", err)
+	}
+	b = dm
+	if c.Mature() {
+		t.Fatalf("SETUP: network should have de-matured (coefficient %d < 2)", c.C2Metric().NakamotoOperators)
+	}
+	if !c.EverMature() {
+		t.Fatal("latch must hold through de-maturation")
+	}
+
+	// A SMALL coalition (s1 proposer + s2 attester = 2 MiB of 13 MiB) meets the
+	// head-count quorum (1) but is BELOW ⅔ of the bonded weight → rejected.
+	small := &Block{Version: BlockVersion, Height: b.Height + 1, Prev: b.Hash(), Entries: []ports.Entry{entry(20)}}
+	Sign(small, s1)
+	small.Atts = []Attestation{Attest(small, s2)}
+	if err := c.Append(*small); !errors.Is(err, ErrDeMatureQuorum) {
+		t.Fatalf("a sub-⅔ coalition must be rejected with ErrDeMatureQuorum after de-maturation, got: %v", err)
+	}
+	t.Log("sub-⅔ coalition REJECTED: de-maturation requires a real-bond super-quorum, not just head-count")
+
+	// A coalition INCLUDING the whale (w1 proposer + s1 attester = 11 MiB of 13 MiB)
+	// clears ⅔ → commits, with NO anchor. HALT horn stays dead, center-lessly.
+	big := &Block{Version: BlockVersion, Height: b.Height + 1, Prev: b.Hash(),
+		Entries: []ports.Entry{entry(21)}, BondRegs: []BondReg{bondReg(w1, whale, b.Hash())}}
+	Sign(big, w1)
+	big.Atts = []Attestation{Attest(big, s1)}
+	if err := c.Append(*big); err != nil {
+		t.Fatalf("a ≥⅔ real-bond coalition must commit after de-maturation (no anchor), got: %v", err)
+	}
+	t.Log("≥⅔ real-bond coalition COMMITS with no anchor: liveness preserved center-lessly")
+}
+
 // TestMaturityLatchSurvivesReloadAndReconcile pins that the latch is a CONSENSUS
 // fact (a pure function of the committed blocks), not process-local memory: a fresh
 // replica that Reloads the same history, and a replica that Reconciles onto it,
