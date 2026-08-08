@@ -238,6 +238,18 @@ type BondReg struct {
 	Size      int64      `cbor:"3,keyasint"`
 	Answer    []byte     `cbor:"4,keyasint,omitempty"`
 	Sig       []byte     `cbor:"5,keyasint,omitempty"`
+	// Domain is the validator's committed failure-domain label (A axis, D-C2): a
+	// self-declared AS/rack/geo hash (the same domainID gossiped for DHT diversity,
+	// H5-B), now COMMITTED in the bond so the concentration metric can count
+	// address-diverse participants deterministically (C2Metric NakamotoDomains).
+	// Signed (see signingBytes) so it binds to the validator. 0 = unset (treated as
+	// independent — behavior identical to pre-A-axis chains). HONESTLY WEAK: a
+	// declared domain is free to claim; it only costs a distinct real network
+	// position insofar as the transport layer (H5-B) refuses to route to a validator
+	// whose declared domain does not match its observed /24. It PRICES concentration
+	// (a splitter must declare — and be routable from — distinct domains), it does
+	// not CLOSE it (Kwon; the honest whale remains — m0.md §10).
+	Domain uint64 `cbor:"6,keyasint,omitempty"`
 }
 
 // ValidatorID is the NodeID (hash of the public key) that a registration bonds.
@@ -253,7 +265,17 @@ func (r BondReg) signingBytes(nonce uint64) []byte {
 	var sz [16]byte
 	binary.BigEndian.PutUint64(sz[:8], uint64(r.Size))
 	binary.BigEndian.PutUint64(sz[8:], nonce)
-	return append(b, sz[:]...)
+	b = append(b, sz[:]...)
+	// Bind the committed domain (A axis) — but ONLY when set, so a domain-0 bond
+	// signs the exact pre-A-axis message and every existing/genesis signature still
+	// verifies (backward-compatible; no BlockVersion bump needed).
+	if r.Domain != 0 {
+		var d [8]byte
+		binary.BigEndian.PutUint64(d[:], r.Domain)
+		b = append(b, []byte("silt/chain/bondreg/domain/v1")...)
+		b = append(b, d[:]...)
+	}
+	return b
 }
 
 var encMode cbor.EncMode
@@ -446,6 +468,11 @@ type Chain struct {
 	// within the TTL window is pruned from `bonded`. Deterministic (a function of
 	// block height), so every replica decays standing identically.
 	bondRegHeight map[ports.NodeID]uint64
+	// bondDomain records the committed A-axis failure-domain label from each
+	// validator's LATEST bond registration (0 = unset). A pure function of the
+	// committed blocks, so C2Metric can count address-diverse participants
+	// deterministically (NakamotoDomains). See BondReg.Domain.
+	bondDomain map[ports.NodeID]uint64
 	// slashed is the set of validators evicted for a proven equivocation (F2). A
 	// slashed id is disqualified and cannot re-earn bonded standing, so a proven
 	// double-sign costs standing in the OBJECTIVE set, not only the rep ledger.
@@ -467,6 +494,7 @@ func New(cfg Config, rep func(ports.NodeID) int64) *Chain {
 		bondRootOwner:  make(map[ports.Hash]ports.NodeID),
 		bondRootProven: make(map[ports.Hash]bool),
 		bondRegHeight:  make(map[ports.NodeID]uint64),
+		bondDomain:     make(map[ports.NodeID]uint64),
 		slashed:        make(map[ports.NodeID]bool)}
 }
 
@@ -604,12 +632,13 @@ func BondRegNonce(prev ports.Hash) uint64 {
 // for BondRegNonce(prev); the chain re-verifies it via the injected bond verifier
 // (SetBondVerifier). The signature binds the (root, size, nonce) claim to the
 // validator's key so a non-holder cannot register a bond it does not own.
-func NewBondReg(signer ed25519.PrivateKey, root ports.Hash, size int64, answer []byte, prev ports.Hash) BondReg {
+func NewBondReg(signer ed25519.PrivateKey, root ports.Hash, size int64, answer []byte, prev ports.Hash, domain uint64) BondReg {
 	r := BondReg{
 		Validator: append([]byte(nil), signer.Public().(ed25519.PublicKey)...),
 		Root:      root,
 		Size:      size,
 		Answer:    answer,
+		Domain:    domain, // committed A-axis label (0 = unset); signed via signingBytes
 	}
 	r.Sig = ed25519.Sign(signer, r.signingBytes(BondRegNonce(prev)))
 	return r
@@ -788,11 +817,18 @@ func (c *Chain) matureNow() bool {
 		}
 		return n >= c.cfg.MatureValidators
 	}
-	// Objective maturity gates on the OPERATOR-discounted coefficient, so a stake
-	// split across many keys must clear MatureValidators × M distinct bonds — the
-	// split half of the skew+split attack (D-C2). At M=1 this is the plain
-	// bond-distinct coefficient (unchanged behavior).
-	return c.C2Metric().NakamotoOperators >= c.cfg.MatureValidators
+	// Objective maturity gates on the OPERATOR-discounted coefficient AND the
+	// address-diverse coefficient (A axis, D-C2), whichever is smaller — so a stake
+	// split across many keys must clear MatureValidators × M distinct bonds AND
+	// MatureValidators distinct declared domains. At M=1 with no domains set this is
+	// the plain bond-distinct coefficient (unchanged behavior). min() only ever RAISES
+	// the bar to shed, so it can never weaken an existing config.
+	m := c.C2Metric()
+	k := m.NakamotoOperators
+	if m.NakamotoDomains < k {
+		k = m.NakamotoDomains
+	}
+	return k >= c.cfg.MatureValidators
 }
 
 // C2 is the concentration measurement behind the "no quiet capture" axis (D-C2):
@@ -828,6 +864,31 @@ type C2 struct {
 	Participants int
 	// Margin is the operator margin M the coefficient was discounted by (≥1).
 	Margin int
+	// NakamotoDomains is the Nakamoto coefficient over ADDRESS-DIVERSE groups (A axis,
+	// D-C2): the fewest DISTINCT declared failure-domains whose combined weight exceeds
+	// ⌊total/3⌋. Bonds sharing a declared domain aggregate into one group, so a stake
+	// split across many keys in one domain does not inflate it — only distinct domains
+	// do. With no domains set it equals NakamotoBonds (unchanged). The maturity shed
+	// gates on min(NakamotoOperators, NakamotoDomains), so a splitter must clear BOTH
+	// k·M distinct bonds AND k distinct domains. Weak signal (a domain is declared,
+	// H5-B-cross-checked at the transport layer, not proven) — pricing, not proof.
+	NakamotoDomains int
+	// DistinctDomains is the number of address-diversity groups counted (distinct
+	// non-zero declared domains + each unset-domain bond as its own group).
+	DistinctDomains int
+	// HHI is the Herfindahl–Hirschman concentration index over the participating
+	// bonds: Σ(share²) ∈ [1/n, 1]. 1 = one bond holds everything; 1/n = perfectly
+	// even. A high HHI is the **honest-whale** signal C2 cannot close on-chain (Kwon):
+	// surfaced as an out-of-band observability veto — measurement that makes
+	// concentration LOUD, never consensus enforcement (D-C2 / F-1 follow-up).
+	HHI float64
+	// Gini is the Gini coefficient of the bonded-weight distribution ∈ [0,1]:
+	// 0 = perfectly even, →1 = one holder. A companion inequality signal to HHI.
+	Gini float64
+	// TopShare is the largest single bond's fraction of participating weight ∈ [0,1].
+	// The most interpretable capture signal: a bond approaching ⅓ is one step from
+	// the Byzantine capture fraction (⌊total/3⌋) — the honest-whale alarm threshold.
+	TopShare float64
 }
 
 // C2Metric computes the concentration measurement over the participating,
@@ -839,6 +900,8 @@ type C2 struct {
 // committed chain state.
 func (c *Chain) C2Metric() C2 {
 	sizes := make([]int64, 0, len(c.validatorsSeen))
+	domainWeight := make(map[uint64]int64) // A axis: non-zero domains aggregated
+	var zeroDomainWeights []int64          // domain 0 (unset) → each its own group
 	var total int64
 	for id := range c.validatorsSeen {
 		if c.cfg.Anchors[id] || c.slashed[id] {
@@ -847,6 +910,11 @@ func (c *Chain) C2Metric() C2 {
 		if sz := c.bonded[id]; sz >= c.cfg.MinBond {
 			sizes = append(sizes, sz)
 			total += sz
+			if d := c.bondDomain[id]; d != 0 {
+				domainWeight[d] += sz // same declared domain → one group (no split inflation)
+			} else {
+				zeroDomainWeights = append(zeroDomainWeights, sz) // unset → independent
+			}
 		}
 	}
 	m := C2{TotalBondedBytes: total, Participants: len(sizes), Margin: c.operatorMargin()}
@@ -866,6 +934,44 @@ func (c *Chain) C2Metric() C2 {
 		}
 	}
 	m.NakamotoOperators = m.NakamotoBonds / m.Margin // ⌊k̂/M⌋, conservative
+	// A axis (D-C2): NakamotoDomains is the Nakamoto coefficient over ADDRESS-DIVERSE
+	// groups — bonds sharing a declared domain aggregate into one group, so splitting
+	// a stake across many keys in ONE domain does NOT inflate the count; only distinct
+	// declared domains do (the earned-per-network-position cost the flat margin M only
+	// assumes). Domain 0 (unset) is independent, so a chain with no domains set yields
+	// NakamotoDomains == NakamotoBonds — behavior identical to a pre-A-axis chain.
+	groups := make([]int64, 0, len(domainWeight)+len(zeroDomainWeights))
+	for _, w := range domainWeight {
+		groups = append(groups, w)
+	}
+	groups = append(groups, zeroDomainWeights...)
+	m.DistinctDomains = len(groups)
+	sort.Slice(groups, func(i, j int) bool { return groups[i] > groups[j] })
+	var gcum int64
+	m.NakamotoDomains = len(groups)
+	for i, w := range groups {
+		gcum += w
+		if gcum > threshold {
+			m.NakamotoDomains = i + 1
+			break
+		}
+	}
+	// Concentration observability (D-C2 / F-1 follow-up): HHI, Gini, and the top
+	// bond's share. C2 cannot CLOSE the honest-whale residue on-chain (Kwon), so this
+	// is an out-of-band veto that makes a concentration event LOUD — measurement, not
+	// enforcement. sizes is sorted largest-first; ftotal > 0 here.
+	n := len(sizes)
+	ftotal := float64(total)
+	m.TopShare = float64(sizes[0]) / ftotal
+	var hhi, giniNum float64
+	for i, sz := range sizes {
+		share := float64(sz) / ftotal
+		hhi += share * share
+		// Gini numerator for a DESCENDING-sorted distribution: Σ (n−1−2i)·xᵢ.
+		giniNum += float64(n-1-2*i) * float64(sz)
+	}
+	m.HHI = hhi
+	m.Gini = giniNum / (float64(n) * ftotal)
 	return m
 }
 
@@ -1330,6 +1436,7 @@ func (c *Chain) apply(b Block) {
 		}
 		c.bonded[id] = r.Size
 		c.bondRegHeight[id] = b.Height // reset the TTL clock on every (re)registration (G4)
+		c.bondDomain[id] = r.Domain    // committed A-axis label (0 = unset); latest wins
 	}
 	// OBJECTIVE RE-CHALLENGE (retest G4): standing lapses if not renewed with a
 	// fresh proof within BondTTLBlocks. A validator that registers once and then
@@ -1506,6 +1613,7 @@ func (c *Chain) adopt(t *Chain) {
 	c.bondRootOwner = t.bondRootOwner
 	c.bondRootProven = t.bondRootProven
 	c.bondRegHeight = t.bondRegHeight
+	c.bondDomain = t.bondDomain
 	c.slashed = t.slashed
 	c.everMature = t.everMature // the maturity latch is a function of the adopted history (F-1)
 }

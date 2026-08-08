@@ -81,6 +81,7 @@ func cmdDaemon(args []string) error {
 	signedProviders := fs.Bool("signed-providers", true, "self-certifying DHT provider records (M0 H5): a node signs its 'I hold this' announcements with its identity key and re-verifies records served back on lookup, so a node holding the k-closest slots to a key cannot fabricate provider records for identities that never announced. Default ON; =false drops to the legacy unsigned path (trusted/demo swarm only)")
 	signedProviderTTL := fs.Duration("signed-provider-ttl", 30*time.Minute, "freshness window stamped on signed provider records (M0 H5): a re-served record older than this is treated as expired, so an eclipsing node can't replay an ancient claim forever")
 	dhtDomainCap := fs.Int("dht-domain-cap", 2, "failure-domain diversity cap for DHT eclipse resistance (M0 H5-B): at most this many peers sharing one -domain are kept per routing bucket, and provider records are announced to / resolved from a domain-spread set — so an adversary owning the NodeIDs closest to a key but sitting in one domain (a ~$4 /24 key-surround) can't suppress discovery. Only bites when peers set distinct -domain labels. 0 = off (no diversity constraint)")
+	domain := fs.String("domain", "", "this node's failure-domain label (AS / rack / geo — e.g. \"as64500\" or \"us-east-1b\"). Two uses: DHT eclipse-resistance (H5-B, with -dht-domain-cap) AND, for a validator, it is COMMITTED in the bond so the C2 concentration metric counts ADDRESS-DIVERSE participants (A axis / D-C2) — a stake split across many keys in ONE domain cannot fake decentralization; shedding the launch anchors requires distinct domains, not just distinct keys. A WEAK signal (declared, transport-cross-checked, not proven); it prices concentration higher, it does not close the honest-whale residual. Empty = unset (independent).")
 	bondTTL := fs.Uint64("bond-ttl", 0, "objective re-challenge cadence (M0 retest G4 / RT-2): objective standing LAPSES this many committed blocks after a validator's latest on-chain bond registration unless it renews with a fresh space-time proof — so a validator that registers once then releases its plot cannot keep voting. LEFT UNSET it defaults ON for an untrusted objective validator (derived cadence); an explicit 0 disables it (standing never expires; safe only for a trusted/demo swarm)")
 	requireTokens := fs.Int("require-tokens", 0, "publisher privacy: require every published entry to carry a publish token blind-signed by this many validators, instead of a Publisher identity (0 = off; validators issue tokens)")
 	allowPublisher := fs.Bool("allow-publisher", false, "permit entries that carry a durable Publisher identity (records a PERMANENT Publisher→root link on the append-only chain; off by default for privacy/M0 — only for explicitly trusted deployments)")
@@ -198,6 +199,7 @@ func cmdDaemon(args []string) error {
 	cfg.RequireSignedProviders = *signedProviders
 	cfg.ProviderRecordTTL = ports.Duration(*signedProviderTTL)
 	cfg.DHTDomainCap = *dhtDomainCap // failure-domain diversity for eclipse resistance (H5-B)
+	cfg.Domain = *domain             // this node's failure-domain label (H5-B DHT diversity + committed in the bond for the A-axis C2 metric)
 	// The anti-release floor is SAFE-BY-DEFAULT on the objective/open path (M0
 	// retest G4-residual). Shipping the mechanism but defaulting it OFF left a
 	// doc-following open validator admitting a sub-floor, releasable bond to full
@@ -540,9 +542,18 @@ func cmdDaemon(args []string) error {
 						wheels = "shed permanently (matured; live decentralization has since dropped — real-bond super-quorum in force, anchors NOT re-armed)"
 					}
 				}
-				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | wheels %s\n",
+				fmt.Printf("  C2: nakamoto %d bonds → %d operators (margin ×%d) | cost-to-corrupt %d MiB of %d MiB bonded across %d | concentration HHI %.2f Gini %.2f top %.0f%% | wheels %s\n",
 					m.NakamotoBonds, m.NakamotoOperators, m.Margin,
-					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants, wheels)
+					m.CostToCorruptBytes>>20, m.TotalBondedBytes>>20, m.Participants,
+					m.HHI, m.Gini, m.TopShare*100, wheels)
+				// Concentration alarm (D-C2 / F-1 follow-up): the honest whale C2 cannot
+				// close on-chain, made LOUD out-of-band. A single bond at/above the ⅓
+				// Byzantine capture fraction is one step from being able to stall or
+				// (with more) capture consensus — a social/operational trigger, not an
+				// on-chain enforcement (impossible per Kwon).
+				if m.TopShare >= 1.0/3 {
+					fmt.Printf("  ⚠ CONCENTRATION ALARM: one bond holds %.0f%% of bonded weight (≥ the ⅓ capture fraction) — real standing is concentrating; this is the honest-whale residual C2 measures but cannot close on-chain. Act out-of-band.\n", m.TopShare*100)
+				}
 				// Export the committed head as a copy-pasteable weak-subjectivity
 				// checkpoint (F-1): a fresh/long-offline node pins one via -ws-checkpoint
 				// to refuse a long-range reorg. Publish it / cross-check across nodes.
