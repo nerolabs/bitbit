@@ -1665,7 +1665,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   semantics are what the tokened-publish design turn (#97) will settle. Closes
   #98.
 - **Register-after-distribute: a failed scatter no longer leaves a dangling
-  registry entry** (Gate 2, #65) — `pipeline.Add` published the registry entry
+  registry entry** (2026-08-02, Gate 2, #65) — `pipeline.Add` published the registry entry
   as its final step, *before* the caller distributed the chunks to peers, so a
   loud placement failure left an entry pointing at content that never landed
   (no link reaches the user, but the registry — and network-size estimates —
@@ -1678,7 +1678,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   (the rest of #65) already landed. Closes #65.
 
 ### Security
-- **Unlinkable publish is now the default; the Gated registry is fenced off**
+- **Unlinkable publish is now the default; the Gated registry is fenced off** (2026-08-02)
   (M0 privacy, #97/#99) — publishing recorded a permanent `Publisher → root`
   link on the append-only chain because the publish clients attached the node's
   durable identity by default. The chain never *required* it; it was being
@@ -1697,7 +1697,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   is used only by the sim today). Traces to **M0** (privacy corner), **F1 /
   risk #14**, immutable #3 (no permanent linkage). Closes #97 and #99.
 - **Hole-punch now actually fires end-to-end: two NATed daemons upgrade the relay
-  path to a direct connection** (Gate 3, #27/#111) — the Phase-3 wiring existed
+  path to a direct connection** (2026-08-02, Gate 3, #27/#111) — the Phase-3 wiring existed
   but never worked, and CI never caught it because it only ran the standalone
   probe, never the integrated daemons. Two bugs, both found locally via the
   Docker NAT harness (build-immutable V5): (1) the punch was only *requested* on
@@ -1765,7 +1765,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   placeholder seal being hardened for V1.
 
 ### Security
-- **Publisher privacy: quorum-issued blind publish tokens** (#14 / F1): the
+- **Publisher privacy: quorum-issued blind publish tokens** (2026-08-01) (#14 / F1): the
   chain recorded a Publisher NodeID per root, letting an observer map a durable
   reputation key to every root it published (silt protects who-READS far better
   than who-WRITES). A publish is now authorized by a **publish token** — a
@@ -1783,7 +1783,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   narrows the anonymity *set* to same-epoch requesters of the same subset (use a
   canonical validator set); the RSA issuer key is in-RAM (cross-restart
   persistence is a follow-up).
-- **Launch-window training wheels** (#79, risk 15): a young network is the
+- **Launch-window training wheels** (2026-08-01) (#79, risk 15): a young network is the
   easiest to capture — a Sybil quorum is cheap before the network has
   decentralized. A validator set may now declare **anchors** (`-anchors`,
   `-anchor-quorum`): while the network is immature, a commit ALSO requires
@@ -1801,7 +1801,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   is deterministic chain logic covered at unit+sim, and the `-anchors` wiring
   is confirmed by a daemon smoke check — a bespoke multi-daemon shed e2e is
   high-cost/low-value).
-- **Identity costs storage: bond-gated consensus standing** (#78): reputation —
+- **Identity costs storage: bond-gated consensus standing** (2026-08-01) (#78): reputation —
   the number the chain gates writes on — is no longer dominated by
   self-reported serving (which two colluding nodes could wash-mint for free,
   threat-catalog D1/D3). Standing now costs **real, challenged, held storage**:
@@ -1818,7 +1818,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   in RAM and the seal is not yet memory-hard (proof-of-*space*-lite, labeled);
   disk-persistence + a memory-hard seal are tracked follow-ups. Design:
   `docs/design/bond-audit.md`.
-- **Safe consensus defaults** (#79): `silt daemon -validator` now defaults to
+- **Safe consensus defaults** (2026-08-01) (#79): `silt daemon -validator` now defaults to
   `-quorum 3 -min-rep 100` (was `-quorum 1 -min-rep 0`), so a lone or fresh
   node can no longer rubber-stamp the registry — writing requires earned
   standing and a real quorum. A trusted one-box swarm opts into self-commit
@@ -1829,7 +1829,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   `-quorum 0`) as the positive control.
 
 ### Added
-- **Deterministic NAT/relay/hole-punch in the sim** (#27): the in-process
+- **Deterministic NAT/relay/hole-punch in the sim** (2026-08-01) (#27): the in-process
   network (`simnet`) now models a home router — a NATed node dials out freely
   (each outbound opening the conntrack reverse mapping so replies get back in)
   but is un-dialable cold from off its LAN. Two NATed nodes on different LANs
@@ -1840,7 +1840,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   tier-1, seed-reproducible mirror of the `integration/nat` Docker harness; it
   is zero-overhead and byte-identical for every existing scenario (no NAT
   configured → the fast path short-circuits and draws no extra randomness).
-- **Hole-punching: relay paths upgrade to direct connections** (#27): when two
+- **Hole-punching: relay paths upgrade to direct connections** (2026-08-01) (#27): when two
   NATed daemons talk through a relay, the relay now *coordinates* a
   hole-punch — it tells each the other's observed endpoint, and both dial it
   from their relay-registration port at once (`SO_REUSEPORT`, TCP
@@ -1854,7 +1854,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   to rendezvous, the big cost win for cheap public infrastructure (S6). (The
   live two-daemon upgrade has a harness scenario in progress — the caretaker
   traffic-trigger needs the minimal-network provider resolution sorted.)
-- **NATed nodes learn their public endpoint, STUN-style** (#27, the groundwork
+- **NATed nodes learn their public endpoint, STUN-style** (2026-08-01) (#27, the groundwork
   for hole-punching): when a node registers with a relay, the relay reports the
   `host:port` it observed the registration coming from — the node's NAT mapping.
   A node behind NAT cannot otherwise know its own public address, and
@@ -1864,7 +1864,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   dial, and relay→direct upgrade follow. The `integration/nat` harness asserts
   a NATed node learns its *mapped* public IP (the gateway's), not its LAN
   address.
-- **Automated cross-NAT integration harness** (`integration/nat/`, and a
+- **Automated cross-NAT integration harness** (2026-08-01) (`integration/nat/`, and a
   `nat-integration` CI job): stands up two genuinely-NATed daemons plus a
   public relay in real container networks (real kernel NAT via iptables
   MASQUERADE, real TLS over real sockets), publishes from behind one NAT and
@@ -1877,14 +1877,14 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   machine.
 
 ### Fixed
-- **The daemon no longer silently drops config fields** (#71): `cmd/silt` built
+- **The daemon no longer silently drops config fields** (2026-08-01) (#71): `cmd/silt` built
   `node.Config` field-by-field, so any field added to `DefaultConfig` defaulted
   to its zero value in the real binary — how the #65 fetch-retry shipped inert
   and demand-responsive dispersion was off in the daemon while the roadmap
   listed it as done. The daemon and the ephemeral swarm add/get client now
   start from `node.DefaultConfig()` and override only what genuinely differs
   (the daemon's 2s `RequestTimeout`), so new fields are inherited by default.
-- **A restarted daemon's content stays discoverable** (#69, found in the #65
+- **A restarted daemon's content stays discoverable** (2026-08-01) (#69, found in the #65
   field test): provider records live only in peers' memory and die with the
   process, so a daemon re-announces everything on its disk at startup
   (`AnnounceHeld`) — but a coded shard must be announced under its *column
@@ -1897,7 +1897,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   the node can still answer storage-audit challenges after a restart. The
   `integration/nat` harness gained a `RESTART=1` scenario that restarts the
   whole swarm and re-fetches to prove it.
-- **Fetches survive a saturated relay** (#65): once the public rendezvous
+- **Fetches survive a saturated relay** (2026-08-01) (#65): once the public rendezvous
   node hits its capacity cap, every byte to a NATed provider funnels through
   the relay, whose per-peer splice slots saturate under concurrent fan-out
   and return "relay at capacity" — and the fetch path had **no retry**, so a
@@ -1915,7 +1915,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   distribute (a loud placement failure still leaves a dangling registry
   entry), and hole-punching (the structural fix that moves bulk bytes off
   the relay entirely).
-- **Publish no longer returns a link for a file the swarm can't rebuild**
+- **Publish no longer returns a link for a file the swarm can't rebuild** (2026-08-01)
   (#64, the data-shard twin of #60): placement verified that *manifest*
   chunks landed durably, but **data and parity shards were placed
   optimistically** — a column that no node accepted was ignored, so under
@@ -1931,7 +1931,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   identical silent-loss on **uncoded files** (which carry no parity, so every
   chunk is required). Extends tenet **B7 — trust but verify; no optimistic
   operations** from the manifest path to all of publish.
-- **Publish no longer returns a link for content it never stored** (#60,
+- **Publish no longer returns a link for content it never stored** (2026-07-30) (#60,
   found in the 300-file scaling re-test): under load, once the network
   passed its capacity cap, a manifest chunk could be placed on *no* node
   (all candidates full or unreachable) yet publish still registered the
@@ -1944,7 +1944,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   publisher **fails loudly** instead of handing back an unretrievable link.
   This makes publish honor the new tenet **B7 — trust but verify; no
   optimistic operations.**
-- **Ghost routing entries no longer break discovery at scale** (found in
+- **Ghost routing entries no longer break discovery at scale** (2026-07-30) (found in
   the 300-file scaling test, #43): every `swarm add`/`swarm get` ran as a
   short-lived client with a fresh identity, and nodes both routed to those
   clients and persisted them to `peers.json` — so a busy node's routing
@@ -1953,13 +1953,13 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   fail. Fixed at both ends: nodes persist only peers they have actually
   reached, and a short-lived client stamps its messages so peers never
   route to it.
-- **Re-publishing identical content is idempotent** (#46): a failed
+- **Re-publishing identical content is idempotent** (2026-07-30) (#46): a failed
   publish could leave a root registered but return no link, and a retry
   then hit "root already published with different entry" — because
   idempotency compared the whole entry, including the per-invocation
   publisher identity. It now dedups on content, so a retry (or a second
   person adding the same file) succeeds instead of colliding.
-- **NATed peers can actually converse** (found in the first real
+- **NATed peers can actually converse** (2026-07-26) (found in the first real
   cross-network test, #27): the transport dialed a fresh connection per
   message, so a reply required dialing *into* the requester — impossible
   behind NAT, and bootstrap came back with zero table entries. Replies
@@ -1973,23 +1973,23 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   reachability dial-back deliberately never reuses a connection — its
   meaning is "a fresh inbound dial landed" — so AutoNAT stays honest.
 - **Relay-form addresses survive `-bootstrap`, DNS seeds, and
-  peers.json** — peer strings split on the first `@`, not the last, so
+  peers.json** (2026-07-26) — peer strings split on the first `@`, not the last, so
   `ID@relay:RID@host:port` parses instead of being silently dropped.
 
 ### Added
-- **Opt-in in-RAM read cache for hot chunks** (`-cache SIZE`, default off;
+- **Opt-in in-RAM read cache for hot chunks** (2026-07-30) (`-cache SIZE`, default off;
   #42): a cache hit serves trusted bytes from memory, skipping both the
   disk read and the per-read hash re-verification. Read-through LRU,
   cache-on-read only, and Delete evicts so purged content is never served.
-- **The daemon caretakes content published through its own UI** by default
+- **The daemon caretakes content published through its own UI** (2026-07-30) by default
   (`-care-published`, #44): without a caretaker a published file's
   redundancy only decays as nodes churn — now the publishing daemon
   repairs its own roots, and both the UI and CLI say whether a caretaker
   is running.
-- **Paginated, shard-sorted roots list in the daemon UI** (#45): the
+- **Paginated, shard-sorted roots list in the daemon UI** (2026-07-30) (#45): the
   "identifiers this daemon holds shards of" table now paginates and sorts
   by shards held, instead of rendering every row (unusable at hundreds).
-- **A public build log** — a chronological "how it was built and why"
+- **A public build log** (2026-07-27) — a chronological "how it was built and why"
   narrative under `docs/buildlog/` (dated Markdown entries), rendered to
   `website/buildlog.html` by `scripts/gen_buildlog.py` on the same
   source-of-truth pipeline as the changelog and roadmap (CI fails if the
@@ -1999,7 +1999,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   infrastructure. Seeded with three entries: the one-process/ports-and-
   adapters prime directive, the placement spectrum, and cross-network
   reachability. Linked from the site's docs and footer.
-- **`-log LEVEL` — narrate the normal path, not just failures** — both
+- **`-log LEVEL` — narrate the normal path, not just failures** (2026-07-27) — both
   `silt daemon` and `silt client` take `-log error|warn|info|debug`,
   opening the `debug.log` sink at that threshold; `-debug` is now
   shorthand for `-log debug`. At `info` the happy path narrates —
@@ -2011,7 +2011,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   debug firehose. Free when off and off the hot path (per-chunk store
   events stay at debug); core still logs through the `ports.Logger` port
   and imports nothing new.
-- **Multi-process end-to-end tests over real TCP** (CI hardening,
+- **Multi-process end-to-end tests over real TCP** (2026-07-27) (CI hardening,
   BACKLOG Phase 2) — a new `e2e/` suite builds the `silt` binary and
   runs three daemons as separate OS processes, publishes a 1 MiB file
   through the chain-backed registry over pinned HTTPS (driving a real
@@ -2021,7 +2021,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   #36's "a reply can never reach a NATed peer" bug hid until real
   sockets carried it. It runs as its own CI job; the unit and race jobs
   pass `-short` to skip the process spawning.
-- **Relay discovery by gossip** (#27 polish) — a daemon offering `-relay`
+- **Relay discovery by gossip** (2026-07-27) (#27 polish) — a daemon offering `-relay`
   now stamps the service's dialable `host:port` on every outgoing
   envelope (borrowing the `-advertise` host when the relay listener is
   bound to a wildcard). Peers record these first-hand — a node only ever
@@ -2030,7 +2030,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   verdict is NATed and that has no `-relay-via` adopts the first
   discovered relay automatically (and keeps watching until one appears):
   the two-Macs runbook now works with nothing but `-bootstrap`.
-- **Two-slot address book: direct preferred, relay fallback** (#27
+- **Two-slot address book: direct preferred, relay fallback** (2026-07-27) (#27
   polish) — the transport now remembers up to two addresses per peer,
   one direct `host:port` and one `relay:R@host:port`, instead of one
   slot the two forms fought over (an mDNS-learned LAN address used to be
@@ -2045,7 +2045,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   addresses outright: reachable-through-a-relay is exactly what "public"
   must not mean.
 
-- **Relay** (#27, step 3 — the universal NAT fallback) — a NATed daemon can
+- **Relay** (2026-07-26) (#27, step 3 — the universal NAT fallback) — a NATed daemon can
   now be reached across networks through any reachable node running
   `-relay ADDR`. The shape is libp2p Circuit-Relay-v2's, without the
   dependency: the NATed node keeps one registered outbound connection to
@@ -2062,7 +2062,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   exposure is documented in the threat model. CI proves the full path on
   localhost — including both-peers-NATed, every byte relayed — because
   "NATed" is modeled honestly as "accepts no inbound connections".
-- **`-debug` flag → `debug.log`** on both `silt daemon` and `silt client` —
+- **`-debug` flag → `debug.log`** (2026-07-26) on both `silt daemon` and `silt client` —
   a leveled logger behind a new `ports.Logger` interface (core stays pure;
   the file sink is `adapters/logfile`). One grep-able line per event:
   transport failures (dials, handshakes, forged frames), node events
@@ -2072,7 +2072,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   artifact that can be attached to a bug report. Groundwork for testing
   cross-network reachability (#27) on real networks, where failures are
   one-shot and remote instead of deterministic and replayable.
-- **Zero-config LAN discovery** (#27, first rung of cross-network
+- **Zero-config LAN discovery** (2026-07-26) (#27, first rung of cross-network
   reachability) — `silt daemon` now announces itself on the local network
   and folds any peer it hears into the routing table, so two nodes in the
   same house find each other with no `-bootstrap`, no DNS seed, and no
@@ -2084,7 +2084,7 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
   loopback-only `-listen` disables it with a note (nothing on the LAN could
   reach a loopback address anyway). See
   [docs/design/cross-network.md](docs/design/cross-network.md).
-- **Reachability check** (#27, our AutoNAT) — after bootstrap, a daemon asks
+- **Reachability check** (2026-07-26) (#27, our AutoNAT) — after bootstrap, a daemon asks
   a couple of known peers to dial it back at its advertised address. A
   landed dial-back both proves and delivers the verdict "public"; silence
   within a timeout is read, conservatively, as "behind NAT" (which only ever
