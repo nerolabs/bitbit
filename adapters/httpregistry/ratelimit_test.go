@@ -37,40 +37,46 @@ func TestRateLimiterBurstThenThrottleThenRefill(t *testing.T) {
 	}
 }
 
-// TestChargePricesAllByWork is the F-3 regression (red-team blind-2026-08-08): a big
-// GET /all must cost the caller tokens PROPORTIONAL TO WORK, not one flat token, so a
-// single source can't amplify one token into an unbounded full-registry dump. After
-// serving a large /all, that IP's bucket is drained into debt and the next request is
-// throttled — the amplification is now priced.
-func TestChargePricesAllByWork(t *testing.T) {
-	l := newIPRateLimiter(10, 5) // 10/s, burst 5
+// TestBucketMapIsBounded is the F-3 hardening regression: the per-IP bucket map is a
+// bounded resource — a flood that cycles source IPs cannot grow it without bound (it
+// would otherwise be its OWN cost vector). It never exceeds maxBuckets, and a
+// recently-active IP survives the sampled-LRU eviction that a flood triggers.
+func TestBucketMapIsBounded(t *testing.T) {
+	l := newIPRateLimiter(10, 5)
 	defer l.close()
-	now := time.Unix(3_000_000, 0)
-	const ip = "198.51.100.9"
+	base := time.Unix(4_000_000, 0)
 
-	// One /all-sized request is allowed (spends 1 of the 5 burst tokens)...
-	if !l.allow(ip, now) {
-		t.Fatal("the first request should be allowed")
-	}
-	// ...then priced by the work it did: a 20k-entry registry at 64 entries/token
-	// costs ~312 tokens, far exceeding the burst → the bucket goes deep into debt.
-	l.charge(ip, 20_000/allEntriesPerToken, now)
+	// Pre-seed one IP and keep it hot (most-recent `last`), so the sampled-LRU eviction
+	// prefers older flood entries over it.
+	const hot = "203.0.113.1"
+	l.allow(hot, base.Add(time.Duration(maxBuckets+50)*time.Second))
 
-	// The very next request from the same IP, same instant, must be throttled — the
-	// caller cannot immediately repeat the expensive dump (the pre-fix behavior the
-	// red-team measured: 40 unpriced /all in one burst, zero 429).
-	if l.allow(ip, now) {
-		t.Fatal("F-3 regression: a source that just pulled a large /all must be throttled, not free to repeat it")
+	// Flood far more distinct IPs than the cap, each older than `hot`.
+	for i := 0; i < maxBuckets+5000; i++ {
+		l.allow("10."+itoa(i/65536%256)+"."+itoa(i/256%256)+"."+itoa(i%256), base.Add(time.Duration(i)*time.Second))
 	}
-	// A small /all (few entries) costs a fraction of a token, so normal use is
-	// unaffected — the price tracks the work, it isn't a flat penalty on /all.
-	l2 := newIPRateLimiter(10, 5)
-	defer l2.close()
-	l2.allow("10.0.0.5", now)
-	l2.charge("10.0.0.5", 10/allEntriesPerToken, now) // 10 entries → ~0.16 tokens
-	if !l2.allow("10.0.0.5", now) {
-		t.Fatal("a small /all must not lock out a normal caller")
+	l.mu.Lock()
+	n := len(l.buckets)
+	_, hotAlive := l.buckets[hot]
+	l.mu.Unlock()
+	if n > maxBuckets {
+		t.Fatalf("F-3: the bucket map must stay ≤ maxBuckets (%d); got %d", maxBuckets, n)
 	}
+	if !hotAlive {
+		t.Fatal("F-3: a recently-active IP must survive the sampled-LRU eviction under a distinct-IP flood")
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b []byte
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
 }
 
 // TestRateLimiterIsPerIP: one noisy client does not throttle another.

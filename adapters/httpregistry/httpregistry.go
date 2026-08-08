@@ -129,9 +129,7 @@ func ServeTLS(addr string, ident *identity.Identity, reg ports.Registry) (boundA
 
 func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr string, shutdown func(), err error) {
 	// Read-cost bounding (#48): a per-IP rate limit + server timeouts keep a public
-	// registry cheap to run and hard to exhaust (slowloris, lookup floods). GET /all is
-	// additionally priced by work (F-3), so it is created up here for the /all handler to
-	// charge against.
+	// registry cheap to run and hard to exhaust (slowloris, lookup floods).
 	lim := newIPRateLimiter(defaultRatePerSec, defaultBurst)
 	mux := http.NewServeMux()
 
@@ -178,22 +176,15 @@ func serve(addr string, reg ports.Registry, tlsCfg *tls.Config) (boundAddr strin
 		json.NewEncoder(w).Encode(toJSON(e))
 	})
 
-	mux.HandleFunc("GET /all", func(w http.ResponseWriter, r *http.Request) {
-		entries, err := reg.All(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// Price the O(N) serialization by work, not one flat token (F-3): dumping the
-		// whole registry now costs the caller ~len/allEntriesPerToken extra tokens, so a
-		// single source can't repeatedly amplify a token into a full-registry download.
-		lim.charge(clientIP(r), float64(len(entries))/allEntriesPerToken, time.Now())
-		out := make([]entryJSON, 0, len(entries))
-		for _, e := range entries {
-			out = append(out, toJSON(e))
-		}
-		json.NewEncoder(w).Encode(out)
-	})
+	// GET /all is DELIBERATELY NOT SERVED on the public mux (red-team blind-2026-08-08
+	// F-3). It serialized the whole registry O(N) with no pagination, an unbounded
+	// per-request cost that an interim work-pricing bounded only per-SOURCE — a
+	// distributed dump (one request per source IP) no per-IP counter can touch. It is
+	// used only by an operator's OWN CLI/UI, which reads the registry IN-PROCESS (the
+	// daemon's local chainhost/fileregistry), never over this wire. Removing it deletes
+	// the amplification and the distributed variant outright. A client asking for /all
+	// over HTTP now gets 404 by design; the operator UI degrades gracefully. If a public
+	// bulk-read is ever wanted, add it back paginated (cursor + hard page cap) + priced.
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -302,6 +293,12 @@ func (c *Client) Lookup(ctx context.Context, root ports.Hash) (ports.Entry, bool
 	return e, err == nil, err
 }
 
+// ErrAllNotServed is returned by a remote client's All(): a registry no longer
+// serves a bulk /all dump on its public mux (F-3). A caller should degrade (list
+// nothing / use /lookup), not treat it as a hard error. An operator listing its OWN
+// registry reads it in-process, not through this client, so is unaffected.
+var ErrAllNotServed = errors.New("httpregistry: /all is not served on the public registry mux (use per-root lookup)")
+
 func (c *Client) All(ctx context.Context) ([]ports.Entry, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.base+"/all", nil)
 	if err != nil {
@@ -312,6 +309,9 @@ func (c *Client) All(ctx context.Context) ([]ports.Entry, error) {
 		return nil, fmt.Errorf("httpregistry all: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrAllNotServed
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("httpregistry all: %s", resp.Status)
 	}

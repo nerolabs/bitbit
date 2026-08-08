@@ -9,6 +9,18 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 ## [Unreleased]
 
 ### Security
+- **F-3: the whole-registry `GET /all` dump is off the public mux** (2026-08-08) — Completes the
+  red-team F-3 fix. `/all` serialized the entire registry O(N) with no pagination — an unbounded
+  per-request cost. An interim change priced it by work, but that only bounds cost *per source*; a
+  **distributed** dump (one request per source IP) no per-IP counter can touch. Since `/all` is used
+  only by an operator's own CLI/UI — which reads the registry **in-process** (the daemon's local
+  `chainhost`/`fileregistry`), never over this wire — it is now simply **not served on the public
+  mux**: a remote client gets `404` / `ErrAllNotServed` and degrades to per-root `/lookup`; an
+  operator listing its *own* registry is unaffected. This deletes both the amplification and the
+  distributed variant. Also hardened the rate-limiter's per-IP **bucket map with a hard size cap +
+  sampled-LRU eviction** so a source-IP-cycling flood can't grow it without bound (it would otherwise
+  be its own cost vector). Regressions: `TestBucketMapIsBounded` + the round-trip test now asserts
+  `/all` is not served. (The interim work-pricing `charge()` is removed as superseded.)
 - **F-1: the maturity shed is now a genuine one-way ratchet (anchors never re-arm)** (2026-08-08) —
   A blind red-team pass (re-)found that the launch-anchor "training wheels" were gated on the **live**
   `Mature()`, which recomputes decentralization from the *current* bonded set — so an honest whale
