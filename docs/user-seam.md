@@ -117,14 +117,14 @@ identity you just printed, so the IDs match):
 # Validator B first, so A can bootstrap to it. B runs its own bond and names A
 # as its attester. Copy B's `peer:` line from its output → that's <B> below.
 silt daemon -id-seed 2 -listen 127.0.0.1:7102 -store dB \
-  -validator -min-rep 100 -quorum 1 -attesters <ID_A> \
+  -validator -objective=false -min-rep 100 -quorum 1 -attesters <ID_A> \
   -bond 8M -min-bond-floor 0 -bond-audit 1s -capacity 1G
 
 # Validator A: registry + validator + a storage bond. -min-rep 100 means
 # standing must be EARNED (no -quorum 0 rubber-stamp). Fast bond audit so
 # standing accrues quickly. Names B as its attester and bootstraps to it.
 silt daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -store dA \
-  -validator -min-rep 100 -quorum 1 -attesters <ID_B> -bootstrap <B> \
+  -validator -objective=false -min-rep 100 -quorum 1 -attesters <ID_B> -bootstrap <B> \
   -bond 8M -min-bond-floor 0 -bond-audit 1s -capacity 1G
 
 # Publish through consensus: the entry commits only once the bond audits have
@@ -133,6 +133,17 @@ silt daemon -id-seed 1 -listen 127.0.0.1:7101 -serve-registry 127.0.0.1:7100 -st
 # <regRef> is A's registry: line, both copied verbatim from A's output.
 silt swarm add FILE -peers <A> -registry <regRef>
 ```
+
+> **Why `-objective=false` here.** This 2-box walkthrough demos earned standing on
+> the **reputation-earned (subjective) path** — exactly what the cited test
+> `TestBondEarnedStandingCommitsOverTCP` runs. The **default** path is objective
+> fork-choice (`-objective`, on for an untrusted validator), which reads standing
+> from the *committed on-chain bond ledger* and so needs `-anchors` (the launch
+> validator set) + `-mature-validators` to bootstrap a young network's bonded
+> weight — without them a fresh objective swarm has zero committed weight and the
+> publish is refused (`bonded 0, needs …`). For the real multi-validator launch
+> path, drop `-objective=false` and add the anchor set — see the **Training
+> wheels** row below (and `TestObjectiveConsensusCommitsOverTCP`).
 
 > **Why `-min-bond-floor 0` here.** An untrusted validator gets an anti-release
 > floor (1 GiB) by DEFAULT: a plot smaller than that could be released and

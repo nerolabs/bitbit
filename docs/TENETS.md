@@ -93,14 +93,18 @@ scale a Sybil relies on — one plot backing many identities (size-bound bond),
 synthetic bytes standing in for real storage (unique-sealed real content),
 self-dealt demand (witnessed, *unlinkable* demand receipts that reuse the
 blind-token primitive), free keys massed near a target (address/AS-diversity
-buckets), instant standing (VDF elapsed time + audited accrual). Composed so
+buckets), coasting on stale standing (retention decay/TTL forces continuous
+re-proof — note T is *retention only*: there is no acquisition-time accrual,
+so acquisition is priced by D alone). Composed so
 every shortcut on one axis trips another axis's check, the *target composition*
 makes **forging N standings cost N× of *every* non-substitutable resource** —
 which is honest provision. **⚠️ Shipped subset vs. target (be honest which):**
 today consensus *standing* is gated by the **bond (disk) axis alone**; the
-served-demand axis (B) is an unbuilt track (D-DEMAND / #181), and
+served-demand axis (B) is an unbuilt track (D-DEMAND / #181),
 address-diversity (A) lives in the DHT layer (H5), not yet in the standing
-number. So `C_honest ≈ D` in force today, `D×A×T×B` as the target — the interlock
+number, and **T (time) ships for retention only** (decay/TTL) with **no
+acquisition-time accrual** (a time-acquisition ramp is deferred — a bare age
+gate is pre-farmable). So `C_honest ≈ D` in force today, `D×A×T×B` as the target — the interlock
 is designed, not fully wired, and the C1 claim is *conditional* (see
 `design/m0.md` §3, §7, §10). Sybil-resistance is therefore *re-pricing +
 concentration-bounding*, not
