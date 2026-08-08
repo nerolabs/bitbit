@@ -8,6 +8,25 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Added
+- **`-registry-only` — the leanest public-registry role** (2026-08-08,
+  [#47](https://github.com/nerolabs/silt/issues/47)) — A daemon started with `-registry-only` serves a
+  file-backed registry over HTTPS and constructs **no storage node at all** — no DHT, chunk store,
+  chain, or caretaker. It sits below `-freeload` (which is still a full routing node that merely refuses
+  to host content): a public-infrastructure operator can now run a rendezvous registry at minimal cost.
+  The daemon returns to a tiny registry-serving path before any of the node machinery is built. Proven
+  over real TLS (`e2e/registry_only_test.go`: a pinned client publishes + looks up an entry, and the
+  daemon never announces a routing peer). With `-freeload` (PR #201) this completes #47.
+- **Registry read-cost bounding — keep public registries cheap to run** (2026-08-08,
+  [#48](https://github.com/nerolabs/silt/issues/48)) — A registry is a costless public good only if a
+  single caller can't drive unbounded cost, so the registry HTTP server now enforces a **per-client-IP
+  token-bucket rate limit** (generous defaults — 20 req/s, burst 40 — so normal clients never notice;
+  sustained floods from one source get `429`) plus **server timeouts** (read-header / read / write /
+  idle) against slowloris and lookup/`/all`-serialization floods. Idle rate buckets are pruned on a
+  timer so a caller cycling source IPs can't grow the bucket map without bound (the map would be its
+  own cost vector). Covers the read-cost-bounding lever of #48; liveness-pruning of dead entries and
+  federation/sharding remain as post-launch work.
+
 ### Fixed
 - **Prepaid publish credits were silently dropped over real TCP** (2026-08-08,
   [#179](https://github.com/nerolabs/silt/issues/179)) — `tcpnet`'s hand-rolled wire codec
