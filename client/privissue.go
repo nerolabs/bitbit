@@ -32,9 +32,19 @@ import (
 // issuer at issuerAddr, paying with a prepaid blind credit. It spins up a one-off
 // ephemeral identity + transport, withdraws over it, and tears everything down on
 // return. It returns the withdrawn token and the ephemeral NodeID the issuer saw (never
-// the fetcher's durable one). issuerAddr is the issuer's dialable address (resolved via
-// the durable node's routing table); issuerPub is its token-issuer public key; credit is
-// a blind credit acquired earlier under the durable identity (Node.AcquireCredits).
+// the fetcher's durable one). issuerPub is its token-issuer public key; credit is a blind
+// credit acquired earlier under the durable identity (Node.AcquireCredits).
+//
+// issuerAddr severs one or two links depending on its form (D3):
+//   - a DIRECT "host:port" hides the fetcher's IDENTITY (the issuer authenticates only
+//     the ephemeral key) but the issuer still sees the fetcher's IP (slice 1);
+//   - a RELAY-form "relay:R@host:port" (the issuer's advertised relay address) ALSO
+//     hides the fetcher's IP: the ephemeral transport dials the issuer THROUGH the relay,
+//     so the issuer's inbound connection is from the relay, not the fetcher (slice 2).
+//     The end-to-end TLS still authenticates the ephemeral key across the relay pipe.
+//
+// Timing-correlation (epoch-batching) is the remaining D3 hardening, deferred to the H8
+// mixnet.
 func WithdrawDemandTokenPrivately(rng io.Reader, issuerID ports.NodeID, issuerAddr string, issuerPub *rsa.PublicKey, credit ports.PublishCredit, timeout time.Duration) (demand.Token, ports.NodeID, error) {
 	eph, err := identity.Generate(rng)
 	if err != nil {

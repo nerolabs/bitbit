@@ -250,12 +250,14 @@ subset). Superseded per-finding history: [`/archive/`](../archive/).
   bond per faked unit* (the best achievable under no-center). Self-dealing red-team at both the pure
   layer (`core/demand`) and the real node wire (`sim`: one bonded identity washes N → demand 1;
   unbonded delivery → 0; a distinct bonded identity → +1). **Property (b) fetcher-unlinkability —
-  D3 issuance-mixing (H8/#179):** ◑ **slice 1 (identity) BUILT** — `client.WithdrawDemandTokenPrivately`
-  withdraws over a FRESH EPHEMERAL identity paying with a prepaid blind credit, so the issuer
-  authenticates only an unlinkable ephemeral key, not the fetcher's durable NodeID (real-TCP test;
-  also fixed a latent bug where `tcpnet` dropped the `Credit` field over the wire, so the F4/D3 fee
-  decoupling had only ever worked in the sim). ☐ slice 2 (relay-routing — the IP link) next; timing
-  (epoch-batching) deferred to the H8 mixnet (post-M0). The blind signature already hid the serial.
+  D3 issuance-mixing (H8/#179):** ◑ **slices 1+2 BUILT** — `client.WithdrawDemandTokenPrivately`
+  withdraws over a FRESH EPHEMERAL identity paying with a prepaid blind credit (slice 1 — issuer
+  authenticates only an unlinkable ephemeral key, not the durable NodeID), and given a relay-form
+  issuer address dials the issuer THROUGH a content-blind relay (slice 2 — issuer sees the relay's IP,
+  not the fetcher's; end-to-end TLS still authenticates the ephemeral key across the relay pipe). Both
+  proven over real TCP (`client/privissue_test.go`). Also fixed a latent bug where `tcpnet` dropped the
+  `Credit` field over the wire, so the F4/D3 fee decoupling had only ever worked in the sim. ☐ timing-
+  correlation (epoch-batching) deferred to the post-M0 H8 mixnet. The blind signature already hid the serial.
 
 ## D-C2 — "no quiet capture" is held in tension, never closed (by theorem)
 
