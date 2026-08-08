@@ -1,112 +1,191 @@
 #!/usr/bin/env python3
-"""Render CHANGELOG.md into website/changelog.html, styled to match the
-site. CHANGELOG.md is the single source of truth; CI runs this before
-every deploy so the published page can never drift from the log.
+"""Render CHANGELOG.md into website/changelog.html, styled to match the site.
 
-Deliberately dependency-free (stdlib only) so it runs on any CI runner
-without an install step."""
+CHANGELOG.md is the single source of truth; CI runs this before every deploy so
+the published page can never drift from the log. Dependency-free (stdlib only).
+
+The page is organised as a CHRONOLOGICAL SPINE, not a wall of category headers:
+the Unreleased section's entries are regrouped by their per-entry date (newest
+first), each rendered as a card carrying a category chip. Released versions keep
+their version+date header. This is why every Unreleased entry needs an inline
+`(YYYY-MM-DD…)` date — the grouping key.
+"""
 import html
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "CHANGELOG.md"
 OUT = ROOT / "website" / "changelog.html"
-
-
 GH_BLOB = "https://github.com/nerolabs/silt/blob/main/"
+
+CAT_CLASS = {"Added": "added", "Changed": "changed", "Fixed": "fixed",
+             "Security": "security", "Docs": "docs", "Removed": "removed",
+             "Deprecated": "deprecated"}
 
 
 def _href(url: str) -> str:
-    """Keep absolute / anchor / root links as-is; map repo-relative paths
-    (docs/…, ROADMAP.md) to their GitHub blob URL so they resolve on the
-    published site and pass the internal link-check, which skips externals."""
     if url.startswith(("http://", "https://", "//", "#", "mailto:", "/")):
         return url
     return GH_BLOB + url
 
 
 def inline(s: str) -> str:
-    """Minimal inline markdown → HTML: escape, then code/bold/links."""
+    """Minimal inline markdown → HTML: escape, then code/bold/italics/links."""
     s = html.escape(s)
+    s = s.replace("\\`", "`")  # unescape stray \`…\` in the source so it renders as code
     s = re.sub(r"`([^`]+)`", r'<span class="mono">\1</span>', s)
-    s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)  # bold first, may wrap inner *italics*
-    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)  # single-asterisk italics
+    s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
+    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
                lambda m: f'<a href="{_href(m.group(2))}">{m.group(1)}</a>', s)
     return s
 
 
-def render(md: str) -> str:
-    body, para, quote = [], [], []
-    in_list, intro_done, lead_used = False, False, False
+# ── Parsing: CHANGELOG.md → [Version{name, date, entries[]}] ────────────────────
+class Entry:
+    __slots__ = ("category", "date", "lead", "subs")
 
-    def flush_para():
-        nonlocal para, lead_used
-        if not para:
-            return
-        text = inline(" ".join(para))
-        cls = "lead" if (not intro_done and not lead_used) else ""
-        if cls:
-            lead_used = True
-        body.append(f'<p class="{cls}">{text}</p>' if cls else f"<p>{text}</p>")
-        para = []
+    def __init__(self, category, date, lead, subs):
+        self.category, self.date, self.lead, self.subs = category, date, lead, subs
 
-    def flush_quote():
-        nonlocal quote
-        if not quote:
-            return
-        body.append(f"<blockquote>{inline(' '.join(quote))}</blockquote>")
-        quote = []
 
-    def close_list():
-        nonlocal in_list
-        if in_list:
-            body.append("</ul>"); in_list = False
+class Version:
+    __slots__ = ("name", "date", "entries")
 
-    # Unwrap soft wraps: an indented continuation line folds onto the
-    # line above it (how Markdown continues a list item or paragraph).
-    merged = []
-    for raw in md.splitlines():
-        if raw[:1] in (" ", "\t") and raw.strip() and merged and merged[-1].strip() \
-           and not merged[-1].lstrip().startswith("#"):
-            merged[-1] = merged[-1].rstrip() + " " + raw.strip()
+    def __init__(self, name, date):
+        self.name, self.date, self.entries = name, date, []
+
+
+DATE_RE = re.compile(r"\(?(20\d\d-\d\d-\d\d)")
+
+
+def _entry_from_block(block_lines, category):
+    """A block is one top-level `- **…**` bullet plus its continuation lines
+    (soft-wraps fold into the lead; nested `- ` bullets become sub-items)."""
+    segs = []
+    for ln in block_lines:
+        s = ln.strip()
+        if not s:
+            continue
+        is_bullet = s.startswith("- ")
+        if is_bullet and segs:
+            segs.append(s[2:])
+        elif not segs:
+            segs.append(s[2:] if is_bullet else s)
         else:
-            merged.append(raw)
+            segs[-1] += " " + s
+    if not segs:
+        return None
+    lead, subs = segs[0], segs[1:]
+    m = DATE_RE.search(lead)
+    date = m.group(1) if m else None
+    # strip the date token from the display text (it becomes the group header),
+    # keeping any issue link that shared the parenthetical.
+    lead = re.sub(r"\(20\d\d-\d\d-\d\d,\s*", "(", lead)   # (date, #47) -> (#47)
+    lead = re.sub(r"\s*\(20\d\d-\d\d-\d\d\)", "", lead)   # standalone (date) -> gone
+    lead = re.sub(r"\(\s*\)", "", lead).strip()
+    return Entry(category, date, lead, subs)
 
-    for raw in merged:
+
+def parse(md: str):
+    versions = []
+    cur = None
+    category = None
+    block = None
+
+    def flush_block():
+        nonlocal block
+        if block and cur is not None:
+            e = _entry_from_block(block, category)
+            if e:
+                cur.entries.append(e)
+        block = None
+
+    for raw in md.splitlines():
         line = raw.rstrip()
         if re.match(r"^\[[^\]]+\]:\s+https?://", line) or line.startswith("# "):
             continue
-        if line.startswith("> ") or line == ">":
-            flush_para(); close_list()
-            quote.append(line[2:] if len(line) > 1 else "")
-        elif line.startswith("## "):
-            flush_para(); flush_quote(); close_list(); intro_done = True
+        if line.startswith("## "):
+            flush_block()
             m = re.match(r"^##\s+\[?([^\]\s]+)\]?\s*(?:—|-)?\s*(.*)$", line)
-            ver = m.group(1) if m else line[3:]
+            name = m.group(1) if m else line[3:]
             date = (m.group(2) or "").strip() if m else ""
-            tag = "unreleased" if ver.lower() == "unreleased" else "released"
-            body.append(
-                f'<h2 class="rel {tag}"><span class="v">{inline(ver)}</span>'
-                + (f'<span class="d">{inline(date)}</span>' if date else "")
-                + "</h2>")
+            cur = Version(name, date)
+            versions.append(cur)
+            category = None
         elif line.startswith("### "):
-            flush_para(); flush_quote(); close_list()
-            body.append(f"<h3>{inline(line[4:])}</h3>")
-        elif line.startswith("- "):
-            flush_para(); flush_quote()
-            if not in_list:
-                body.append("<ul>"); in_list = True
-            body.append(f"<li>{inline(line[2:])}</li>")
+            flush_block()
+            category = line[4:].strip()
+        elif re.match(r"^- ", line):          # a new top-level entry
+            flush_block()
+            block = [line]
+        elif block is not None and (raw[:1] in (" ", "\t")) and line.strip():
+            block.append(line)                # continuation / sub-bullet
         elif line.strip() == "":
-            flush_para(); flush_quote(); close_list()
+            # blank: end an entry block, but keep collecting a version's prose intro
+            flush_block()
+    flush_block()
+    return versions
+
+
+# ── Rendering ───────────────────────────────────────────────────────────────
+def fmt_date(iso: str) -> str:
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%B ") + \
+            str(int(iso[8:10])) + ", " + iso[:4]
+    except ValueError:
+        return iso
+
+
+def render_entry(e: Entry) -> str:
+    cls = CAT_CLASS.get(e.category, "other")
+    chip = f'<span class="chip {cls}">{html.escape(e.category or "Note")}</span>'
+    body = f'<div class="body"><p>{inline(e.lead)}</p>'
+    if e.subs:
+        body += "<ul>" + "".join(f"<li>{inline(s)}</li>" for s in e.subs) + "</ul>"
+    body += "</div>"
+    return f'<article class="entry {cls}">{chip}{body}</article>'
+
+
+def render_unreleased(v: Version) -> str:
+    out = ['<section class="unreleased">',
+           '<div class="banner"><span class="dot"></span><div>'
+           '<b>Unreleased</b> — merged to <span class="mono">main</span>, not yet in a '
+           'tagged release. Newest first.</div></div>']
+    # group entries by date, newest first; undated (shouldn't happen) sink to the end
+    dates = sorted({e.date for e in v.entries if e.date}, reverse=True)
+    undated = [e for e in v.entries if not e.date]
+    for d in dates:
+        out.append(f'<h2 class="day"><time datetime="{d}">{fmt_date(d)}</time></h2>')
+        out.append('<div class="entries">')
+        out += [render_entry(e) for e in v.entries if e.date == d]
+        out.append('</div>')
+    if undated:
+        out.append('<h2 class="day">Undated</h2><div class="entries">')
+        out += [render_entry(e) for e in undated]
+        out.append('</div>')
+    out.append('</section>')
+    return "\n".join(out)
+
+
+def render_release(v: Version) -> str:
+    head = (f'<h2 class="rel"><span class="v">{inline(v.name)}</span>'
+            + (f'<span class="d">{inline(v.date)}</span>' if v.date else "") + '</h2>')
+    return (f'<section class="release">{head}<div class="entries">'
+            + "".join(render_entry(e) for e in v.entries) + '</div></section>')
+
+
+def render(md: str) -> str:
+    parts = []
+    for v in parse(md):
+        if v.name.lower() == "unreleased":
+            parts.append(render_unreleased(v))
         else:
-            flush_quote(); close_list()
-            para.append(line.strip())
-    flush_para(); flush_quote(); close_list()
-    return "\n".join(body)
+            parts.append(render_release(v))
+    return "\n".join(parts)
 
 
 TEMPLATE = """<!doctype html>
@@ -115,20 +194,44 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Silt changelog</title>
-<meta name="description" content="Notable changes to Silt, release by release.">
+<meta name="description" content="Notable changes to Silt, newest first.">
 <link rel="canonical" href="https://silthq.com/changelog.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
-  .doc h2.rel {{ display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }}
-  .doc h2.rel .v {{ font-family:var(--display); }}
+  /* the changelog is a scannable list, not prose — give it 2× the doc width */
+  .doc {{ max-width:1680px; }}
+  .doc > p, .doc .entry p {{ max-width:none; }}
+  .doc .day {{ font-family:var(--mono); font-size:0.82rem; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--drab); margin:2.4rem 0 0.9rem;
+    padding-bottom:0.4rem; border-bottom:1px solid rgba(255,255,255,0.08); }}
+  .doc .banner {{ display:flex; gap:0.7rem; align-items:flex-start; margin:0.5rem 0 1rem;
+    padding:0.8rem 1rem; border:1px solid var(--ochre); border-radius:10px;
+    background:rgba(200,140,60,0.06); color:var(--bone); font-size:0.92rem; }}
+  .doc .banner .dot {{ width:0.55rem; height:0.55rem; border-radius:50%;
+    background:var(--ochre); margin-top:0.42rem; flex:none; box-shadow:0 0 0 4px rgba(200,140,60,0.15); }}
+  .doc .entries {{ display:flex; flex-direction:column; gap:0.7rem; }}
+  .doc .entry {{ display:grid; grid-template-columns:6.2rem 1fr; gap:0.9rem;
+    padding:0.85rem 1rem; border:1px solid rgba(255,255,255,0.07); border-radius:10px;
+    background:rgba(255,255,255,0.015); }}
+  .doc .entry:hover {{ border-color:rgba(255,255,255,0.14); }}
+  .doc .entry .body p {{ margin:0; }}
+  .doc .entry .body ul {{ margin:0.5rem 0 0; padding-left:1.1rem; }}
+  .doc .entry .body li {{ margin:0.2rem 0; }}
+  .doc .chip {{ align-self:start; font-family:var(--mono); font-size:0.68rem;
+    letter-spacing:0.05em; text-transform:uppercase; padding:0.22rem 0.5rem;
+    border-radius:999px; border:1px solid currentColor; white-space:nowrap; text-align:center; }}
+  .doc .chip.added {{ color:#7fb98a; }} .doc .chip.fixed {{ color:#d0a44c; }}
+  .doc .chip.changed {{ color:#6fa8c7; }} .doc .chip.security {{ color:#c77b6b; }}
+  .doc .chip.docs, .doc .chip.other {{ color:var(--drab); }}
+  .doc .entry.security {{ background:rgba(199,123,107,0.05); }}
+  .doc h2.rel {{ display:flex; align-items:baseline; gap:0.9rem; flex-wrap:wrap;
+    margin:2.6rem 0 1rem; padding-top:1.4rem; border-top:1px solid rgba(255,255,255,0.08); }}
+  .doc h2.rel .v {{ font-family:var(--display); font-size:1.5rem; }}
   .doc h2.rel .d {{ font-family:var(--mono); font-size:0.8rem; color:var(--drab); letter-spacing:0.04em; }}
-  .doc h2.rel.unreleased .v::after {{ content:" ·"; color:var(--ochre); }}
-  .doc h2.rel.unreleased {{ color:var(--ochre); }}
-  .doc blockquote {{ margin:1.4rem 0; padding:0.1rem 0 0.1rem 1.1rem; border-left:2px solid var(--ochre); color:var(--drab); }}
-  .doc blockquote b {{ color:var(--bone); }}
+  @media (max-width:560px) {{ .doc .entry {{ grid-template-columns:1fr; gap:0.5rem; }} }}
 </style>
 </head>
 <body>
@@ -144,6 +247,8 @@ TEMPLATE = """<!doctype html>
 <div class="doc">
   <p class="eyebrow">Changelog</p>
   <h1>What's changed</h1>
+  <p class="lead">Every notable change to Silt, newest first. The source of truth is
+  <a href="{gh}CHANGELOG.md">CHANGELOG.md</a>; this page is generated from it.</p>
 {body}
   <p style="margin-top:3rem"><a href="/" class="btn ghost">← Back to silthq.com</a></p>
 </div>
@@ -159,7 +264,7 @@ def main() -> int:
     if not SRC.exists():
         print(f"error: {SRC} not found", file=sys.stderr)
         return 1
-    OUT.write_text(TEMPLATE.format(body=render(SRC.read_text())))
+    OUT.write_text(TEMPLATE.format(body=render(SRC.read_text()), gh=GH_BLOB))
     print(f"wrote {OUT.relative_to(ROOT)}")
     return 0
 
