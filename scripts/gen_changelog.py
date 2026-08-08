@@ -201,6 +201,9 @@ TEMPLATE = """<!doctype html>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
+  /* the changelog is a scannable list, not prose — give it 2× the doc width */
+  .doc {{ max-width:1680px; }}
+  .doc > p, .doc .entry p {{ max-width:none; }}
   .doc .day {{ font-family:var(--mono); font-size:0.82rem; letter-spacing:0.06em;
     text-transform:uppercase; color:var(--drab); margin:2.4rem 0 0.9rem;
     padding-bottom:0.4rem; border-bottom:1px solid rgba(255,255,255,0.08); }}
