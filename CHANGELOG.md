@@ -42,6 +42,24 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
     re-centralization risk (the honest whale — the same trade Ethereum/Cosmos/Bitcoin made) and the
     weak-subjectivity dependency itself. Regressions invert the red-team PoC (both halt and
     permanent-center horns killed; super-quorum enforced; long-range reorg refused).
+- **C2 concentration: the address-diversity (A) axis + an out-of-band honest-whale alarm** (2026-08-08) —
+  Two follow-ups to F-1, hardening the residual it deliberately leaves open (the honest whale — real bond
+  concentrated by a real operator, unclosable on-chain by theorem, Kwon):
+  - **A axis wired into the shed.** A validator's failure-domain (`-domain`) is now **committed in its
+    bond** (`BondReg.Domain`, backward-compatibly signed) so the concentration metric counts
+    **address-diverse** participants: bonds sharing a declared domain aggregate into one group
+    (`NakamotoDomains`), and the maturity shed gates on `min(NakamotoOperators, NakamotoDomains)` — so a
+    stake split across many keys in ONE domain cannot fake decentralization; retiring the launch anchors
+    needs distinct domains, not just distinct keys. Turns the flat operator-margin `M` into a
+    per-network-position cost. Honestly **weak** (a domain is declared, transport-cross-checked, not
+    proven; /24s are rentable) — it *prices* concentration, it does not *close* it. With no `-domain` set,
+    behavior is identical to before.
+  - **Concentration alarm.** `C2Metric` now also reports **HHI**, the **Gini** coefficient, and the
+    top bond's share; the daemon narrates them and raises a `⚠ CONCENTRATION ALARM` when one bond holds
+    ≥ ⅓ of bonded weight — a social/operational veto, explicitly not on-chain enforcement.
+
+  Regressions: `TestC2Metric_AddressDiversityGate` (same-domain splitting doesn't shed; distinct domains
+  do; unset domains unchanged), `TestBondRegDomainSignatureBackwardCompatible`, `TestC2Metric_ConcentrationSignals`.
 
 ### Changed
 - **Truth-in-labelling sweep + split-defense safe-default — remediating the M0 blind

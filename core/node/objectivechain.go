@@ -54,7 +54,7 @@ func (n *Node) RegisterBondReg(prev ports.Hash) (chain.BondReg, bool) {
 	if err != nil {
 		return chain.BondReg{}, false
 	}
-	return chain.NewBondReg(n.signer, n.bond.Root, n.bond.Size, answer, prev), true
+	return chain.NewBondReg(n.signer, n.bond.Root, n.bond.Size, answer, prev, n.domainID), true
 }
 
 // SubmitBondRenewal broadcasts a fresh self-signed bond registration to peers so
