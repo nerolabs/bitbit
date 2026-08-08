@@ -60,6 +60,45 @@ func (n *Node) AcquireDemandToken(rng io.Reader, issuer ports.NodeID, done func(
 	})
 }
 
+// AcquireDemandTokenWithCredit is the D3 credit-paid withdrawal: it blind-withdraws a
+// demand token from issuer while paying the fee with a PREPAID BLIND CREDIT (acquired
+// earlier under a durable identity via AcquireCredits) instead of charging this node's
+// durable account. Because payment rides the credit — which the issuer verifies and
+// spends without charging `from` — a node with NO balance and NO durable standing (an
+// EPHEMERAL identity) can still withdraw. That is what lets the D3 client withdraw over
+// a throwaway identity so the issuer cannot link the withdrawal to the fetcher (the
+// blind signature already hides the serial; this severs the account/identity link).
+// issuerPub is passed explicitly so an ephemeral node that never cached it can still
+// blind and unblind. done fires once with the token or an error.
+func (n *Node) AcquireDemandTokenWithCredit(rng io.Reader, issuer ports.NodeID, issuerPub *rsa.PublicKey, credit ports.PublishCredit, done func(demand.Token, error)) {
+	if issuerPub == nil {
+		done(demand.Token{}, errNoIssuerKey)
+		return
+	}
+	serial, err := blindtoken.NewSerial(rng)
+	if err != nil {
+		done(demand.Token{}, err)
+		return
+	}
+	blinded, secret, err := demand.Withdraw(rng, issuerPub, serial)
+	if err != nil {
+		done(demand.Token{}, err)
+		return
+	}
+	c := credit // the issuer spends this instead of charging `from` (tokenChargeFor)
+	n.request(issuer, ports.Message{Kind: ports.MsgTokenRequest, Data: blinded, Credit: &c}, func(resp ports.Message, rerr error) {
+		if rerr != nil {
+			done(demand.Token{}, rerr)
+			return
+		}
+		if !resp.OK || len(resp.Data) == 0 {
+			done(demand.Token{}, ErrTokenAcquire)
+			return
+		}
+		done(demand.Unblind(issuerPub, serial, resp.Data, secret), nil)
+	})
+}
+
 // EnableDemandBank makes this node BANK delivery receipts: on a MsgDeliveryReceipt
 // it verifies the receipt against issuerPub (the retrieval-token issuer it trusts)
 // and, if valid + first-seen + a correct delivery to THIS server, credits the

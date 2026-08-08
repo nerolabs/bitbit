@@ -82,6 +82,38 @@ func TestPorFieldsSurviveWire(t *testing.T) {
 	}
 }
 
+// TestCreditSurvivesWire is the same #65-class guard for the prepaid publish credit
+// (F4 / D3 fee decoupling): the Credit riding a MsgTokenRequest was a port-struct field
+// with no wire mapping, so it was SILENTLY DROPPED over real TCP — the fee-decoupling
+// and any ephemeral/credit-paid withdrawal only worked in the in-process sim. This
+// round-trips a credit-bearing request and asserts it arrives intact.
+func TestCreditSurvivesWire(t *testing.T) {
+	want := ports.Message{
+		Kind:   ports.MsgTokenRequest,
+		RID:    9,
+		Data:   bytes.Repeat([]byte{0xaa}, 16), // the blinded serial
+		Credit: &ports.PublishCredit{Serial: bytes.Repeat([]byte{0xbb}, 24), Sig: bytes.Repeat([]byte{0xcc}, 32)},
+	}
+	b, err := encMode.Marshal(envelope{Msg: toWire(want)})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var env envelope
+	if err := cbor.Unmarshal(b, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := fromWire(env.Msg)
+	if got.Credit == nil {
+		t.Fatal("Credit dropped entirely over the wire")
+	}
+	if !bytes.Equal(got.Credit.Serial, want.Credit.Serial) {
+		t.Errorf("Credit.Serial lost: got %x want %x", got.Credit.Serial, want.Credit.Serial)
+	}
+	if !bytes.Equal(got.Credit.Sig, want.Credit.Sig) {
+		t.Errorf("Credit.Sig lost: got %x want %x", got.Credit.Sig, want.Credit.Sig)
+	}
+}
+
 func equalChunks(a, b [][]byte) bool {
 	if len(a) != len(b) {
 		return false

@@ -55,6 +55,17 @@ type wireMsg struct {
 	// ProviderRecs on MsgGetProvidersReply.
 	Provider     *wireProvRec  `cbor:"26,keyasint,omitempty"`
 	ProviderRecs []wireProvRec `cbor:"27,keyasint,omitempty"`
+	// A prepaid publish credit optionally riding a MsgTokenRequest (F4 / D3 fee
+	// decoupling): the issuer spends it instead of charging the requester, so the
+	// per-publish fee link is severed. Without this on the wire, an ephemeral or
+	// credit-paying withdrawal only worked in the in-process sim.
+	Credit *wireCredit `cbor:"28,keyasint,omitempty"`
+}
+
+// wireCredit mirrors ports.PublishCredit for the wire.
+type wireCredit struct {
+	Serial []byte `cbor:"1,keyasint,omitempty"`
+	Sig    []byte `cbor:"2,keyasint,omitempty"`
 }
 
 // wireProvRec mirrors ports.ProviderRecord with CBOR-friendly []byte fields.
@@ -124,6 +135,12 @@ func toWire(m ports.Message) wireMsg {
 			w.ProviderRecs[i] = toWireRec(r)
 		}
 	}
+	if m.Credit != nil {
+		w.Credit = &wireCredit{
+			Serial: append([]byte(nil), m.Credit.Serial...),
+			Sig:    append([]byte(nil), m.Credit.Sig...),
+		}
+	}
 	if len(m.Data) > 0 {
 		w.Data = append([]byte(nil), m.Data...)
 	}
@@ -188,6 +205,12 @@ func fromWire(w wireMsg) ports.Message {
 		m.ProviderRecs = make([]ports.ProviderRecord, len(w.ProviderRecs))
 		for i, r := range w.ProviderRecs {
 			m.ProviderRecs[i] = fromWireRec(r)
+		}
+	}
+	if w.Credit != nil {
+		m.Credit = &ports.PublishCredit{
+			Serial: append([]byte(nil), w.Credit.Serial...),
+			Sig:    append([]byte(nil), w.Credit.Sig...),
 		}
 	}
 	m.Nonce = w.Nonce

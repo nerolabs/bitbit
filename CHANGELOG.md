@@ -8,7 +8,35 @@ This log is published at [silthq.com/changelog](https://silthq.com/changelog.htm
 
 ## [Unreleased]
 
+### Fixed
+- **Prepaid publish credits were silently dropped over real TCP** (2026-08-08,
+  [#179](https://github.com/nerolabs/silt/issues/179)) — `tcpnet`'s hand-rolled wire codec
+  (`toWire`/`fromWire`) never mapped the `Credit` field of a `MsgTokenRequest`, so the F4/D3 **fee
+  decoupling** (paying for a token with a prepaid blind credit instead of charging the durable
+  identity) only ever worked in the in-process sim — over real sockets the credit vanished and the
+  issuer fell back to charging the requester. Added `Credit` to the wire struct + `toWire`/`fromWire`,
+  with a `TestCreditSurvivesWire` round-trip guard (the exact `#65`-class silent-drop bug
+  `wire_por_test.go` warns about). This repairs the publish-token credit path (F4) as well as enabling
+  D3 below.
+
 ### Added
+- **D3 issuance-mixing, slices 1 & 2 — ephemeral-identity + relay-routed token withdrawal** (2026-08-08,
+  [#179](https://github.com/nerolabs/silt/issues/179)) — Closes the remaining fetcher-unlinkability
+  links in the demand receipt. The token issuer authenticates whoever dials it via the end-to-end TLS
+  handshake, so a withdrawal made over a fetcher's durable identity tied that withdrawal to the fetcher
+  (the blind signature hid only the token serial, not the network identity). Now `client.
+  WithdrawDemandTokenPrivately` performs the withdrawal over a **fresh ephemeral identity** — a one-off
+  keypair + transport, torn down on return — paying with a **prepaid blind credit** (`Node.
+  AcquireDemandTokenWithCredit`) rather than a durable account, so the issuer authenticates only an
+  unlinkable ephemeral key and charges nothing it can tie to the fetcher (**slice 1 — the identity
+  link**). Given a **relay-form** issuer address (`relay:R@host:port`) the ephemeral transport dials the
+  issuer THROUGH a content-blind relay, so the issuer's inbound connection is from the relay, not the
+  fetcher — hiding the fetcher's IP as well (**slice 2 — the IP link**); the end-to-end TLS still
+  authenticates the ephemeral key across the relay pipe. Proven over real TCP (`client/privissue_test.go`:
+  a mock issuer records the authenticated identity — it is the ephemeral one, never the fetcher's, direct
+  and relay-routed; a withdrawal with no valid credit is refused). *Fetcher-unlinkability is now
+  cryptographic + identity + IP; timing-correlation (epoch-batching) is deferred to the post-M0 H8
+  mixnet.* Whole suite green with \`-race\`; full e2e suite green over real TCP.
 - **#184 verify — forged-block→reject and low-bond→reject over the REAL WIRE** (2026-08-08,
   [#184](https://github.com/nerolabs/silt/issues/184)) — The two `ValidateProposal` defences, proven
   against real daemons over TCP: an honest validator refuses to attest a proposal whose **proposer
