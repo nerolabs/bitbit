@@ -1,0 +1,80 @@
+# A real swarm on one flat Docker network, built to be CHURNED:
+#
+#   seed ── registry + bootstrap (holds no content: -capacity 1)
+#     │
+#     ├─ holder×N ── real disk stores; these get killed in waves
+#     └─ caretaker ── holds the care link, runs the repair loop (-log info)
+#
+# Unlike integration/nat there is NO NAT here — every node is directly
+# dialable. The thing under test is not traversal but DURABILITY: kill enough
+# holders to strand erasure columns and assert the caretaker reconstructs the
+# lost shards from parity and re-scatters them to fresh survivors, all while a
+# fetch stays bit-perfect. Content is 3x-replicated AND erasure-coded (k=10 of
+# n=16), so a stripe only needs rebuilding once node deaths drop every replica
+# of more than RepairSlack(=2) of its columns — see run.sh for how the waves
+# are sized to actually reach that boundary.
+#
+# The seed's NodeID and IP aren't known until it boots, so run.sh starts the
+# seed first, derives SEED_PEER / SEED_REG, exports them, then starts the rest.
+# The caretaker also needs the file's care link (only known after publish), so
+# run.sh starts it last with CARE_LINK set. Each daemon self-advertises its
+# container IP via role.sh (a wildcard bind is not dialable on its own).
+
+networks:
+  swarm:
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.40.0.0/24 }]
+
+services:
+  # Public rendezvous: registry + bootstrap peer. -capacity 1 => it refuses to
+  # store content, so every shard lives on a holder and the churn actually bites.
+  seed:
+    image: silt-churn
+    entrypoint: ["role.sh"]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -serve-registry=0.0.0.0:4003
+      - -store=/data
+      - -capacity=1
+      - -mdns=false
+      - -log=info
+    networks: [swarm]
+
+  # The storage pool. Scaled to N by run.sh (docker compose up --scale holder=N).
+  # These are the nodes that die; each holds real coded shards on a real disk.
+  holder:
+    image: silt-churn
+    entrypoint: ["role.sh"]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=5G
+      - -mdns=false
+      - -log=info
+      - -bootstrap=${SEED_PEER:-unset}
+      - -registry=${SEED_REG:-unset}
+    networks: [swarm]
+
+  # The repair engine. Holds the care link (repair rights, no decryption),
+  # sweeps every RepairInterval(=60s), and re-seeds reconstructed shards onto
+  # fresh survivors. Never killed by run.sh — it is the vantage that must survive.
+  caretaker:
+    image: silt-churn
+    entrypoint: ["role.sh"]
+    command:
+      - silt
+      - daemon
+      - -listen=0.0.0.0:4001
+      - -store=/data
+      - -capacity=5G
+      - -mdns=false
+      - -log=info
+      - -bootstrap=${SEED_PEER:-unset}
+      - -registry=${SEED_REG:-unset}
+      - -care=${CARE_LINK:-none}
+    networks: [swarm]
